@@ -1,0 +1,172 @@
+/* Status overview stats */
+.stats {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 32px 16px;
+    gap: 40px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.stat-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-color-muted);
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Monitors main container */
+.monitors {
+    width: 100%;
+    max-width: 1280px;
+    padding: 0 24px 48px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Search and actions toolbar */
+.search {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+/* Monitor cards grid (3 to 4 cards per row on desktop) */
+.monitor-grid {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 16px;
+    margin: 0;
+    padding: 0;
+}
+
+.service-monitor-card {
+    background: var(--background-secondary);
+    border: 1px solid var(--color-stroke);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: border-color 150ms ease;
+}
+
+.service-monitor-card:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* Card Header: Name, status dot and ping */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-title-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+
+.card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-ping {
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-color-muted);
+    flex-shrink: 0;
+}
+
+/* Card Uptime Stats */
+.card-uptime-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.card-uptime {
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.card-duration {
+    font-size: 12px;
+    color: var(--text-color-muted);
+}
+
+/* Heartbeat ticks bar (suite de petits bâtons sur toute la largeur de la carte) */
+.heartbeat-bar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    width: 100%;
+    padding-top: 2px;
+}
+
+.tick {
+    flex: 1;
+    min-width: 3px;
+    height: 18px;
+    border-radius: 2px;
+    cursor: default;
+}
+
+.tick-green {
+    background-color: var(--text-color-green);
+}
+
+.tick-orange {
+    background-color: var(--text-color-orange);
+}
+
+.tick-red {
+    background-color: var(--text-color-red);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .monitors {
+        padding: 0 16px 32px 16px;
+    }
+
+    .search {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .search-bar {
+        width: 100%;
+    }
+
+    .monitor-grid {
+        grid-template-columns: 1fr;
+    }
+}

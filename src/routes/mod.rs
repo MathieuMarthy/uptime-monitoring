@@ -1,10 +1,10 @@
 use axum::Router;
 
-mod dashboard;
 mod health;
+mod monitors;
 
 pub fn all() -> Router {
     Router::new()
         .merge(health::router())
-        .merge(dashboard::router())
+        .merge(monitors::router())
 }

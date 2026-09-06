@@ -1,3 +1,4 @@
+use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -15,10 +16,12 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let app = routes::all().layer(TraceLayer::new_for_http());
+    let app = routes::all()
+        .nest_service("/static", ServeDir::new("static"))
+        .layer(TraceLayer::new_for_http());
     let addr = "0.0.0.0:8080";
 
-    println!("uptime-monitoring is running on http://{}", addr);
+    tracing::info!("uptime-monitoring is running on http://{}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
