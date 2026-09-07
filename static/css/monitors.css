@@ -151,6 +151,10 @@
     background-color: var(--text-color-red);
 }
 
+.tick-gray {
+    background-color: var(--color-stroke);
+}
+
 /* Responsive adjustments */
 @media (max-width: 640px) {
     .monitors {

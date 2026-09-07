@@ -3,8 +3,13 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+mod db;
+mod models;
 mod routes;
+mod state;
 mod templates;
+
+use crate::state::AppState;
 
 #[tokio::main]
 async fn main() {
@@ -16,9 +21,16 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://uptime.db".to_string());
+    let pool = db::init_pool(&database_url)
+        .await
+        .expect("Failed to initialize SQLite database");
+    let state = AppState::new(pool);
+
     let app = routes::all()
         .nest_service("/static", ServeDir::new("static"))
-        .layer(TraceLayer::new_for_http());
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
     let addr = "0.0.0.0:8080";
 
     tracing::info!("uptime-monitoring is running on http://{}", addr);

@@ -9,15 +9,15 @@
 <section aria-label="Status overview" class="stats">
     <div class="stat-item">
         <span class="stat-label">Up</span>
-        <span class="stat-value text-green">5</span>
+        <span class="stat-value text-green">{{ up_count }}</span>
     </div>
     <div class="stat-item">
         <span class="stat-label">Down</span>
-        <span class="stat-value text-red">1</span>
+        <span class="stat-value text-red">{{ down_count }}</span>
     </div>
     <div class="stat-item">
-        <span class="stat-label">Maintenance</span>
-        <span class="stat-value text-blue">0</span>
+        <span class="stat-label">Paused</span>
+        <span class="stat-value text-blue">{{ paused_count }}</span>
     </div>
 </section>
 
@@ -37,285 +37,30 @@
     </div>
 
     <ul class="monitor-grid">
+        {% for monitor in monitors %}
         <li class="service-monitor-card">
             <div class="card-header">
                 <div class="card-title-group">
-                    <h2 class="card-title">Production API Gateway</h2>
+                    <h2 class="card-title">{{ monitor.service.name }}</h2>
                 </div>
-                <span class="card-ping">24ms</span>
+                {% match monitor.last_ping_ms %}
+                    {% when Some with (ping) %}
+                        <span class="card-ping">{{ ping }}ms</span>
+                    {% when None %}
+                        <span class="card-ping">-</span>
+                {% endmatch %}
             </div>
             <div class="card-uptime-row">
-                <span class="card-uptime">99.98%</span>
+                <span class="card-uptime">{{ "{:.2}"|format(monitor.uptime_rate) }}%</span>
                 <span class="card-duration">24h</span>
             </div>
-            <div class="heartbeat-bar" role="img">
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
+            <div class="heartbeat-bar" role="img" aria-label="History of checks">
+                {% for tick in monitor.ticks %}
+                <span class="tick {{ tick.class }}" title="{{ tick.tooltip }}"></span>
+                {% endfor %}
             </div>
         </li>
-
-        <li class="service-monitor-card">
-            <div class="card-header">
-                <div class="card-title-group">
-                    <h2 class="card-title">Main Web Application</h2>
-                </div>
-                <span class="card-ping">48ms</span>
-            </div>
-            <div class="card-uptime-row">
-                <span class="card-uptime">98.45%</span>
-                <span class="card-duration">24h</span>
-            </div>
-            <div aria-label="History of last checks: minor incident" class="heartbeat-bar" role="img">
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-orange"></span>
-                <span class="tick tick-orange"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-            </div>
-        </li>
-
-        <li class="service-monitor-card">
-            <div class="card-header">
-                <div class="card-title-group">
-                    <h2 class="card-title">Auth & SSO Service</h2>
-                </div>
-                <span class="card-ping">18ms</span>
-            </div>
-            <div class="card-uptime-row">
-                <span class="card-uptime">100.00%</span>
-                <span class="card-duration">24h</span>
-            </div>
-            <div aria-label="History of last checks: 100% operational" class="heartbeat-bar" role="img">
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-            </div>
-        </li>
-
-        <li class="service-monitor-card">
-            <div class="card-header">
-                <div class="card-title-group">
-                    <h2 class="card-title">Postgres Primary DB</h2>
-                </div>
-                <span class="card-ping">12ms</span>
-            </div>
-            <div class="card-uptime-row">
-                <span class="card-uptime">99.99%</span>
-                <span class="card-duration">24h</span>
-            </div>
-            <div aria-label="History of last checks: 100% operational" class="heartbeat-bar" role="img">
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-            </div>
-        </li>
-
-        <li class="service-monitor-card">
-            <div class="card-header">
-                <div class="card-title-group">
-                    <h2 class="card-title">Analytics API</h2>
-                </div>
-                <span class="card-ping text-red">Timeout</span>
-            </div>
-            <div class="card-uptime-row">
-                <span class="card-uptime text-red">84.10%</span>
-                <span class="card-duration">24h</span>
-            </div>
-            <div aria-label="History of last checks: currently down" class="heartbeat-bar" role="img">
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-red"></span>
-                <span class="tick tick-red"></span>
-                <span class="tick tick-red"></span>
-                <span class="tick tick-red"></span>
-                <span class="tick tick-red"></span>
-                <span class="tick tick-red"></span>
-            </div>
-        </li>
-
-        <li class="service-monitor-card">
-            <div class="card-header">
-                <div class="card-title-group">
-                    <h2 class="card-title">Redis Cache Cluster</h2>
-                </div>
-                <span class="card-ping">4ms</span>
-            </div>
-            <div class="card-uptime-row">
-                <span class="card-uptime">100.00%</span>
-                <span class="card-duration">24h</span>
-            </div>
-            <div aria-label="History of last checks: 100% operational" class="heartbeat-bar" role="img">
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-            </div>
-        </li>
-
-        <li class="service-monitor-card">
-            <div class="card-header">
-                <div class="card-title-group">
-                    <h2 class="card-title">Global CDN Edge</h2>
-                </div>
-                <span class="card-ping">15ms</span>
-            </div>
-            <div class="card-uptime-row">
-                <span class="card-uptime">99.95%</span>
-                <span class="card-duration">24h</span>
-            </div>
-            <div aria-label="History of last checks: 100% operational" class="heartbeat-bar" role="img">
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-            </div>
-        </li>
-
-        <li class="service-monitor-card">
-            <div class="card-header">
-                <div class="card-title-group">
-                    <h2 class="card-title">Stripe Webhook Gateway</h2>
-                </div>
-                <span class="card-ping">32ms</span>
-            </div>
-            <div class="card-uptime-row">
-                <span class="card-uptime">100.00%</span>
-                <span class="card-duration">24h</span>
-            </div>
-            <div aria-label="History of last checks: 100% operational" class="heartbeat-bar" role="img">
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-                <span class="tick tick-green"></span>
-            </div>
-        </li>
+        {% endfor %}
     </ul>
 </section>
 {% endblock %}
