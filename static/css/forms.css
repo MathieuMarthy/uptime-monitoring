@@ -1,0 +1,221 @@
+/* Form container and layout */
+.form-container {
+    width: 100%;
+    max-width: 720px;
+    padding: 32px 24px 64px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.form-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-color);
+}
+
+.form-subtitle {
+    font-size: 14px;
+    color: var(--text-color-muted);
+}
+
+/* Error message banner */
+.error-banner {
+    background: rgba(255, 56, 60, 0.12);
+    border: 1px solid var(--text-color-red);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: #FFA5A7;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Form card */
+.form-card {
+    background: var(--background-secondary);
+    border: 1px solid var(--color-stroke);
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-color);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-stroke);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.form-hint {
+    font-size: 12px;
+    color: var(--text-color-muted);
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+    background: var(--background);
+    border: 1px solid var(--color-stroke);
+    border-radius: 8px;
+    color: var(--text-color);
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    width: 100%;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary);
+}
+
+.form-textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+/* Checkbox container */
+.checkbox-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--background);
+    border: 1px solid var(--color-stroke);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+    margin-top: 3px;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.checkbox-label-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Actions footer */
+.form-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-stroke);
+    gap: 16px;
+}
+
+.form-actions-left,
+.form-actions-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.button-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border-radius: 9999px;
+    border: 1px solid var(--color-stroke);
+    background: transparent;
+    color: var(--text-color);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.button-secondary:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--text-color-muted);
+}
+
+.button-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 56, 60, 0.4);
+    background: rgba(255, 56, 60, 0.08);
+    color: var(--text-color-red);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.button-danger:hover {
+    background: rgba(255, 56, 60, 0.18);
+    border-color: var(--text-color-red);
+}
+
+@media (max-width: 640px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .form-actions {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .form-actions-left,
+    .form-actions-right {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .button-primary,
+    .button-secondary,
+    .button-danger {
+        width: 100%;
+        text-align: center;
+    }
+}

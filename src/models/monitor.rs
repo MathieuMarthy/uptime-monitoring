@@ -72,6 +72,34 @@ impl Monitor {
         Ok(monitors)
     }
 
+    pub async fn fetch_by_id(pool: &SqlitePool, id: &str) -> Result<Option<Self>, sqlx::Error> {
+        let service = match Service::find_by_id(pool, id).await? {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let twenty_four_hours_ago = now - (24 * 3600);
+
+        let metrics = sqlx::query_as::<_, MetricRow>(
+            r#"
+            SELECT service_id, timestamp, response_time_ms, status_code
+            FROM metrics
+            WHERE service_id = ? AND timestamp >= ?
+            ORDER BY timestamp ASC
+            "#,
+        )
+        .bind(id)
+        .bind(twenty_four_hours_ago)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(Some(Self::compute_monitor(service, metrics, now)))
+    }
+
     fn compute_monitor(service: Service, metrics: Vec<MetricRow>, now: i64) -> Self {
         let last_ping_ms = metrics.last().map(|m| m.response_time_ms);
 

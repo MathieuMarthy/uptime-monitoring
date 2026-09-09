@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}{{ monitor.service.name }} - Uptime Monitoring{% endblock %}
+
+{% block styles %}
+<link href="/static/css/monitors.css" rel="stylesheet">
+<link href="/static/css/detail.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="detail-container">
+    <!-- Top-left navigation -->
+    <nav class="detail-nav" aria-label="Breadcrumb">
+        <a class="back-link" href="/">
+            <img src="/static/images/arrow-back.svg" alt="" aria-hidden="true" width="16" height="14" />
+            <span>Monitors</span>
+        </a>
+    </nav>
+
+    <!-- Header with status and actions -->
+    <div class="detail-header">
+        <div class="detail-title-group">
+            <h1 class="detail-title">{{ monitor.service.name }}</h1>
+            <a class="detail-url" href="{{ monitor.service.url }}" target="_blank" rel="noopener noreferrer">
+                <span>{{ monitor.service.url }}</span>
+                <img src="/static/images/open-external-link.svg" alt="" aria-hidden="true" width="14" height="14" />
+            </a>
+        </div>
+
+        <div class="detail-actions">
+            <form action="/monitors/{{ monitor.service.id }}/toggle-pause" method="POST" style="margin: 0;">
+                {% if monitor.service.is_enabled %}
+                <button class="button-secondary" type="submit" title="Pause monitoring checks">
+                    Pause
+                </button>
+                {% else %}
+                <button class="button-primary" type="submit" title="Resume monitoring checks">
+                    Resume
+                </button>
+                {% endif %}
+            </form>
+
+            <a class="button-secondary" href="/monitors/{{ monitor.service.id }}/edit">
+                Edit Monitor
+            </a>
+        </div>
+    </div>
+
+    <!-- Unified Hero Strip (Status, Metrics & Heartbeat) -->
+    <div class="hero-strip">
+        <div class="hero-strip-top">
+            <div class="hero-status">
+                <div class="hero-status-indicator">
+                    {% if !monitor.service.is_enabled %}
+                    <span class="pulse-dot pulse-blue"></span>
+                    <span class="hero-status-text text-blue">Monitoring Paused</span>
+                    {% else if monitor.service.current_status == ServiceStatus::Down %}
+                    <span class="pulse-dot pulse-red"></span>
+                    <span class="hero-status-text text-red">Incident Detected</span>
+                    {% else %}
+                    <span class="pulse-dot pulse-green"></span>
+                    <span class="hero-status-text text-green">All Systems Operational</span>
+                    {% endif %}
+                </div>
+                <span class="hero-status-sub">
+                    Checked every {{ monitor.service.interval_seconds }}s • Timeout {{ monitor.service.timeout_seconds }}s
+                </span>
+            </div>
+
+            <div class="hero-metrics">
+                <div class="hero-metric-item">
+                    <span class="hero-metric-value text-green">{{ "{:.2}"|format(monitor.uptime_rate) }}%</span>
+                    <span class="hero-metric-label">24h Uptime</span>
+                </div>
+
+                <div class="hero-metric-divider"></div>
+
+                <div class="hero-metric-item">
+                    {% match monitor.last_ping_ms %}
+                    {% when Some with (ping) %}
+                    <span class="hero-metric-value">{{ ping }}ms</span>
+                    {% when None %}
+                    <span class="hero-metric-value text-muted">-</span>
+                    {% endmatch %}
+                    <span class="hero-metric-label">Response</span>
+                </div>
+
+                <div class="hero-metric-divider"></div>
+
+                <div class="hero-metric-item">
+                    <span class="hero-metric-value">{{ monitor.service.method }}</span>
+                    <span class="hero-metric-label">Method</span>
+                </div>
+
+                <div class="hero-metric-divider"></div>
+
+                <div class="hero-metric-item">
+                    <span class="hero-metric-value">HTTP {{ monitor.service.expected_status }}</span>
+                    <span class="hero-metric-label">Expected</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="hero-strip-bottom">
+            <div class="heartbeat-header">
+                <h3>24-Hour Heartbeat History</h3>
+                <span class="heartbeat-range">Past 24 hours (1 bar = 1 hour)</span>
+            </div>
+
+            <div class="heartbeat-bar-large" role="img" aria-label="Status history last 24h">
+                {% for tick in monitor.ticks %}
+                <span class="tick {{ tick.class }}" title="{{ tick.tooltip }}"></span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Details -->
+    <div class="section-card">
+        <h2 class="section-card-title">Configuration Details</h2>
+
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">Expected Status Code</span>
+                <span class="info-value">HTTP {{ monitor.service.expected_status }}</span>
+            </div>
+
+            <div class="info-item">
+                <span class="info-label">Request Timeout</span>
+                <span class="info-value">{{ monitor.service.timeout_seconds }} seconds</span>
+            </div>
+
+            <div class="info-item">
+                <span class="info-label">Retry Threshold</span>
+                <span class="info-value">{{ monitor.service.max_retries }} failure(s)</span>
+            </div>
+
+            <div class="info-item">
+                <span class="info-label">Monitoring State</span>
+                <span class="info-value">{% if monitor.service.is_enabled %}Active{% else %}Suspended (Paused){% endif %}</span>
+            </div>
+        </div>
+
+        {% match monitor.service.keyword_match %}
+        {% when Some with (k) %}
+        <div class="info-item" style="margin-top: 8px;">
+            <span class="info-label">Expected Response Keyword</span>
+            <div class="code-block">{{ k }}</div>
+        </div>
+        {% when None %}
+        {% endmatch %}
+
+        {% match monitor.service.headers %}
+        {% when Some with (h) %}
+        <div class="info-item" style="margin-top: 8px;">
+            <span class="info-label">Custom Request Headers</span>
+            <div class="code-block">{{ h }}</div>
+        </div>
+        {% when None %}
+        {% endmatch %}
+
+        {% match monitor.service.body %}
+        {% when Some with (b) %}
+        <div class="info-item" style="margin-top: 8px;">
+            <span class="info-label">Request Body Payload</span>
+            <div class="code-block">{{ b }}</div>
+        </div>
+        {% when None %}
+        {% endmatch %}
+    </div>
+
+    <!-- Recent Incidents -->
+    <div class="section-card">
+        <h2 class="section-card-title">Recent Incidents</h2>
+
+        {% if incidents.is_empty() %}
+        <div class="empty-state">
+            <span class="text-green" style="font-size: 20px;">✓</span>
+            <p style="margin-top: 8px;">No incidents recorded for this monitor yet. System is performing normally.</p>
+        </div>
+        {% else %}
+        <table class="incidents-table">
+            <thead>
+                <tr>
+                    <th>Started</th>
+                    <th>Duration</th>
+                    <th>Status</th>
+                    <th>Cause / Error</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for incident in incidents %}
+                <tr>
+                    <td><span title="{{ incident.started_at_formatted() }}">{{ incident.started_at_relative() }}</span></td>
+                    <td>{{ incident.duration_formatted() }}</td>
+                    <td>
+                        {% match incident.resolved_at %}
+                        {% when Some with (_) %}
+                        <span class="text-green">Resolved</span>
+                        {% when None %}
+                        <span class="text-red">Ongoing</span>
+                        {% endmatch %}
+                    </td>
+                    <td>
+                        {% match incident.cause %}
+                        {% when Some with (c) %}{{ c }}{% when None %}{{ incident.error_type }}{% endmatch %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

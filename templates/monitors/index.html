@@ -23,9 +23,9 @@
 
 <section aria-label="Monitors list" class="monitors">
     <div class="search">
-        <button class="button-primary" type="button">
+        <a class="button-primary" href="/monitors/new">
             + Add monitor
-        </button>
+        </a>
 
         <input
                 aria-label="Search monitors"
@@ -38,27 +38,29 @@
 
     <ul class="monitor-grid">
         {% for monitor in monitors %}
-        <li class="service-monitor-card">
-            <div class="card-header">
-                <div class="card-title-group">
-                    <h2 class="card-title">{{ monitor.service.name }}</h2>
+        <li>
+            <a class="service-monitor-card" href="/monitors/{{ monitor.service.id }}">
+                <div class="card-header">
+                    <div class="card-title-group">
+                        <h2 class="card-title">{{ monitor.service.name }}</h2>
+                    </div>
+                    {% match monitor.last_ping_ms %}
+                        {% when Some with (ping) %}
+                            <span class="card-ping">{{ ping }}ms</span>
+                        {% when None %}
+                            <span class="card-ping">-</span>
+                    {% endmatch %}
                 </div>
-                {% match monitor.last_ping_ms %}
-                    {% when Some with (ping) %}
-                        <span class="card-ping">{{ ping }}ms</span>
-                    {% when None %}
-                        <span class="card-ping">-</span>
-                {% endmatch %}
-            </div>
-            <div class="card-uptime-row">
-                <span class="card-uptime">{{ "{:.2}"|format(monitor.uptime_rate) }}%</span>
-                <span class="card-duration">24h</span>
-            </div>
-            <div class="heartbeat-bar" role="img" aria-label="History of checks">
-                {% for tick in monitor.ticks %}
-                <span class="tick {{ tick.class }}" title="{{ tick.tooltip }}"></span>
-                {% endfor %}
-            </div>
+                <div class="card-uptime-row">
+                    <span class="card-uptime">{{ "{:.2}"|format(monitor.uptime_rate) }}%</span>
+                    <span class="card-duration">24h</span>
+                </div>
+                <div class="heartbeat-bar" role="img" aria-label="History of checks">
+                    {% for tick in monitor.ticks %}
+                    <span class="tick {{ tick.class }}" title="{{ tick.tooltip }}"></span>
+                    {% endfor %}
+                </div>
+            </a>
         </li>
         {% endfor %}
     </ul>

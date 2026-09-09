@@ -64,11 +64,14 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    transition: border-color 150ms ease;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 150ms ease, transform 150ms ease;
 }
 
 .service-monitor-card:hover {
     border-color: rgba(255, 255, 255, 0.22);
+    transform: translateY(-2px);
 }
 
 /* Card Header: Name, status dot and ping */
