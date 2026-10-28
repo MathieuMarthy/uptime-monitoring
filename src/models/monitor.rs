@@ -3,7 +3,7 @@ use crate::time::now_ms;
 use sqlx::{FromRow, SqlitePool};
 
 const COLUMNS: &str = "id, name, kind, url, method, headers, body, keyword, accepted_statuses, \
-    follow_redirects, interval_s, timeout_s, failure_threshold, tls_expiry_warn_days, paused, \
+    follow_redirects, ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold, tls_expiry_warn_days, paused, \
     created_at, updated_at";
 
 /// A monitor's configuration, written only by the admin.
@@ -19,7 +19,9 @@ pub struct Monitor {
     pub keyword: Option<String>,
     pub accepted_statuses: String,
     pub follow_redirects: bool,
+    pub ignore_tls_errors: bool,
     pub interval_s: i64,
+    pub retry_interval_s: i64,
     pub timeout_s: i64,
     pub failure_threshold: i64,
     pub tls_expiry_warn_days: Option<i64>,
@@ -55,10 +57,10 @@ impl Monitor {
             r#"
             INSERT INTO monitors (
                 name, url, method, headers, body, keyword, accepted_statuses, follow_redirects,
-                interval_s, timeout_s, failure_threshold, tls_expiry_warn_days, paused,
-                created_at, updated_at
+                ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold,
+                tls_expiry_warn_days, paused, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&input.name)
@@ -69,7 +71,9 @@ impl Monitor {
         .bind(&input.keyword)
         .bind(&input.accepted_statuses)
         .bind(input.follow_redirects)
+        .bind(input.ignore_tls_errors)
         .bind(input.interval_s)
+        .bind(input.retry_interval_s)
         .bind(input.timeout_s)
         .bind(input.failure_threshold)
         .bind(input.tls_expiry_warn_days)
@@ -99,8 +103,8 @@ impl Monitor {
             r#"
             UPDATE monitors
             SET name = ?, url = ?, method = ?, headers = ?, body = ?, keyword = ?,
-                accepted_statuses = ?, follow_redirects = ?, interval_s = ?, timeout_s = ?,
-                failure_threshold = ?, tls_expiry_warn_days = ?, paused = ?, updated_at = ?
+                accepted_statuses = ?, follow_redirects = ?, ignore_tls_errors = ?, interval_s = ?,
+                retry_interval_s = ?, timeout_s = ?, failure_threshold = ?, tls_expiry_warn_days = ?, paused = ?, updated_at = ?
             WHERE id = ?
             "#,
         )
@@ -112,7 +116,9 @@ impl Monitor {
         .bind(&input.keyword)
         .bind(&input.accepted_statuses)
         .bind(input.follow_redirects)
+        .bind(input.ignore_tls_errors)
         .bind(input.interval_s)
+        .bind(input.retry_interval_s)
         .bind(input.timeout_s)
         .bind(input.failure_threshold)
         .bind(input.tls_expiry_warn_days)

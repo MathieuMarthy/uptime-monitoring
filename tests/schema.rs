@@ -99,3 +99,22 @@ async fn check_constraints_hold() {
             .await;
     assert!(bad_status.is_err());
 }
+
+#[tokio::test]
+async fn check_engine_columns_have_defaults() {
+    let (_, pool) = common::test_app().await;
+    let id = insert_monitor(&pool, "api").await;
+    sqlx::query("INSERT INTO monitor_state (monitor_id) VALUES (?)")
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let row: (i64, i64, i64, Option<i64>) = sqlx::query_as(
+        "SELECT m.retry_interval_s, m.ignore_tls_errors, m.failure_threshold, s.failing_since
+         FROM monitors m JOIN monitor_state s ON s.monitor_id = m.id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row, (20, 0, 3, None));
+}

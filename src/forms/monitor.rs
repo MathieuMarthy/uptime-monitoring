@@ -23,6 +23,7 @@ pub struct MonitorForm {
     pub method: String,
     pub accepted_statuses: String,
     pub interval_s: String,
+    pub retry_interval_s: String,
     pub timeout_s: String,
     pub failure_threshold: String,
     pub tls_expiry_warn_days: String,
@@ -30,6 +31,7 @@ pub struct MonitorForm {
     pub body: String,
     pub keyword: String,
     pub follow_redirects: Option<String>,
+    pub ignore_tls_errors: Option<String>,
     pub active: Option<String>,
 }
 
@@ -44,7 +46,9 @@ pub struct MonitorInput {
     pub keyword: Option<String>,
     pub accepted_statuses: String,
     pub follow_redirects: bool,
+    pub ignore_tls_errors: bool,
     pub interval_s: i64,
+    pub retry_interval_s: i64,
     pub timeout_s: i64,
     pub failure_threshold: i64,
     pub tls_expiry_warn_days: Option<i64>,
@@ -59,13 +63,15 @@ impl MonitorForm {
             method: "GET".to_string(),
             accepted_statuses: "200-299".to_string(),
             interval_s: "60".to_string(),
+            retry_interval_s: "20".to_string(),
             timeout_s: "10".to_string(),
-            failure_threshold: "1".to_string(),
+            failure_threshold: "3".to_string(),
             tls_expiry_warn_days: "14".to_string(),
             headers: String::new(),
             body: String::new(),
             keyword: String::new(),
             follow_redirects: Some("on".to_string()),
+            ignore_tls_errors: None,
             active: Some("on".to_string()),
         }
     }
@@ -78,6 +84,7 @@ impl MonitorForm {
             method: m.method.clone(),
             accepted_statuses: m.accepted_statuses.clone(),
             interval_s: m.interval_s.to_string(),
+            retry_interval_s: m.retry_interval_s.to_string(),
             timeout_s: m.timeout_s.to_string(),
             failure_threshold: m.failure_threshold.to_string(),
             tls_expiry_warn_days: m
@@ -88,6 +95,7 @@ impl MonitorForm {
             body: m.body.clone().unwrap_or_default(),
             keyword: m.keyword.clone().unwrap_or_default(),
             follow_redirects: checkbox(m.follow_redirects),
+            ignore_tls_errors: checkbox(m.ignore_tls_errors),
             active: checkbox(!m.paused),
         }
     }
@@ -116,12 +124,7 @@ impl MonitorForm {
         }
 
         let accepted_statuses = match parse_status_ranges(&self.accepted_statuses) {
-            Ok(_) => self
-                .accepted_statuses
-                .split(',')
-                .map(str::trim)
-                .collect::<Vec<_>>()
-                .join(","),
+            Ok(ranges) => format_status_ranges(&ranges),
             Err(message) => {
                 errors.insert("accepted_statuses", message);
                 String::new()
@@ -131,6 +134,18 @@ impl MonitorForm {
         let interval_s = parse_bounded(&self.interval_s, 5, 86_400)
             .map_err(|m| errors.insert("interval_s", m))
             .ok();
+
+        let retry_interval_s = parse_bounded(&self.retry_interval_s, 5, 86_400)
+            .map_err(|m| errors.insert("retry_interval_s", m))
+            .ok();
+        if let (Some(interval), Some(retry)) = (interval_s, retry_interval_s)
+            && retry > interval
+        {
+            errors.insert(
+                "retry_interval_s",
+                "Retry interval cannot be longer than the check interval.".to_string(),
+            );
+        }
 
         let timeout_s = parse_bounded(&self.timeout_s, 1, 120)
             .map_err(|m| errors.insert("timeout_s", m))
@@ -163,7 +178,8 @@ impl MonitorForm {
             errors.insert("headers", message);
         }
 
-        let body = non_empty(&self.body);
+        // Kept as typed: leading or trailing whitespace may matter to the target.
+        let body = has_visible_char(&self.body).then(|| self.body.clone());
         if body.as_ref().is_some_and(|b| b.len() > BODY_MAX_BYTES) {
             errors.insert("body", "Request body must be at most 64 KiB.".to_string());
         }
@@ -189,8 +205,10 @@ impl MonitorForm {
             keyword,
             accepted_statuses,
             follow_redirects: self.follow_redirects.is_some(),
+            ignore_tls_errors: self.ignore_tls_errors.is_some(),
             // Unwraps are safe: each `None` above recorded an error and returned early.
             interval_s: interval_s.unwrap(),
+            retry_interval_s: retry_interval_s.unwrap(),
             timeout_s: timeout_s.unwrap(),
             failure_threshold: failure_threshold.unwrap(),
             tls_expiry_warn_days,
@@ -229,6 +247,21 @@ pub fn parse_status_ranges(raw: &str) -> Result<Vec<(u16, u16)>, String> {
     Ok(ranges)
 }
 
+/// Canonical form of parsed ranges: `200-299,301`.
+fn format_status_ranges(ranges: &[(u16, u16)]) -> String {
+    ranges
+        .iter()
+        .map(|&(low, high)| {
+            if low == high {
+                low.to_string()
+            } else {
+                format!("{low}-{high}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 fn parse_bounded(raw: &str, min: i64, max: i64) -> Result<i64, String> {
     match raw.trim().parse::<i64>() {
         Ok(n) if (min..=max).contains(&n) => Ok(n),
@@ -257,13 +290,16 @@ fn validate_url(raw: &str) -> Result<(), String> {
 }
 
 fn validate_headers(raw: &str) -> Result<(), String> {
-    let map: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_str(raw).map_err(|_| {
-            r#"Headers must be a JSON object, e.g. {"Authorization": "Bearer token"}."#.to_string()
-        })?;
-    for (name, value) in &map {
-        http::HeaderName::from_bytes(name.as_bytes())
+    let HeaderPairs(pairs) = serde_json::from_str(raw).map_err(|_| {
+        r#"Headers must be a JSON object, e.g. {"Authorization": "Bearer token"}."#.to_string()
+    })?;
+    let mut seen = std::collections::HashSet::new();
+    for (name, value) in &pairs {
+        let header = http::HeaderName::from_bytes(name.as_bytes())
             .map_err(|_| format!("{name:?} is not a valid header name."))?;
+        if !seen.insert(header) {
+            return Err(format!("{name:?} appears more than once."));
+        }
         let value = value
             .as_str()
             .ok_or_else(|| format!("The value of {name:?} must be a string."))?;
@@ -271,6 +307,37 @@ fn validate_headers(raw: &str) -> Result<(), String> {
             .map_err(|_| format!("The value of {name:?} is not a valid header value."))?;
     }
     Ok(())
+}
+
+/// A JSON object read as its entries in order, duplicates included
+/// (`serde_json::Map` would silently keep only the last one).
+struct HeaderPairs(Vec<(String, serde_json::Value)>);
+
+impl<'de> Deserialize<'de> for HeaderPairs {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct PairsVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for PairsVisitor {
+            type Value = HeaderPairs;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a JSON object")
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<HeaderPairs, A::Error> {
+                let mut pairs = Vec::new();
+                while let Some(entry) = map.next_entry()? {
+                    pairs.push(entry);
+                }
+                Ok(HeaderPairs(pairs))
+            }
+        }
+
+        deserializer.deserialize_map(PairsVisitor)
+    }
 }
 
 #[cfg(test)]
@@ -302,7 +369,7 @@ mod tests {
         let i = valid().validate().unwrap();
         assert_eq!(
             (i.interval_s, i.timeout_s, i.failure_threshold),
-            (60, 10, 1)
+            (60, 10, 3)
         );
         assert_eq!(i.method, "GET");
         assert_eq!(i.accepted_statuses, "200-299");
@@ -413,6 +480,7 @@ mod tests {
             assert!(
                 MonitorForm {
                     interval_s: ok.into(),
+                    retry_interval_s: "5".into(),
                     ..valid()
                 }
                 .validate()
@@ -422,6 +490,7 @@ mod tests {
         }
         let five = MonitorForm {
             interval_s: "5".into(),
+            retry_interval_s: "5".into(),
             timeout_s: "5".into(),
             ..valid()
         };
@@ -600,6 +669,85 @@ mod tests {
             },
             "keyword",
         );
+    }
+
+    #[test]
+    fn retry_interval_and_tls_defaults() {
+        let i = valid().validate().unwrap();
+        assert_eq!(i.retry_interval_s, 20);
+        assert_eq!(i.failure_threshold, 3);
+        assert!(!i.ignore_tls_errors);
+        let i = MonitorForm {
+            ignore_tls_errors: Some("on".into()),
+            ..valid()
+        }
+        .validate()
+        .unwrap();
+        assert!(i.ignore_tls_errors);
+    }
+
+    #[test]
+    fn retry_interval_bounds() {
+        for bad in ["4", "61", "", "x"] {
+            assert_field_error(
+                MonitorForm {
+                    retry_interval_s: bad.into(),
+                    ..valid()
+                },
+                "retry_interval_s",
+            );
+        }
+        for ok in ["5", "60"] {
+            assert!(
+                MonitorForm {
+                    retry_interval_s: ok.into(),
+                    ..valid()
+                }
+                .validate()
+                .is_ok(),
+                "{ok}"
+            );
+        }
+    }
+
+    #[test]
+    fn accepted_statuses_are_canonical() {
+        let i = MonitorForm {
+            accepted_statuses: "0200-0299, 301-301".into(),
+            ..valid()
+        }
+        .validate()
+        .unwrap();
+        assert_eq!(i.accepted_statuses, "200-299,301");
+    }
+
+    #[test]
+    fn duplicate_header_names_are_rejected() {
+        assert_field_error(
+            MonitorForm {
+                headers: r#"{"X-Token":"a","x-token":"b"}"#.into(),
+                ..valid()
+            },
+            "headers",
+        );
+    }
+
+    #[test]
+    fn body_is_kept_as_typed() {
+        let i = MonitorForm {
+            body: "  {\"a\": 1}\n".into(),
+            ..valid()
+        }
+        .validate()
+        .unwrap();
+        assert_eq!(i.body.as_deref(), Some("  {\"a\": 1}\n"));
+        let i = MonitorForm {
+            body: " \n ".into(),
+            ..valid()
+        }
+        .validate()
+        .unwrap();
+        assert_eq!(i.body, None);
     }
 
     #[test]

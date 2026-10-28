@@ -3,7 +3,7 @@ mod common;
 use common::{TestApp, TestResponse, get, post_form};
 use sqlx::SqlitePool;
 
-const DEFAULTS: &str = "method=GET&accepted_statuses=200-299&interval_s=60&timeout_s=10\
+const DEFAULTS: &str = "method=GET&accepted_statuses=200-299&interval_s=60&retry_interval_s=20&timeout_s=10\
     &failure_threshold=1&tls_expiry_warn_days=14&headers=&body=&keyword=\
     &follow_redirects=on&active=on";
 

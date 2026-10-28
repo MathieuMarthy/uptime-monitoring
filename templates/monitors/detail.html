@@ -114,6 +114,11 @@
             </div>
 
             <div class="info-item">
+                <span class="info-label">Retry Interval</span>
+                <span class="info-value">{{ m.retry_interval_s }} seconds</span>
+            </div>
+
+            <div class="info-item">
                 <span class="info-label">Failure Threshold</span>
                 <span class="info-value">{{ m.failure_threshold }} consecutive failure(s)</span>
             </div>
@@ -121,6 +126,11 @@
             <div class="info-item">
                 <span class="info-label">Follow Redirects</span>
                 <span class="info-value">{% if m.follow_redirects %}Yes{% else %}No{% endif %}</span>
+            </div>
+
+            <div class="info-item">
+                <span class="info-label">Ignore TLS Errors</span>
+                <span class="info-value">{% if m.ignore_tls_errors %}Yes{% else %}No{% endif %}</span>
             </div>
 
             <div class="info-item">
