@@ -1,4 +1,5 @@
 use crate::forms::monitor::MonitorInput;
+use crate::models::MonitorState;
 use crate::time::now_ms;
 use sqlx::{FromRow, SqlitePool};
 
@@ -99,6 +100,8 @@ impl Monitor {
         id: i64,
         input: &MonitorInput,
     ) -> Result<bool, sqlx::Error> {
+        let now = now_ms();
+        let mut tx = pool.begin().await?;
         let result = sqlx::query(
             r#"
             UPDATE monitors
@@ -123,12 +126,19 @@ impl Monitor {
         .bind(input.failure_threshold)
         .bind(input.tls_expiry_warn_days)
         .bind(input.paused)
-        .bind(now_ms())
+        .bind(now)
         .bind(id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
+        if result.rows_affected() == 0 {
+            return Ok(false);
+        }
 
-        Ok(result.rows_affected() > 0)
+        if input.paused {
+            MonitorState::reset_for_pause(&mut tx, id, now).await?;
+        }
+        tx.commit().await?;
+        Ok(true)
     }
 
     /// Returns `false` when no monitor has this id.
@@ -141,15 +151,26 @@ impl Monitor {
         Ok(result.rows_affected() > 0)
     }
 
-    /// Returns `false` when no monitor has this id.
+    /// Returns `false` when no monitor has this id. Pausing resolves the open incident and resets
+    /// the state to `pending`.
     pub async fn toggle_pause(pool: &SqlitePool, id: i64) -> Result<bool, sqlx::Error> {
-        let result =
-            sqlx::query("UPDATE monitors SET paused = 1 - paused, updated_at = ? WHERE id = ?")
-                .bind(now_ms())
-                .bind(id)
-                .execute(pool)
-                .await?;
+        let now = now_ms();
+        let mut tx = pool.begin().await?;
+        let paused: Option<(bool,)> = sqlx::query_as(
+            "UPDATE monitors SET paused = 1 - paused, updated_at = ? WHERE id = ? RETURNING paused",
+        )
+        .bind(now)
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some((paused,)) = paused else {
+            return Ok(false);
+        };
 
-        Ok(result.rows_affected() > 0)
+        if paused {
+            MonitorState::reset_for_pause(&mut tx, id, now).await?;
+        }
+        tx.commit().await?;
+        Ok(true)
     }
 }

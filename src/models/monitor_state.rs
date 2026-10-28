@@ -1,6 +1,8 @@
-use sqlx::{FromRow, SqlitePool};
+use crate::engine::verdict::{self, CheckOutcome, Health, Transition};
+use crate::models::{Check, Incident};
+use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
-const COLUMNS: &str = "monitor_id, status, consecutive_failures, last_check_at, last_latency_ms, \
+const COLUMNS: &str = "monitor_id, status, consecutive_failures, failing_since, last_check_at, last_latency_ms, \
     last_error, tls_expires_at, tls_warned_for";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
@@ -17,6 +19,7 @@ pub struct MonitorState {
     pub monitor_id: i64,
     pub status: MonitorStatus,
     pub consecutive_failures: i64,
+    pub failing_since: Option<i64>,
     pub last_check_at: Option<i64>,
     pub last_latency_ms: Option<i64>,
     pub last_error: Option<String>,
@@ -40,5 +43,82 @@ impl MonitorState {
         .bind(monitor_id)
         .fetch_optional(pool)
         .await
+    }
+
+    pub fn health(&self) -> Health {
+        Health {
+            status: self.status,
+            consecutive_failures: self.consecutive_failures,
+            failing_since: self.failing_since,
+        }
+    }
+
+    /// Records a check in one transaction: state, raw check, and the incident it opens or
+    /// resolves. Returns `None`, recording nothing, when the monitor was paused or deleted while
+    /// the check ran.
+    pub async fn record(
+        pool: &SqlitePool,
+        monitor_id: i64,
+        outcome: &CheckOutcome,
+        health: Health,
+        failure_threshold: i64,
+    ) -> Result<Option<(Health, Option<Transition>)>, sqlx::Error> {
+        let (next, transition) =
+            verdict::apply(health, outcome.ok(), outcome.checked_at, failure_threshold);
+        let mut tx = pool.begin().await?;
+
+        // Written first so the transaction takes the write lock at once.
+        let updated = sqlx::query(
+            "UPDATE monitor_state
+             SET status = ?, consecutive_failures = ?, failing_since = ?, last_check_at = ?,
+                 last_latency_ms = ?, last_error = ?, tls_expires_at = COALESCE(?, tls_expires_at)
+             WHERE monitor_id = ? AND (SELECT paused FROM monitors WHERE id = ?) = 0",
+        )
+        .bind(next.status)
+        .bind(next.consecutive_failures)
+        .bind(next.failing_since)
+        .bind(outcome.checked_at)
+        .bind(outcome.latency_ms)
+        .bind(outcome.failure.as_ref().map(|f| f.message.as_str()))
+        .bind(outcome.tls_expires_at)
+        .bind(monitor_id)
+        .bind(monitor_id)
+        .execute(&mut *tx)
+        .await?;
+        if updated.rows_affected() == 0 {
+            return Ok(None);
+        }
+
+        Check::insert(&mut tx, monitor_id, outcome).await?;
+        match transition {
+            Some(Transition::WentDown { since }) => {
+                Incident::open(&mut tx, monitor_id, since).await?
+            }
+            Some(Transition::Recovered) => {
+                Incident::resolve(&mut tx, monitor_id, outcome.checked_at).await?
+            }
+            None => {}
+        }
+
+        tx.commit().await?;
+        Ok(Some((next, transition)))
+    }
+
+    /// On pause: resolves the open incident at `now` and puts the monitor back to `pending`.
+    pub async fn reset_for_pause(
+        conn: &mut SqliteConnection,
+        monitor_id: i64,
+        now: i64,
+    ) -> Result<(), sqlx::Error> {
+        Incident::resolve(conn, monitor_id, now).await?;
+        sqlx::query(
+            "UPDATE monitor_state
+             SET status = 'pending', consecutive_failures = 0, failing_since = NULL
+             WHERE monitor_id = ?",
+        )
+        .bind(monitor_id)
+        .execute(conn)
+        .await?;
+        Ok(())
     }
 }
