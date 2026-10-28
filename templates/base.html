@@ -6,31 +6,9 @@
     <title>{% block title %}Uptime Monitoring{% endblock %}</title>
     <link href="/static/css/style.css" rel="stylesheet">
     {% block styles %}{% endblock %}
+    {% block scripts %}{% endblock %}
 </head>
 <body>
-<header>
-    <div>
-        <a href="/" class="header-logo" aria-label="Uptime Monitoring Home">
-            <img alt="Uptime Monitoring logo" height="46" src="/static/images/icon.svg"/>
-        </a>
-        <nav aria-label="Main navigation">
-            <a href="/">Monitors</a>
-            <a href="/public-pages">Public pages</a>
-            <a href="/alerts">Alerts</a>
-        </nav>
-    </div>
-    <a href="/settings" class="header-settings" aria-label="Settings">
-        <img
-                alt=""
-                aria-hidden="true"
-                height="32"
-                src="/static/images/settings.svg"
-        />
-    </a>
-</header>
-
-<main>
-    {% block content %}{% endblock %}
-</main>
+{% block body %}{% endblock %}
 </body>
 </html>

@@ -242,3 +242,7 @@ main {
 .error-page p {
     color: var(--text-color-muted);
 }
+
+.inline-form {
+    margin: 0;
+}

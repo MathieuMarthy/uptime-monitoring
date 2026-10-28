@@ -1,21 +1,34 @@
 use crate::error::AppError;
 use crate::state::AppState;
-use axum::Router;
 use axum::extract::rejection::FormRejection;
 use axum::extract::{Form, FromRequestParts, Path};
 use axum::http::request::Parts;
+use axum::{Router, middleware};
 
+mod auth;
 mod health;
 mod monitors;
 
-pub fn all() -> Router<AppState> {
-    Router::new()
-        .merge(health::router())
+/// Every route requires a session unless it is listed in the public router.
+pub fn all(state: &AppState) -> Router<AppState> {
+    let protected = Router::new()
         .merge(monitors::router())
+        .merge(auth::protected_router())
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            crate::middleware::require_session,
+        ));
+    let public = Router::new()
+        .merge(health::router())
+        .merge(auth::public_router());
+    protected.merge(public)
 }
 
 /// Parses a positive integer id from a path segment; anything else is a 404.
 pub fn parse_id(raw: &str) -> Result<i64, AppError> {
+    if raw.is_empty() || !raw.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(AppError::NotFound);
+    }
     raw.parse::<i64>()
         .ok()
         .filter(|id| *id > 0)

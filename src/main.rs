@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use uptime_monitoring::config::Config;
@@ -33,6 +34,18 @@ async fn main() {
         }
     };
 
+    let state = AppState::new(pool).with_trust_proxy_headers(config.trust_proxy_headers);
+    match state.start_setup_if_needed().await {
+        Ok(Some(token)) => tracing::warn!(
+            "No admin account yet. Create it by opening /setup?token={token} on this instance."
+        ),
+        Ok(None) => {}
+        Err(e) => {
+            eprintln!("Cannot read the admin account: {e}");
+            std::process::exit(1);
+        }
+    }
+
     let listener = tokio::net::TcpListener::bind(config.bind_addr)
         .await
         .expect("Failed to bind address");
@@ -40,10 +53,13 @@ async fn main() {
         "uptime-monitoring is running on http://{}",
         config.bind_addr
     );
-    axum::serve(listener, app(AppState::new(pool)))
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .expect("Server error");
+    axum::serve(
+        listener,
+        app(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .expect("Server error");
 }
 
 async fn shutdown_signal() {

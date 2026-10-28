@@ -1,3 +1,4 @@
+use crate::forms::has_visible_char;
 use crate::models::Monitor;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -95,7 +96,7 @@ impl MonitorForm {
         let mut errors = FieldErrors::new();
 
         let name = self.name.trim();
-        if name.is_empty() {
+        if !has_visible_char(name) {
             errors.insert("name", "Name is required.".to_string());
         } else if name.chars().count() > NAME_MAX_CHARS {
             errors.insert(

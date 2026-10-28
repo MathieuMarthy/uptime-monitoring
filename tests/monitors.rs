@@ -1,7 +1,6 @@
 mod common;
 
-use axum::Router;
-use common::{TestResponse, get, post_form};
+use common::{TestApp, TestResponse, get, post_form};
 use sqlx::SqlitePool;
 
 const DEFAULTS: &str = "method=GET&accepted_statuses=200-299&interval_s=60&timeout_s=10\
@@ -12,7 +11,7 @@ fn form(name: &str, extra: &str) -> String {
     format!("name={name}&url=https%3A%2F%2Fexample.com&{DEFAULTS}{extra}")
 }
 
-async fn create(app: &Router, name: &str) -> TestResponse {
+async fn create(app: &TestApp, name: &str) -> TestResponse {
     post_form(app, "/monitors/new", &form(name, "")).await
 }
 
@@ -140,7 +139,7 @@ async fn toggle_pause_and_delete() {
 async fn bad_ids_return_404() {
     let (app, _) = common::test_app().await;
     create(&app, "API").await;
-    for id in ["abc", "-1", "0", "999", "1.5"] {
+    for id in ["abc", "-1", "0", "999", "1.5", "+1", "%2B1"] {
         let responses = [
             get(&app, &format!("/monitors/{id}")).await,
             get(&app, &format!("/monitors/{id}/edit")).await,
@@ -192,11 +191,16 @@ async fn malformed_form_bodies_render_html_error_page() {
     let (app, pool) = common::test_app().await;
     let duplicate_field = post_form(&app, "/monitors/new", &form("API", "&name=Other")).await;
     let duplicate_checkbox = post_form(&app, "/monitors/new", &form("API", "&active=on")).await;
+    let session = app.session.clone().unwrap();
     let wrong_type = common::send(
         &app,
         Request::post("/monitors/new")
             .header("content-type", "text/plain")
-            .body(Body::from(form("API", "")))
+            .header("cookie", format!("__Host-session={}", session.token))
+            .body(Body::from(form(
+                "API",
+                &format!("&csrf_token={}", session.csrf_token),
+            )))
             .unwrap(),
     )
     .await;
@@ -247,4 +251,24 @@ async fn non_utf8_path_segments_return_404_page() {
         assert_eq!(r.status, 404, "body: {}", r.body);
         assert!(r.body.contains("Page not found"));
     }
+}
+
+#[tokio::test]
+async fn invisible_name_is_field_error() {
+    let (app, pool) = common::test_app().await;
+    for name in ["%E2%80%8B", "%C2%A0%E2%80%8D", "%EF%BB%BF+"] {
+        let r = create(&app, name).await;
+        assert_eq!(r.status, 200, "name {name}");
+        assert!(r.body.contains("Name is required."), "name {name}");
+    }
+    assert_eq!(count_monitors(&pool).await, 0);
+}
+
+#[tokio::test]
+async fn wrong_method_renders_405_page() {
+    let (app, _) = common::test_app().await;
+    create(&app, "API").await;
+    let r = get(&app, "/monitors/1/delete").await;
+    assert_eq!(r.status, 405);
+    assert!(r.body.contains("Method not allowed"));
 }

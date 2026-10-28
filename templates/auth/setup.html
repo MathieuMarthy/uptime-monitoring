@@ -1,0 +1,58 @@
+{% extends "public.html" %}
+
+{% block title %}Setup - Uptime Monitoring{% endblock %}
+{% block styles %}
+<link href="/static/css/forms.css" rel="stylesheet">
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/setup.js" defer></script>
+{% endblock %}
+
+{% macro field_error(field) %}
+{% if let Some(message) = self.error(field) %}<p class="field-error">{{ message }}</p>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="form-container auth-container">
+    <div class="form-header">
+        <h1 class="form-title">Welcome</h1>
+        {% if token.is_some() %}
+        <p class="form-subtitle">Create the administrator account of this instance.</p>
+        {% else %}
+        <p class="form-subtitle">This instance has no administrator yet. Open the setup link printed in the
+            server logs to create the account.</p>
+        {% endif %}
+    </div>
+
+    {% if let Some(token) = token %}
+    <form action="/setup" method="POST" class="auth-form">
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="timezone" id="timezone" value="UTC">
+
+        <div class="form-group">
+            <label class="form-label" for="username">Username</label>
+            <input class="form-input" id="username" name="username" type="text" autocomplete="username"
+                   required maxlength="64" value="{{ username }}"/>
+            {% call field_error("username") %}{% endcall %}
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="password">Password</label>
+            <input class="form-input" id="password" name="password" type="password" autocomplete="new-password"
+                   required minlength="12"/>
+            <p class="form-hint">At least 12 characters.</p>
+            {% call field_error("password") %}{% endcall %}
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" for="password_confirm">Confirm password</label>
+            <input class="form-input" id="password_confirm" name="password_confirm" type="password"
+                   autocomplete="new-password" required minlength="12"/>
+            {% call field_error("password_confirm") %}{% endcall %}
+        </div>
+
+        <button class="button-primary" type="submit">Create account</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

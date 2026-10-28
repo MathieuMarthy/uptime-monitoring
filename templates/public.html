@@ -1,0 +1,16 @@
+{# Pages shown without a session: setup, login, errors. #}
+{% extends "base.html" %}
+
+{% block body %}
+<header>
+    <div>
+        <a href="/" class="header-logo" aria-label="Uptime Monitoring Home">
+            <img alt="Uptime Monitoring logo" height="46" src="/static/images/icon.svg"/>
+        </a>
+    </div>
+</header>
+
+<main>
+    {% block content %}{% endblock %}
+</main>
+{% endblock %}

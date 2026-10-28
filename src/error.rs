@@ -6,6 +6,11 @@ use axum::response::{Html, IntoResponse, Response};
 #[derive(Debug)]
 pub enum AppError {
     NotFound,
+    MethodNotAllowed,
+    /// Missing or wrong CSRF or setup token.
+    Forbidden,
+    /// Too many failed login attempts.
+    TooManyRequests,
     /// A request the framework could not parse (malformed form body, wrong content type, too large).
     InvalidRequest(StatusCode),
     Internal(Box<dyn std::error::Error + Send + Sync>),
@@ -27,6 +32,15 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             Self::NotFound => (StatusCode::NOT_FOUND, "Page not found"),
+            Self::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed"),
+            Self::Forbidden => (
+                StatusCode::FORBIDDEN,
+                "This form has expired or was not sent from this site. Reload the page and try again.",
+            ),
+            Self::TooManyRequests => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "Too many failed login attempts. Try again in 15 minutes.",
+            ),
             Self::InvalidRequest(status) => (status, "Invalid request"),
             Self::Internal(e) => {
                 tracing::error!(error = %e, "request failed");

@@ -1,9 +1,12 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 
 {% block title %}{% if self.is_edit() %}Edit Monitor{% else %}Add New Monitor{% endif %} - Uptime Monitoring{% endblock %}
 
 {% block styles %}
 <link href="/static/css/forms.css" rel="stylesheet">
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/confirm.js" defer></script>
 {% endblock %}
 
 {% macro field_error(field) %}
@@ -25,6 +28,7 @@
 
     <div class="form-card">
         <form action="{{ action_url }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="form-section">
                 <h2 class="section-title">General Settings</h2>
 
@@ -35,15 +39,15 @@
                     {% call field_error("name") %}{% endcall %}
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group" style="flex: 2;">
+                <div class="form-row form-row-wide-first">
+                    <div class="form-group">
                         <label class="form-label" for="url">URL to monitor *</label>
                         <input class="form-input" id="url" name="url" type="url"
                                placeholder="https://example.com/health" required value="{{ form.url }}"/>
                         {% call field_error("url") %}{% endcall %}
                     </div>
 
-                    <div class="form-group" style="flex: 1;">
+                    <div class="form-group">
                         <label class="form-label" for="method">HTTP Method</label>
                         <select class="form-select" id="method" name="method">
                             {% for method in self.methods() %}
@@ -165,12 +169,13 @@
         </form>
 
         {% if let Some(id) = monitor_id %}
-        <div style="padding-top: 16px; border-top: 1px solid var(--color-stroke);">
+        <div class="danger-zone">
             <form action="/monitors/{{ id }}/delete" method="POST"
-                  onsubmit="return confirm('Are you sure you want to permanently delete this monitor and all its history?');">
-                <div class="form-actions" style="border-top: none; padding-top: 0;">
+                  data-confirm="Are you sure you want to permanently delete this monitor and all its history?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="form-actions form-actions-plain">
                     <div>
-                        <span style="font-size: 13px; font-weight: 600; color: var(--text-color-red);">Danger Zone</span>
+                        <span class="danger-zone-title">Danger Zone</span>
                         <p class="form-hint">Permanently delete this monitor and all its history.</p>
                     </div>
                     <button class="button-danger" type="submit">Delete Monitor</button>

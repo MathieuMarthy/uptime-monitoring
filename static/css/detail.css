@@ -382,3 +382,15 @@
         display: none;
     }
 }
+
+.info-item-spaced {
+    margin-top: 8px;
+}
+
+.empty-state-icon {
+    font-size: 20px;
+}
+
+.empty-state-text {
+    margin-top: 8px;
+}

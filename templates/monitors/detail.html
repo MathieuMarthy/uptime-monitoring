@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 
 {% block title %}{{ view.monitor.name }} - Uptime Monitoring{% endblock %}
 
@@ -27,7 +27,8 @@
         </div>
 
         <div class="detail-actions">
-            <form action="/monitors/{{ m.id }}/toggle-pause" method="POST" style="margin: 0;">
+            <form action="/monitors/{{ m.id }}/toggle-pause" method="POST" class="inline-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 {% if m.paused %}
                 <button class="button-primary" type="submit" title="Resume monitoring checks">Resume</button>
                 {% else %}
@@ -139,21 +140,21 @@
         </div>
 
         {% if let Some(keyword) = m.keyword %}
-        <div class="info-item" style="margin-top: 8px;">
+        <div class="info-item info-item-spaced">
             <span class="info-label">Expected Response Keyword</span>
             <div class="code-block">{{ keyword }}</div>
         </div>
         {% endif %}
 
         {% if let Some(headers) = m.headers %}
-        <div class="info-item" style="margin-top: 8px;">
+        <div class="info-item info-item-spaced">
             <span class="info-label">Custom Request Headers</span>
             <div class="code-block">{{ headers }}</div>
         </div>
         {% endif %}
 
         {% if let Some(body) = m.body %}
-        <div class="info-item" style="margin-top: 8px;">
+        <div class="info-item info-item-spaced">
             <span class="info-label">Request Body Payload</span>
             <div class="code-block">{{ body }}</div>
         </div>
@@ -164,8 +165,8 @@
         <h2 class="section-card-title">Recent Incidents</h2>
 
         <div class="empty-state">
-            <span class="text-green" style="font-size: 20px;">✓</span>
-            <p style="margin-top: 8px;">No incidents recorded for this monitor yet.</p>
+            <span class="text-green empty-state-icon">✓</span>
+            <p class="empty-state-text">No incidents recorded for this monitor yet.</p>
         </div>
     </div>
 </div>

@@ -7,6 +7,7 @@ const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
 pub struct Config {
     pub database_url: String,
     pub bind_addr: SocketAddr,
+    pub trust_proxy_headers: bool,
 }
 
 impl Config {
@@ -21,9 +22,20 @@ impl Config {
             format!("BIND_ADDR must be an address like {DEFAULT_BIND_ADDR}, got {bind_addr:?}")
         })?;
 
+        let trust_proxy_headers = match get("TRUST_PROXY_HEADERS").as_deref() {
+            None | Some("false") | Some("0") => false,
+            Some("true") | Some("1") => true,
+            Some(other) => {
+                return Err(format!(
+                    "TRUST_PROXY_HEADERS must be true or false, got {other:?}"
+                ));
+            }
+        };
+
         Ok(Self {
             database_url,
             bind_addr,
+            trust_proxy_headers,
         })
     }
 }
@@ -37,6 +49,19 @@ mod tests {
         let config = Config::from_lookup(|_| None).unwrap();
         assert_eq!(config.database_url, "sqlite://uptime.db");
         assert_eq!(config.bind_addr.to_string(), "0.0.0.0:8080");
+        assert!(!config.trust_proxy_headers);
+    }
+
+    #[test]
+    fn trust_proxy_headers_is_a_boolean() {
+        let with = |value: &'static str| {
+            Config::from_lookup(move |key| {
+                (key == "TRUST_PROXY_HEADERS").then(|| value.to_string())
+            })
+        };
+        assert!(with("true").unwrap().trust_proxy_headers);
+        assert!(!with("0").unwrap().trust_proxy_headers);
+        assert!(with("yes").unwrap_err().contains("TRUST_PROXY_HEADERS"));
     }
 
     #[test]

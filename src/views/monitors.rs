@@ -75,10 +75,11 @@ pub struct IndexTemplate {
     pub down: usize,
     pub pending: usize,
     pub paused: usize,
+    pub csrf_token: String,
 }
 
 impl IndexTemplate {
-    pub fn new(monitors: Vec<MonitorView>) -> Self {
+    pub fn new(monitors: Vec<MonitorView>, csrf_token: String) -> Self {
         let active_with = |status| {
             monitors
                 .iter()
@@ -96,6 +97,7 @@ impl IndexTemplate {
             down,
             pending,
             paused,
+            csrf_token,
         }
     }
 }
@@ -104,6 +106,7 @@ impl IndexTemplate {
 #[template(path = "monitors/detail.html")]
 pub struct DetailTemplate {
     pub view: MonitorView,
+    pub csrf_token: String,
 }
 
 #[derive(Template, WebTemplate)]
@@ -111,6 +114,7 @@ pub struct DetailTemplate {
 pub struct FormTemplate {
     pub form: MonitorForm,
     pub errors: FieldErrors,
+    pub csrf_token: String,
     pub action_url: String,
     pub cancel_url: String,
     pub monitor_id: Option<i64>,
