@@ -139,9 +139,11 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `failure_threshold` consecutive failures make it `down` and open an incident dated from the first failure of the
   series, with that failure's error. The transition is logged and returned, for notifications to hook onto.
 - **Recording.** One transaction per check. Its first statement updates `monitor_state` only if the monitor is still
-  active, so a check that finishes after a pause or a deletion is dropped.
+  active and its state is still the one the task knows, so a check that finishes after a pause, an unpause or a
+  deletion is dropped and its task ends. A response without TLS clears `tls_expires_at`; a check without a response
+  keeps it.
 - **Private targets.** With `settings.block_private_targets`, loopback, private, link-local (cloud metadata), CGNAT,
-  multicast and reserved addresses are refused: by the DNS resolver (the connection uses exactly the checked
+  benchmarking, multicast and reserved addresses are refused, including when embedded in IPv6 (mapped, NAT64, 6to4): by the DNS resolver (the connection uses exactly the checked
   addresses, so DNS rebinding cannot slip through), for literal IP hosts, and on every redirect. The check fails with
   `error_kind = blocked`. The flag is read at startup (`Guard::set_block_private` changes it at runtime).
 - **Certificates.** Verified against the system store (`rustls-platform-verifier`): the Docker image needs

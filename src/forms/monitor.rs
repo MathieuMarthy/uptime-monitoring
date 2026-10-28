@@ -190,6 +190,12 @@ impl MonitorForm {
             .is_some_and(|k| k.len() > KEYWORD_MAX_BYTES)
         {
             errors.insert("keyword", "Keyword must be at most 1 KiB.".to_string());
+        } else if keyword.is_some() && method == "HEAD" {
+            errors.insert(
+                "keyword",
+                "A HEAD response has no body: choose another method or remove the keyword."
+                    .to_string(),
+            );
         }
 
         if !errors.is_empty() {
@@ -748,6 +754,18 @@ mod tests {
         .validate()
         .unwrap();
         assert_eq!(i.body, None);
+    }
+
+    #[test]
+    fn keyword_needs_a_method_with_a_body() {
+        assert_field_error(
+            MonitorForm {
+                method: "HEAD".into(),
+                keyword: "OK".into(),
+                ..valid()
+            },
+            "keyword",
+        );
     }
 
     #[test]

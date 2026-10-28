@@ -1,3 +1,4 @@
+use crate::engine::verdict::Failure;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
 /// An outage period: from the first failed check of the series to the first successful check.
@@ -23,21 +24,35 @@ impl Incident {
         .await
     }
 
-    /// Opens an incident starting at the failed check recorded at `since`, with its error.
+    /// Opens an incident starting at the failed check recorded at `since`, with its error. If
+    /// that check was already purged, `latest` (the failure that reached the threshold) gives
+    /// the error instead.
     pub async fn open(
         conn: &mut SqliteConnection,
         monitor_id: i64,
         since: i64,
+        latest: &Failure,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query(
+        let inserted = sqlx::query(
             "INSERT INTO incidents (monitor_id, started_at, error_kind, cause)
              SELECT monitor_id, checked_at, error_kind, error FROM checks
              WHERE monitor_id = ? AND checked_at = ?",
         )
         .bind(monitor_id)
         .bind(since)
-        .execute(conn)
+        .execute(&mut *conn)
         .await?;
+        if inserted.rows_affected() == 0 {
+            sqlx::query(
+                "INSERT INTO incidents (monitor_id, started_at, error_kind, cause) VALUES (?, ?, ?, ?)",
+            )
+            .bind(monitor_id)
+            .bind(since)
+            .bind(latest.kind.as_str())
+            .bind(&latest.message)
+            .execute(conn)
+            .await?;
+        }
         Ok(())
     }
 

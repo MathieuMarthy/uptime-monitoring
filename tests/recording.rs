@@ -225,3 +225,75 @@ async fn editing_an_active_monitor_keeps_its_state() {
         None
     );
 }
+
+#[tokio::test]
+async fn stale_health_is_not_recorded() {
+    let (pool, id) = monitor("1").await;
+    let stale = MonitorState::find(&pool, id)
+        .await
+        .unwrap()
+        .unwrap()
+        .health();
+    record_all(&pool, id, 1, &[fail_at(1_000, ErrorKind::Timeout)]).await;
+    // A pause and an unpause between two checks of a task that did not stop yet.
+    Monitor::toggle_pause(&pool, id).await.unwrap();
+    Monitor::toggle_pause(&pool, id).await.unwrap();
+    let down = MonitorState::record(
+        &pool,
+        id,
+        &fail_at(2_000, ErrorKind::Timeout),
+        Health {
+            status: MonitorStatus::Down,
+            consecutive_failures: 1,
+            failing_since: Some(1_000),
+        },
+        1,
+    )
+    .await
+    .unwrap();
+    assert_eq!(down, None, "the state was reset meanwhile");
+    assert!(
+        MonitorState::record(&pool, id, &ok_at(3_000), stale, 1)
+            .await
+            .unwrap()
+            .is_some(),
+        "pending is what the reset wrote"
+    );
+}
+
+#[tokio::test]
+async fn incident_opens_even_without_the_first_failed_check() {
+    let (pool, id) = monitor("2").await;
+    record_all(&pool, id, 2, &[fail_at(1_000, ErrorKind::Dns)]).await;
+    // Purged by retention during a very long series.
+    sqlx::query("DELETE FROM checks")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let health = MonitorState::find(&pool, id)
+        .await
+        .unwrap()
+        .unwrap()
+        .health();
+    MonitorState::record(&pool, id, &fail_at(2_000, ErrorKind::Timeout), health, 2)
+        .await
+        .unwrap();
+    let incidents = Incident::for_monitor(&pool, id).await.unwrap();
+    assert_eq!(incidents.len(), 1);
+    assert_eq!(
+        (incidents[0].started_at, incidents[0].error_kind.as_str()),
+        (1_000, "timeout")
+    );
+}
+
+#[tokio::test]
+async fn response_without_tls_clears_the_expiry() {
+    let (pool, id) = monitor("1").await;
+    let plain = CheckOutcome {
+        tls_expires_at: None,
+        ..ok_at(2_000)
+    };
+    record_all(&pool, id, 1, &[ok_at(1_000), plain]).await;
+    let s = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(s.tls_expires_at, None);
+}

@@ -180,9 +180,6 @@ fn classify(error: &reqwest::Error) -> Failure {
             None => e.source(),
         };
     }
-    if error.is_timeout() {
-        return failure(ErrorKind::Timeout, "request timed out".to_string());
-    }
     failure(ErrorKind::Connect, format!("connection failed: {root}"))
 }
 
@@ -220,35 +217,37 @@ fn status_accepted(accepted: &str, status: u16) -> bool {
 
 /// Searches a keyword across body chunks without keeping the whole body.
 pub struct KeywordScan<'a> {
-    keyword: &'a [u8],
+    finder: memchr::memmem::Finder<'a>,
+    /// The last `keyword.len() - 1` bytes seen, for a match split across chunks.
     tail: Vec<u8>,
 }
 
 impl<'a> KeywordScan<'a> {
     pub fn new(keyword: &'a str) -> Self {
         Self {
-            keyword: keyword.as_bytes(),
+            finder: memchr::memmem::Finder::new(keyword.as_bytes()),
             tail: Vec::new(),
         }
     }
 
     /// Returns `true` once the keyword has been seen.
     pub fn feed(&mut self, chunk: &[u8]) -> bool {
-        if self.keyword.is_empty() {
+        let overlap = match self.finder.needle().len() {
+            0 => return true,
+            len => len - 1,
+        };
+        self.tail
+            .extend_from_slice(&chunk[..chunk.len().min(overlap)]);
+        if self.finder.find(&self.tail).is_some() || self.finder.find(chunk).is_some() {
             return true;
         }
-        self.tail.extend_from_slice(chunk);
-        if self
-            .tail
-            .windows(self.keyword.len())
-            .any(|window| window == self.keyword)
-        {
-            return true;
+        if chunk.len() >= overlap {
+            self.tail.clear();
+            self.tail.extend_from_slice(&chunk[chunk.len() - overlap..]);
+        } else {
+            let excess = self.tail.len().saturating_sub(overlap);
+            self.tail.drain(..excess);
         }
-        // Keep just enough to match a keyword split across this chunk and the next.
-        let keep = self.keyword.len() - 1;
-        let drop = self.tail.len().saturating_sub(keep);
-        self.tail.drain(..drop);
         false
     }
 }
@@ -279,6 +278,15 @@ mod tests {
         assert!(!scan.feed(b"hay hay ne"));
         assert!(!scan.feed(b"e"));
         assert!(scan.feed(b"dle hay"));
+    }
+
+    #[test]
+    fn keyword_split_over_many_small_chunks() {
+        let mut scan = KeywordScan::new("needle");
+        for byte in b"xxneedl" {
+            assert!(!scan.feed(&[*byte]));
+        }
+        assert!(scan.feed(b"e"));
     }
 
     #[test]

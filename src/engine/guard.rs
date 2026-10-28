@@ -116,8 +116,9 @@ impl Resolve for Guard {
     }
 }
 
-/// Loopback, private, link-local (cloud metadata), CGNAT, multicast, reserved and unspecified
-/// addresses. IPv4-mapped and IPv4-compatible IPv6 addresses are judged as their IPv4.
+/// Loopback, private, link-local (cloud metadata), CGNAT, benchmarking, IETF protocol,
+/// multicast, reserved and unspecified addresses. IPv6 addresses embedding an IPv4 one
+/// (mapped, compatible, NAT64, 6to4) are judged as that IPv4.
 pub fn is_private(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(ip) => is_private_v4(ip),
@@ -126,7 +127,7 @@ pub fn is_private(ip: IpAddr) -> bool {
 }
 
 fn is_private_v4(ip: Ipv4Addr) -> bool {
-    let [a, b, ..] = ip.octets();
+    let [a, b, c, _] = ip.octets();
     ip.is_loopback()
         || ip.is_private()
         || ip.is_link_local()
@@ -134,6 +135,8 @@ fn is_private_v4(ip: Ipv4Addr) -> bool {
         || ip.is_multicast()
         || a == 0
         || (a == 100 && (b & 0xc0) == 64)
+        || (a == 192 && b == 0 && c == 0)
+        || (a == 198 && (b & 0xfe) == 18)
         || a >= 240
 }
 
@@ -144,11 +147,21 @@ fn is_private_v6(ip: Ipv6Addr) -> bool {
         || ip.is_multicast()
         || (first & 0xfe00) == 0xfc00
         || (first & 0xffc0) == 0xfe80
+        || (first & 0xffc0) == 0xfec0
     {
         return true;
     }
     if let Some(v4) = ip.to_ipv4_mapped() {
         return is_private_v4(v4);
+    }
+    let s = ip.segments();
+    let embedded = |high: u16, low: u16| Ipv4Addr::from((u32::from(high) << 16) | u32::from(low));
+    // NAT64 (64:ff9b::/96) and 6to4 (2002::/16) reach the IPv4 address they embed.
+    if s[..6] == [0x64, 0xff9b, 0, 0, 0, 0] {
+        return is_private_v4(embedded(s[6], s[7]));
+    }
+    if first == 0x2002 {
+        return is_private_v4(embedded(s[1], s[2]));
     }
     // IPv4-compatible (`::a.b.c.d`), deprecated but still routed by some stacks.
     if ip.segments()[..6].iter().all(|&s| s == 0) {
@@ -187,6 +200,14 @@ mod tests {
             "::ffff:127.0.0.1",
             "::ffff:10.0.0.1",
             "::10.0.0.1",
+            "192.0.0.1",
+            "198.18.0.1",
+            "198.19.255.255",
+            "fec0::1",
+            "64:ff9b::a9fe:a9fe",
+            "64:ff9b::7f00:1",
+            "2002:7f00:1::1",
+            "2002:a9fe:a9fe::",
         ] {
             assert!(is_private(ip.parse().unwrap()), "{ip}");
         }
@@ -204,6 +225,9 @@ mod tests {
             "192.169.0.1",
             "2606:4700:4700::1111",
             "::ffff:8.8.8.8",
+            "198.20.0.1",
+            "64:ff9b::808:808",
+            "2002:808:808::1",
         ] {
             assert!(!is_private(ip.parse().unwrap()), "{ip}");
         }

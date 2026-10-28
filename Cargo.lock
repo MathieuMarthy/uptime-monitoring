@@ -2357,6 +2357,7 @@ dependencies = [
  "getrandom 0.4.3",
  "http",
  "http-body-util",
+ "memchr",
  "reqwest",
  "rust-embed",
  "rustls",

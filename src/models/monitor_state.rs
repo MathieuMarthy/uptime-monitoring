@@ -54,8 +54,9 @@ impl MonitorState {
     }
 
     /// Records a check in one transaction: state, raw check, and the incident it opens or
-    /// resolves. Returns `None`, recording nothing, when the monitor was paused or deleted while
-    /// the check ran.
+    /// resolves. `health` is the state the caller last knew. Returns `None`, recording nothing,
+    /// when the monitor is paused or deleted, or when its state no longer matches `health`
+    /// (a pause reset it meanwhile): the caller must stop and let a fresh task take over.
     pub async fn record(
         pool: &SqlitePool,
         monitor_id: i64,
@@ -71,8 +72,10 @@ impl MonitorState {
         let updated = sqlx::query(
             "UPDATE monitor_state
              SET status = ?, consecutive_failures = ?, failing_since = ?, last_check_at = ?,
-                 last_latency_ms = ?, last_error = ?, tls_expires_at = COALESCE(?, tls_expires_at)
-             WHERE monitor_id = ? AND (SELECT paused FROM monitors WHERE id = ?) = 0",
+                 last_latency_ms = ?, last_error = ?,
+                 tls_expires_at = CASE WHEN ? THEN ? ELSE tls_expires_at END
+             WHERE monitor_id = ? AND (SELECT paused FROM monitors WHERE id = ?) = 0
+               AND status = ? AND consecutive_failures = ? AND failing_since IS ?",
         )
         .bind(next.status)
         .bind(next.consecutive_failures)
@@ -80,9 +83,14 @@ impl MonitorState {
         .bind(outcome.checked_at)
         .bind(outcome.latency_ms)
         .bind(outcome.failure.as_ref().map(|f| f.message.as_str()))
+        // A response proves which certificate (if any) is in use; without one, keep the last.
+        .bind(outcome.status_code.is_some())
         .bind(outcome.tls_expires_at)
         .bind(monitor_id)
         .bind(monitor_id)
+        .bind(health.status)
+        .bind(health.consecutive_failures)
+        .bind(health.failing_since)
         .execute(&mut *tx)
         .await?;
         if updated.rows_affected() == 0 {
@@ -92,7 +100,8 @@ impl MonitorState {
         Check::insert(&mut tx, monitor_id, outcome).await?;
         match transition {
             Some(Transition::WentDown { since }) => {
-                Incident::open(&mut tx, monitor_id, since).await?
+                let latest = outcome.failure.as_ref().expect("only a failure goes down");
+                Incident::open(&mut tx, monitor_id, since, latest).await?
             }
             Some(Transition::Recovered) => {
                 Incident::resolve(&mut tx, monitor_id, outcome.checked_at).await?
