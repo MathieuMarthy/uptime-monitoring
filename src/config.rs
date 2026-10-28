@@ -17,9 +17,9 @@ impl Config {
     pub fn from_lookup(get: impl Fn(&str) -> Option<String>) -> Result<Self, String> {
         let database_url = get("DATABASE_URL").unwrap_or_else(|| DEFAULT_DATABASE_URL.to_string());
         let bind_addr = get("BIND_ADDR").unwrap_or_else(|| DEFAULT_BIND_ADDR.to_string());
-        let bind_addr = bind_addr
-            .parse()
-            .map_err(|_| format!("BIND_ADDR must be an address like {DEFAULT_BIND_ADDR}, got {bind_addr:?}"))?;
+        let bind_addr = bind_addr.parse().map_err(|_| {
+            format!("BIND_ADDR must be an address like {DEFAULT_BIND_ADDR}, got {bind_addr:?}")
+        })?;
 
         Ok(Self {
             database_url,

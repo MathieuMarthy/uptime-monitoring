@@ -26,7 +26,12 @@ pub async fn send(app: &Router, request: Request<Body>) -> TestResponse {
     let response = app.clone().oneshot(request).await.expect("infallible");
     let status = response.status();
     let headers = response.headers().clone();
-    let bytes = response.into_body().collect().await.expect("body").to_bytes();
+    let bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("body")
+        .to_bytes();
     TestResponse {
         status,
         headers,

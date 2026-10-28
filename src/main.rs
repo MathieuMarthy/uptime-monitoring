@@ -29,7 +29,10 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(config.bind_addr)
         .await
         .expect("Failed to bind address");
-    tracing::info!("uptime-monitoring is running on http://{}", config.bind_addr);
+    tracing::info!(
+        "uptime-monitoring is running on http://{}",
+        config.bind_addr
+    );
     axum::serve(listener, app(AppState::new(pool)))
         .with_graceful_shutdown(shutdown_signal())
         .await

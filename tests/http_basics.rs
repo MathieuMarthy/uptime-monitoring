@@ -13,7 +13,12 @@ async fn static_css_is_served_with_cache_headers() {
     let (app, _) = common::test_app().await;
     let r = common::get(&app, "/static/css/style.css").await;
     assert_eq!(r.status, 200);
-    assert!(r.headers["content-type"].to_str().unwrap().starts_with("text/css"));
+    assert!(
+        r.headers["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("text/css")
+    );
     assert_eq!(r.headers["cache-control"], "public, max-age=3600");
 }
 

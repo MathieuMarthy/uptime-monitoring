@@ -133,10 +133,16 @@ impl ServiceFormInput {
                 }
                 match parsed.host_str() {
                     Some(host) if !host.trim().is_empty() => (),
-                    _ => return Err("URL must include a valid host or domain name (e.g. https://example.com).".to_string()),
+                    _ => return Err(
+                        "URL must include a valid host or domain name (e.g. https://example.com)."
+                            .to_string(),
+                    ),
                 }
             }
-            Err(_) => return Err("Invalid URL format. Please enter a valid URL (e.g. https://example.com/health).".to_string()),
+            Err(_) => return Err(
+                "Invalid URL format. Please enter a valid URL (e.g. https://example.com/health)."
+                    .to_string(),
+            ),
         }
 
         if self.interval_seconds < 5 {

@@ -1,9 +1,7 @@
 use crate::models::{Incident, Service, ServiceFormInput, ServiceStatus};
-use crate::views::monitor_view::Monitor;
 use crate::state::AppState;
-use crate::views::monitors::{
-    MonitorDetailTemplate, MonitorFormTemplate, MonitorIndexTemplate,
-};
+use crate::views::monitor_view::Monitor;
+use crate::views::monitors::{MonitorDetailTemplate, MonitorFormTemplate, MonitorIndexTemplate};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect, Response};
@@ -21,10 +19,7 @@ async fn index(State(state): State<AppState>) -> MonitorIndexTemplate {
         .iter()
         .filter(|m| m.service.is_enabled && m.service.current_status == ServiceStatus::Down)
         .count() as i64;
-    let paused_count = monitors
-        .iter()
-        .filter(|m| !m.service.is_enabled)
-        .count() as i64;
+    let paused_count = monitors.iter().filter(|m| !m.service.is_enabled).count() as i64;
 
     MonitorIndexTemplate {
         monitors,
@@ -44,10 +39,7 @@ async fn new_form() -> MonitorFormTemplate {
     }
 }
 
-async fn create(
-    State(state): State<AppState>,
-    Form(input): Form<ServiceFormInput>,
-) -> Response {
+async fn create(State(state): State<AppState>, Form(input): Form<ServiceFormInput>) -> Response {
     if let Err(err) = input.validate() {
         let dummy = input.to_dummy_service(None);
         return MonitorFormTemplate {
@@ -76,10 +68,7 @@ async fn create(
     }
 }
 
-async fn detail(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Response {
+async fn detail(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let monitor = match Monitor::fetch_by_id(&state.db, &id).await {
         Ok(Some(m)) => m,
         Ok(None) => return (StatusCode::NOT_FOUND, "Monitor not found").into_response(),
@@ -93,10 +82,7 @@ async fn detail(
     MonitorDetailTemplate { monitor, incidents }.into_response()
 }
 
-async fn edit_form(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Response {
+async fn edit_form(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let service = match Service::find_by_id(&state.db, &id).await {
         Ok(Some(s)) => s,
         Ok(None) => return (StatusCode::NOT_FOUND, "Monitor not found").into_response(),
@@ -147,10 +133,7 @@ async fn update(
     }
 }
 
-async fn delete(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Response {
+async fn delete(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     match Service::delete(&state.db, &id).await {
         Ok(_) => Redirect::to("/").into_response(),
         Err(e) => (
@@ -161,10 +144,7 @@ async fn delete(
     }
 }
 
-async fn toggle_pause(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Response {
+async fn toggle_pause(State(state): State<AppState>, Path(id): Path<String>) -> Response {
     let service = match Service::find_by_id(&state.db, &id).await {
         Ok(Some(s)) => s,
         Ok(None) => return (StatusCode::NOT_FOUND, "Monitor not found").into_response(),
