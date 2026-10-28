@@ -170,7 +170,7 @@ fn classify(error: &reqwest::Error) -> Failure {
             return guard_failure(guard);
         }
         if let Some(tls) = e.downcast_ref::<rustls::Error>() {
-            return failure(ErrorKind::Tls, format!("TLS error: {tls}"));
+            return failure(ErrorKind::Tls, tls_message(tls));
         }
         current = match e
             .downcast_ref::<std::io::Error>()
@@ -184,6 +184,28 @@ fn classify(error: &reqwest::Error) -> Failure {
         return failure(ErrorKind::Timeout, "request timed out".to_string());
     }
     failure(ErrorKind::Connect, format!("connection failed: {root}"))
+}
+
+/// The common certificate problems in plain words; rustls's own text for the rest.
+fn tls_message(error: &rustls::Error) -> String {
+    use rustls::CertificateError as C;
+    let reason = match error {
+        rustls::Error::InvalidCertificate(certificate) => match certificate {
+            C::Expired | C::ExpiredContext { .. } => "certificate expired".to_string(),
+            C::NotValidYet | C::NotValidYetContext { .. } => {
+                "certificate not valid yet".to_string()
+            }
+            C::UnknownIssuer => "certificate issued by an unknown authority".to_string(),
+            C::NotValidForName | C::NotValidForNameContext { .. } => {
+                "certificate not valid for this host name".to_string()
+            }
+            C::Revoked => "certificate revoked".to_string(),
+            C::Other(other) => format!("untrusted certificate ({other})"),
+            other => format!("invalid certificate ({other})"),
+        },
+        other => other.to_string(),
+    };
+    format!("TLS error: {reason}")
 }
 
 fn status_accepted(accepted: &str, status: u16) -> bool {
@@ -266,6 +288,25 @@ mod tests {
             assert!(!scan.feed(&[b'x'; 4096]));
         }
         assert!(scan.tail.len() < 3);
+    }
+
+    #[test]
+    fn tls_messages_are_readable() {
+        use rustls::CertificateError as C;
+        let message = |e: C| tls_message(&rustls::Error::InvalidCertificate(e));
+        assert_eq!(message(C::Expired), "TLS error: certificate expired");
+        assert_eq!(
+            message(C::UnknownIssuer),
+            "TLS error: certificate issued by an unknown authority"
+        );
+        assert_eq!(
+            message(C::NotValidForName),
+            "TLS error: certificate not valid for this host name"
+        );
+        assert_eq!(
+            tls_message(&rustls::Error::DecryptError),
+            "TLS error: cannot decrypt peer's message"
+        );
     }
 
     #[test]

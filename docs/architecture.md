@@ -9,6 +9,8 @@ This document describes the project structure and conventions used in uptime-mon
 - **[askama_web](https://github.com/askama-rs/askama_web)** — Askama integration for Axum (implements `IntoResponse` for
   templates)
 - **[SQLx](https://github.com/launchbadge/sqlx)** — Async SQL toolkit for SQLite, with embedded migrations
+- **[reqwest](https://github.com/seanmonstar/reqwest)** with **rustls** (`ring`) — HTTP client of the check engine;
+  certificates are verified against the system store
 - **[rust-embed](https://github.com/pyrossh/rust-embed)** — Static assets embedded in the binary
 - **[Tokio](https://tokio.rs/)** — Async runtime
 
@@ -32,12 +34,21 @@ uptime-monitoring/
 │   ├── time.rs                   # now_ms()
 │   ├── assets.rs                 # /static/* served from embedded files
 │   ├── db.rs                     # SQLite pool (WAL, foreign keys) + migrations
-│   ├── state.rs                  # AppState: pool, setup token, login limiter, hashing semaphore
+│   ├── state.rs                  # AppState: pool, setup token, login limiter, hashing semaphore, engine handle
+│   ├── engine/                   # Check engine
+│   │   ├── mod.rs                # start(), supervisor (one task per active monitor), EngineHandle::reload
+│   │   ├── scheduler.rs          # The loop of one monitor: check, record, sleep
+│   │   ├── http.rs               # One HTTP(S) check → CheckOutcome
+│   │   ├── verdict.rs            # Pure pending/up/down state machine
+│   │   └── guard.rs              # Private-target blocking (resolver, literal IPs, redirects)
 │   ├── models/                   # Entities and their SQL queries
 │   │   ├── admin.rs              # The single admin account
+│   │   ├── check.rs              # Raw check results
+│   │   ├── incident.rs           # Outage periods
 │   │   ├── monitor.rs            # Monitor configuration + CRUD
-│   │   ├── monitor_state.rs      # Runtime state written by the check engine
-│   │   └── session.rs            # Login sessions (token stored as SHA-256)
+│   │   ├── monitor_state.rs      # Runtime state; record() writes a check, its state and incident
+│   │   ├── session.rs            # Login sessions (token stored as SHA-256)
+│   │   └── settings.rs           # The single settings row
 │   ├── forms/
 │   │   ├── auth.rs               # SetupForm, LoginForm
 │   │   └── monitor.rs            # MonitorForm (raw strings) → MonitorInput | FieldErrors
@@ -111,6 +122,31 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Headers.** Every response carries a strict CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and
   `Referrer-Policy: same-origin`; protected pages add `Cache-Control: no-store`. HSTS is left to the reverse proxy.
 
+## Check engine
+
+- **Supervisor.** `engine::start` spawns one task per active monitor, first checks spread at random over
+  `min(interval, 60 s)`. Every monitor route calls `state.engine.reload(id)` after a change: the supervisor stops the
+  monitor's task, waits for it to end, re-reads the monitor and, unless it is paused or deleted, starts a new task that
+  checks at once. At most 20 checks run at the same time.
+- **Pace.** The next check starts `interval_s` after the start of the previous one, or `retry_interval_s` while a
+  failure series has not reached `failure_threshold`.
+- **Check.** One shared client per `(follow_redirects, ignore_tls_errors)` pair, no proxy, no connection reuse (each
+  check does DNS + TCP + TLS for real and keeps no idle socket), at most 10 redirects. `timeout_s` bounds the whole
+  check, body included. Latency is the time to the response headers. The body is read only when a keyword is set, up
+  to 1 MiB. No `Accept-Encoding` is sent. The server certificate's `notAfter` is stored in
+  `monitor_state.tls_expires_at`; with redirects, it is the last hop's.
+- **State machine** (`verdict.rs`). A success makes the monitor `up` (and resolves the incident if it was `down`);
+  `failure_threshold` consecutive failures make it `down` and open an incident dated from the first failure of the
+  series, with that failure's error. The transition is logged and returned, for notifications to hook onto.
+- **Recording.** One transaction per check. Its first statement updates `monitor_state` only if the monitor is still
+  active, so a check that finishes after a pause or a deletion is dropped.
+- **Private targets.** With `settings.block_private_targets`, loopback, private, link-local (cloud metadata), CGNAT,
+  multicast and reserved addresses are refused: by the DNS resolver (the connection uses exactly the checked
+  addresses, so DNS rebinding cannot slip through), for literal IP hosts, and on every redirect. The check fails with
+  `error_kind = blocked`. The flag is read at startup (`Guard::set_block_private` changes it at runtime).
+- **Certificates.** Verified against the system store (`rustls-platform-verifier`): the Docker image needs
+  `ca-certificates`, and an internal CA added to the host store is trusted.
+
 ## Tests
 
 ```bash
@@ -121,4 +157,5 @@ cargo clippy --all-targets -- -D warnings
 Integration tests build the router on an in-memory database (`tests/common/mod.rs`) and call it with
 `tower::ServiceExt::oneshot`; no server or network is involved. `test_app()` is already logged in (`get` sends the
 session cookie, `post_form` also adds the CSRF token); `app_with_admin()` and `fresh_app()` cover login and first
-launch. The `argon2` and `blake2` crates are built optimized in the dev profile so hashing stays fast in tests.
+launch; `test_app_with_engine()` also runs the check engine. Engine and HTTP check tests start a local axum server on
+`127.0.0.1:0` as their target; `tests/fixtures/cert.der` is a certificate with a known expiry. The `argon2` and `blake2` crates are built optimized in the dev profile so hashing stays fast in tests.

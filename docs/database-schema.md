@@ -49,9 +49,11 @@ erDiagram
 | `keyword` | TEXT | NULL | the response body must contain it |
 | `accepted_statuses` | TEXT | NOT NULL DEFAULT `'200-299'` | e.g. `200-299,301` |
 | `follow_redirects` | INTEGER | NOT NULL DEFAULT 1 | |
+| `ignore_tls_errors` | INTEGER | NOT NULL DEFAULT 0 | accept invalid, self-signed or expired certificates |
 | `interval_s` | INTEGER | NOT NULL DEFAULT 60 | |
+| `retry_interval_s` | INTEGER | NOT NULL DEFAULT 20 | used while a failure series is below the threshold; ≤ `interval_s` |
 | `timeout_s` | INTEGER | NOT NULL DEFAULT 10 | |
-| `failure_threshold` | INTEGER | NOT NULL DEFAULT 1, CHECK 1–10 | consecutive failures before Down |
+| `failure_threshold` | INTEGER | NOT NULL DEFAULT 3, CHECK 1–10 | consecutive failures before Down |
 | `tls_expiry_warn_days` | INTEGER | NULL, DEFAULT 14 | NULL = certificate alert disabled |
 | `paused` | INTEGER | NOT NULL DEFAULT 0 | |
 | `created_at`, `updated_at` | INTEGER | NOT NULL | |
@@ -59,8 +61,10 @@ erDiagram
 ### `monitor_state` — runtime state, written by the check engine (1:1)
 
 `monitor_id` (PK, FK cascade), `status` (`pending` \| `up` \| `down`, default `pending`), `consecutive_failures`,
-`last_check_at`, `last_latency_ms`, `last_error`, `tls_expires_at`, `tls_warned_for` (expiry date already alerted on).
-A row is created in the same transaction as its monitor.
+`failing_since` (`checked_at` of the first failure of the current series, NULL after a success), `last_check_at`,
+`last_latency_ms`, `last_error`, `tls_expires_at`, `tls_warned_for` (expiry date already alerted on).
+A row is created in the same transaction as its monitor. Pausing a monitor resets it to `pending` and resolves the
+open incident, in the same transaction.
 
 ### `checks` — raw results, short retention (default 7 days)
 
@@ -68,7 +72,7 @@ A row is created in the same transaction as its monitor.
 monitor is a contiguous range scan.
 
 `monitor_id`, `checked_at`, `ok` (verdict computed by the engine — the single source of truth), `latency_ms` (NULL
-without a response), `status_code`, `error_kind` (`timeout`, `dns`, `connect`, `tls`, `status`, `keyword`), `error`.
+without a response), `status_code`, `error_kind` (`timeout`, `dns`, `blocked`, `connect`, `tls`, `status`, `keyword`), `error`.
 
 ### `incidents` — outage periods, long retention
 
