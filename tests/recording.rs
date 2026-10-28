@@ -297,3 +297,35 @@ async fn response_without_tls_clears_the_expiry() {
     let s = MonitorState::find(&pool, id).await.unwrap().unwrap();
     assert_eq!(s.tls_expires_at, None);
 }
+
+#[tokio::test]
+async fn checks_record_the_time_they_cover_and_whether_it_was_downtime() {
+    let (pool, id) = monitor("3").await; // checked every 60 s
+    let s = 1000;
+    let outcomes = [
+        ok_at(0),
+        fail_at(60 * s, ErrorKind::Timeout),
+        fail_at(120 * s, ErrorKind::Timeout),
+        fail_at(180 * s, ErrorKind::Timeout), // goes down, from the failure at 60 s
+        ok_at(240 * s),                       // recovers
+        ok_at(1000 * s),                      // after a gap longer than twice the interval
+    ];
+    record_all(&pool, id, 3, &outcomes).await;
+
+    let rows: Vec<(i64, i64, bool)> =
+        sqlx::query_as("SELECT checked_at, covered_ms, down FROM checks ORDER BY checked_at")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        rows,
+        [
+            (0, 0, false),
+            (60 * s, 60 * s, false),
+            (120 * s, 60 * s, true),
+            (180 * s, 60 * s, true),
+            (240 * s, 60 * s, true),
+            (1000 * s, 0, false),
+        ]
+    );
+}

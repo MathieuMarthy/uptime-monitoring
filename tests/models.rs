@@ -56,7 +56,9 @@ async fn duplicate_name_ignores_case_of_accented_letters() {
     let err = Monitor::create(&pool, &input("CAFÉ")).await.unwrap_err();
     assert!(is_unique_violation(&err));
     let other = Monitor::create(&pool, &input("Other")).await.unwrap();
-    let err = Monitor::update(&pool, other, &input("CAFÉ")).await.unwrap_err();
+    let err = Monitor::update(&pool, other, &input("CAFÉ"))
+        .await
+        .unwrap_err();
     assert!(is_unique_violation(&err));
     assert!(Monitor::update(&pool, id, &input("CAFÉ")).await.unwrap());
 }

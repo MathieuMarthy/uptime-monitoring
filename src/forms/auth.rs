@@ -76,8 +76,8 @@ impl SetupForm {
     }
 }
 
-/// The timezone comes from the browser through a hidden field: anything that does not look
-/// like an IANA name (`Europe/Paris`, `Etc/GMT+1`) falls back to UTC. Settings can change it.
+/// The timezone comes from the browser through a hidden field: anything that is not a known
+/// IANA name (`Europe/Paris`, `Etc/GMT+1`) falls back to UTC. Settings can change it.
 fn timezone_or_default(raw: &str) -> String {
     let raw = raw.trim();
     let looks_valid = !raw.is_empty()
@@ -85,7 +85,8 @@ fn timezone_or_default(raw: &str) -> String {
         && raw.starts_with(|c: char| c.is_ascii_alphabetic())
         && raw
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '+' | '-'));
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '+' | '-'))
+        && jiff::tz::TimeZone::get(raw).is_ok();
     if looks_valid {
         raw.to_string()
     } else {
@@ -139,7 +140,14 @@ mod tests {
 
     #[test]
     fn timezone_falls_back_to_utc() {
-        for raw in ["", "<script>", "../etc", "Europe/Paris; x", &"A".repeat(65)] {
+        for raw in [
+            "",
+            "<script>",
+            "../etc",
+            "Europe/Paris; x",
+            "Mars/Olympus_Mons",
+            &"A".repeat(65),
+        ] {
             assert_eq!(timezone_or_default(raw), "UTC", "{raw:?}");
         }
         for raw in [

@@ -24,9 +24,9 @@ impl Incident {
         .await
     }
 
-    /// Opens an incident starting at the failed check recorded at `since`, with its error. If
-    /// that check was already purged, `latest` (the failure that reached the threshold) gives
-    /// the error instead.
+    /// Opens an incident starting at the failed check recorded at `since`, with its error, and
+    /// marks the checks after it as downtime. If that check was already purged, `latest` (the
+    /// failure that reached the threshold) gives the error instead.
     pub async fn open(
         conn: &mut SqliteConnection,
         monitor_id: i64,
@@ -50,9 +50,15 @@ impl Incident {
             .bind(since)
             .bind(latest.kind.as_str())
             .bind(&latest.message)
-            .execute(conn)
+            .execute(&mut *conn)
             .await?;
         }
+        // The failures before the threshold was reached were downtime too.
+        sqlx::query("UPDATE checks SET down = 1 WHERE monitor_id = ? AND checked_at > ?")
+            .bind(monitor_id)
+            .bind(since)
+            .execute(conn)
+            .await?;
         Ok(())
     }
 

@@ -47,6 +47,10 @@ CREATE TABLE checks (
     status_code INTEGER,
     error_kind  TEXT,
     error       TEXT,
+    -- Time since the previous check, 0 when that gap exceeds twice the interval.
+    covered_ms  INTEGER NOT NULL DEFAULT 0,
+    -- The covered time was downtime: the previous check falls inside an incident.
+    down        INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (monitor_id, checked_at)
 ) WITHOUT ROWID;
 
