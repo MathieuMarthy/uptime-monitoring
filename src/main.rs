@@ -3,7 +3,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use uptime_monitoring::config::Config;
 use uptime_monitoring::state::AppState;
-use uptime_monitoring::{app, db};
+use uptime_monitoring::{app, db, engine};
 
 #[tokio::main]
 async fn main() {
@@ -34,7 +34,17 @@ async fn main() {
         }
     };
 
-    let state = AppState::new(pool).with_trust_proxy_headers(config.trust_proxy_headers);
+    let engine = match engine::start(pool.clone()).await {
+        Ok(engine) => engine,
+        Err(e) => {
+            eprintln!("Cannot start the check engine: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let state = AppState::new(pool)
+        .with_trust_proxy_headers(config.trust_proxy_headers)
+        .with_engine(engine);
     match state.start_setup_if_needed().await {
         Ok(Some(token)) => uptime_monitoring::auth::print_setup_url(&token),
         Ok(None) => {}

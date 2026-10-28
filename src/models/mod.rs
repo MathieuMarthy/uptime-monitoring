@@ -4,6 +4,7 @@ pub mod incident;
 pub mod monitor;
 pub mod monitor_state;
 pub mod session;
+pub mod settings;
 
 pub use admin::Admin;
 pub use check::Check;
@@ -11,6 +12,7 @@ pub use incident::Incident;
 pub use monitor::Monitor;
 pub use monitor_state::{MonitorState, MonitorStatus};
 pub use session::{NewSession, Session};
+pub use settings::Settings;
 
 pub fn is_unique_violation(e: &sqlx::Error) -> bool {
     matches!(e, sqlx::Error::Database(db) if db.is_unique_violation())

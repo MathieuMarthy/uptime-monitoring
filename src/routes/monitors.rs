@@ -63,7 +63,10 @@ async fn create(
     };
 
     match Monitor::create(&state.db, &input).await {
-        Ok(id) => Ok(Redirect::to(&format!("/monitors/{id}")).into_response()),
+        Ok(id) => {
+            state.engine.reload(id);
+            Ok(Redirect::to(&format!("/monitors/{id}")).into_response())
+        }
         Err(e) if is_unique_violation(&e) => {
             Ok(create_page(form, name_taken(), session.csrf_token).into_response())
         }
@@ -104,7 +107,10 @@ async fn update(
     };
 
     match Monitor::update(&state.db, id, &input).await {
-        Ok(true) => Ok(Redirect::to(&format!("/monitors/{id}")).into_response()),
+        Ok(true) => {
+            state.engine.reload(id);
+            Ok(Redirect::to(&format!("/monitors/{id}")).into_response())
+        }
         Ok(false) => Err(AppError::NotFound),
         Err(e) if is_unique_violation(&e) => {
             Ok(edit_page(id, form, name_taken(), session.csrf_token).into_response())
@@ -118,6 +124,7 @@ async fn delete(
     MonitorId(id): MonitorId,
 ) -> Result<Redirect, AppError> {
     if Monitor::delete(&state.db, id).await? {
+        state.engine.reload(id);
         Ok(Redirect::to("/"))
     } else {
         Err(AppError::NotFound)
@@ -129,6 +136,7 @@ async fn toggle_pause(
     MonitorId(id): MonitorId,
 ) -> Result<Redirect, AppError> {
     if Monitor::toggle_pause(&state.db, id).await? {
+        state.engine.reload(id);
         Ok(Redirect::to(&format!("/monitors/{id}")))
     } else {
         Err(AppError::NotFound)

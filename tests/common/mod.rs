@@ -81,6 +81,19 @@ fn build(state: AppState, session: Option<TestSession>) -> TestApp {
 /// placeholder: use `app_with_admin` to test logging in.
 pub async fn test_app() -> (TestApp, SqlitePool) {
     let pool = pool().await;
+    logged_in(AppState::new(pool.clone()), pool).await
+}
+
+/// Like `test_app`, with the check engine running: monitor routes really trigger checks.
+pub async fn test_app_with_engine() -> (TestApp, SqlitePool) {
+    let pool = pool().await;
+    let engine = uptime_monitoring::engine::start(pool.clone())
+        .await
+        .expect("engine");
+    logged_in(AppState::new(pool.clone()).with_engine(engine), pool).await
+}
+
+async fn logged_in(state: AppState, pool: SqlitePool) -> (TestApp, SqlitePool) {
     Admin::setup(&pool, USERNAME, "not-a-real-hash", "UTC")
         .await
         .expect("admin");
@@ -89,7 +102,7 @@ pub async fn test_app() -> (TestApp, SqlitePool) {
         token: session.token,
         csrf_token: session.csrf_token,
     };
-    (build(AppState::new(pool.clone()), Some(session)), pool)
+    (build(state, Some(session)), pool)
 }
 
 /// An app whose admin can log in with `USERNAME` / `PASSWORD`; no session yet.

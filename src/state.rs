@@ -1,5 +1,6 @@
 use crate::auth::random_token;
 use crate::auth::rate_limit::LoginLimiter;
+use crate::engine::EngineHandle;
 use crate::models::Admin;
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
@@ -14,6 +15,8 @@ pub struct AppState {
     /// One password hash at a time: each Argon2 run takes 19 MiB.
     pub password_hashing: Arc<Semaphore>,
     pub trust_proxy_headers: bool,
+    /// Told about every monitor change; disconnected unless the engine was started.
+    pub engine: EngineHandle,
 }
 
 impl AppState {
@@ -24,11 +27,17 @@ impl AppState {
             login_limiter: Arc::default(),
             password_hashing: Arc::new(Semaphore::new(1)),
             trust_proxy_headers: false,
+            engine: EngineHandle::default(),
         }
     }
 
     pub fn with_trust_proxy_headers(mut self, trust: bool) -> Self {
         self.trust_proxy_headers = trust;
+        self
+    }
+
+    pub fn with_engine(mut self, engine: EngineHandle) -> Self {
+        self.engine = engine;
         self
     }
 
