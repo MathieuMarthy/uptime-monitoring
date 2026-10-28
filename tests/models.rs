@@ -50,6 +50,18 @@ async fn duplicate_name_ignores_case() {
 }
 
 #[tokio::test]
+async fn duplicate_name_ignores_case_of_accented_letters() {
+    let pool = pool().await;
+    let id = Monitor::create(&pool, &input("Café")).await.unwrap();
+    let err = Monitor::create(&pool, &input("CAFÉ")).await.unwrap_err();
+    assert!(is_unique_violation(&err));
+    let other = Monitor::create(&pool, &input("Other")).await.unwrap();
+    let err = Monitor::update(&pool, other, &input("CAFÉ")).await.unwrap_err();
+    assert!(is_unique_violation(&err));
+    assert!(Monitor::update(&pool, id, &input("CAFÉ")).await.unwrap());
+}
+
+#[tokio::test]
 async fn update_changes_fields_and_updated_at() {
     let pool = pool().await;
     let id = Monitor::create(&pool, &input("API")).await.unwrap();

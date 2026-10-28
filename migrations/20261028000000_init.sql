@@ -2,7 +2,9 @@
 
 CREATE TABLE monitors (
     id                   INTEGER PRIMARY KEY,
-    name                 TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    name                 TEXT NOT NULL,
+    -- Unicode lowercase of name, computed by the application: unique, and the sort key.
+    name_key             TEXT NOT NULL UNIQUE,
     kind                 TEXT NOT NULL DEFAULT 'http' CHECK (kind IN ('http')),
     url                  TEXT NOT NULL,
     method               TEXT NOT NULL DEFAULT 'GET'

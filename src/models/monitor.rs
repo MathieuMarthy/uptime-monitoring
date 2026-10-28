@@ -34,7 +34,7 @@ pub struct Monitor {
 impl Monitor {
     pub async fn find_all(pool: &SqlitePool) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as(sqlx::AssertSqlSafe(format!(
-            "SELECT {COLUMNS} FROM monitors ORDER BY name COLLATE NOCASE"
+            "SELECT {COLUMNS} FROM monitors ORDER BY name_key"
         )))
         .fetch_all(pool)
         .await
@@ -57,14 +57,15 @@ impl Monitor {
         let id = sqlx::query(
             r#"
             INSERT INTO monitors (
-                name, url, method, headers, body, keyword, accepted_statuses, follow_redirects,
+                name, name_key, url, method, headers, body, keyword, accepted_statuses, follow_redirects,
                 ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold,
                 tls_expiry_warn_days, paused, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&input.name)
+        .bind(name_key(&input.name))
         .bind(&input.url)
         .bind(&input.method)
         .bind(&input.headers)
@@ -105,13 +106,14 @@ impl Monitor {
         let result = sqlx::query(
             r#"
             UPDATE monitors
-            SET name = ?, url = ?, method = ?, headers = ?, body = ?, keyword = ?,
+            SET name = ?, name_key = ?, url = ?, method = ?, headers = ?, body = ?, keyword = ?,
                 accepted_statuses = ?, follow_redirects = ?, ignore_tls_errors = ?, interval_s = ?,
                 retry_interval_s = ?, timeout_s = ?, failure_threshold = ?, tls_expiry_warn_days = ?, paused = ?, updated_at = ?
             WHERE id = ?
             "#,
         )
         .bind(&input.name)
+        .bind(name_key(&input.name))
         .bind(&input.url)
         .bind(&input.method)
         .bind(&input.headers)
@@ -173,4 +175,9 @@ impl Monitor {
         tx.commit().await?;
         Ok(true)
     }
+}
+
+/// The key that makes names unique and sorts them: `COLLATE NOCASE` only folds ASCII letters.
+fn name_key(name: &str) -> String {
+    name.to_lowercase()
 }

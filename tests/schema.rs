@@ -4,7 +4,7 @@ use sqlx::SqlitePool;
 
 async fn insert_monitor(pool: &SqlitePool, name: &str) -> i64 {
     sqlx::query(
-        "INSERT INTO monitors (name, url, created_at, updated_at) VALUES (?, 'https://example.com', 0, 0)",
+        "INSERT INTO monitors (name, name_key, url, created_at, updated_at) VALUES (?1, ?1, 'https://example.com', 0, 0)",
     )
     .bind(name)
     .execute(pool)
@@ -80,13 +80,13 @@ async fn deleting_monitor_cascades() {
 async fn check_constraints_hold() {
     let (_, pool) = common::test_app().await;
     let bad_method = sqlx::query(
-        "INSERT INTO monitors (name, url, method, created_at, updated_at) VALUES ('a', 'u', 'TRACE', 0, 0)",
+        "INSERT INTO monitors (name, name_key, url, method, created_at, updated_at) VALUES ('a', 'a', 'u', 'TRACE', 0, 0)",
     )
     .execute(&pool)
     .await;
     assert!(bad_method.is_err());
     let bad_threshold = sqlx::query(
-        "INSERT INTO monitors (name, url, failure_threshold, created_at, updated_at) VALUES ('b', 'u', 11, 0, 0)",
+        "INSERT INTO monitors (name, name_key, url, failure_threshold, created_at, updated_at) VALUES ('b', 'b', 'u', 11, 0, 0)",
     )
     .execute(&pool)
     .await;
