@@ -77,4 +77,13 @@ impl Incident {
         .await?;
         Ok(())
     }
+
+    /// Deletes the incidents resolved before `cutoff`; an open incident stays, however old.
+    pub async fn purge_resolved_before(pool: &SqlitePool, cutoff: i64) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM incidents WHERE resolved_at < ?")
+            .bind(cutoff)
+            .execute(pool)
+            .await?;
+        Ok(())
+    }
 }

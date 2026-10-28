@@ -3,7 +3,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use uptime_monitoring::config::Config;
 use uptime_monitoring::state::AppState;
-use uptime_monitoring::{app, db, engine};
+use uptime_monitoring::{app, db, engine, maintenance};
 
 #[tokio::main]
 async fn main() {
@@ -41,6 +41,8 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    maintenance::start(pool.clone());
 
     let state = AppState::new(pool)
         .with_trust_proxy_headers(config.trust_proxy_headers)

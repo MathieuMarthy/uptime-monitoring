@@ -52,9 +52,9 @@ impl Session {
         Ok(())
     }
 
-    pub async fn purge_expired(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    pub async fn purge_expired(pool: &SqlitePool, now: i64) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM sessions WHERE expires_at <= ?")
-            .bind(now_ms())
+            .bind(now)
             .execute(pool)
             .await?;
         Ok(())

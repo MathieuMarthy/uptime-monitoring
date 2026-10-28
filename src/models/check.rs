@@ -1,5 +1,5 @@
 use crate::engine::verdict::CheckOutcome;
-use sqlx::SqliteConnection;
+use sqlx::{SqliteConnection, SqlitePool};
 
 /// Raw check results, short retention. Each check also records the time it covers, for
 /// uptime: see `Bucket`.
@@ -32,6 +32,28 @@ impl Check {
         .bind(outcome.failure.as_ref().map(|f| f.kind.as_str()))
         .bind(outcome.failure.as_ref().map(|f| f.message.as_str()))
         .execute(conn)
+        .await?;
+        Ok(())
+    }
+
+    /// The time of the oldest check kept, across monitors.
+    pub async fn oldest(pool: &SqlitePool) -> Result<Option<i64>, sqlx::Error> {
+        let (oldest,) = sqlx::query_as(
+            "SELECT MIN((SELECT MIN(checked_at) FROM checks WHERE monitor_id = m.id))
+             FROM monitors m",
+        )
+        .fetch_one(pool)
+        .await?;
+        Ok(oldest)
+    }
+
+    pub async fn purge_before(pool: &SqlitePool, cutoff: i64) -> Result<(), sqlx::Error> {
+        // Through the monitors, so each one deletes a range of the primary key.
+        sqlx::query(
+            "DELETE FROM checks WHERE monitor_id IN (SELECT id FROM monitors) AND checked_at < ?",
+        )
+        .bind(cutoff)
+        .execute(pool)
         .await?;
         Ok(())
     }

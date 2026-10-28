@@ -8,6 +8,7 @@ use crate::forms::monitor::FieldErrors;
 use crate::models::{Admin, Session, is_unique_violation};
 use crate::routes::form_or_invalid;
 use crate::state::AppState;
+use crate::time::now_ms;
 use crate::views::auth::{LoginTemplate, SetupTemplate};
 use axum::extract::rejection::{FormRejection, QueryRejection};
 use axum::extract::{ConnectInfo, FromRequestParts, Query, State};
@@ -171,7 +172,7 @@ async fn login(
         .into_response());
     }
     state.login_limiter.lock().unwrap().record_success(ip);
-    Session::purge_expired(&state.db).await?;
+    Session::purge_expired(&state.db, now_ms()).await?;
     start_session(&state).await
 }
 

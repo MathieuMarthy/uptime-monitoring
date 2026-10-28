@@ -43,7 +43,7 @@ impl EngineHandle {
 
 /// Starts the engine: one task per active monitor, first checks spread at random.
 pub async fn start(pool: SqlitePool) -> Result<EngineHandle, sqlx::Error> {
-    let guard = Guard::new(Settings::block_private_targets(&pool).await?);
+    let guard = Guard::new(Settings::load(&pool).await?.block_private_targets);
     let scheduler = Arc::new(Scheduler {
         pool: pool.clone(),
         checker: HttpChecker::new(guard),
