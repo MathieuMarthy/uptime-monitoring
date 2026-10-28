@@ -19,7 +19,7 @@ from any working directory.
 
 ```
 uptime-monitoring/
-├── docs/                         # Project documentation (specs and plans in docs/superpowers/)
+├── docs/                         # Project documentation
 ├── migrations/                   # SQL migrations, embedded and applied at startup
 ├── src/
 │   ├── main.rs                   # Entry point: tracing, config, DB pool, serve with graceful shutdown

@@ -19,8 +19,9 @@ cargo build --release
 - **Process sized to the work.** Medium sub-projects: a short design validated in chat, then implementation — no
   separate plan document. Full spec + plan only for large pieces (e.g. the check engine), and only when agreed.
 - **One independent review per sub-project**, on the whole branch at the end — not per task.
-- **No working documents in the repo after merge.** Specs and plans are deleted once their sub-project is merged;
-  lasting knowledge goes into `docs/architecture.md` or `docs/database-schema.md`.
+- **Working documents are never committed.** Specs and plans live in `docs/superpowers/`, excluded through
+  `.git/info/exclude`, and are deleted once their sub-project is merged; lasting knowledge goes into
+  `docs/architecture.md` or `docs/database-schema.md`.
 - **One session per sub-project.** State lives in the code, the docs and memory, not in the conversation.
 - **Stay lean on tokens.** Load a guide or skill only when it is actually used. Redirect long command output to a
   file and read its tail. Do not re-send content already shown; describe only what changed. Batch doc updates.
