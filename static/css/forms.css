@@ -75,6 +75,10 @@
     gap: 16px;
 }
 
+.form-row-wide-first {
+    grid-template-columns: 2fr 1fr;
+}
+
 .form-label {
     font-size: 13px;
     font-weight: 600;
@@ -197,7 +201,8 @@
 }
 
 @media (max-width: 640px) {
-    .form-row {
+    .form-row,
+    .form-row-wide-first {
         grid-template-columns: 1fr;
     }
 
@@ -223,10 +228,6 @@
 .field-error {
     color: var(--text-color-red);
     font-size: 13px;
-}
-
-.form-row-wide-first {
-    grid-template-columns: 2fr 1fr;
 }
 
 .danger-zone {

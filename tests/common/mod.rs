@@ -81,7 +81,7 @@ fn build(state: AppState, session: Option<TestSession>) -> TestApp {
 /// placeholder: use `app_with_admin` to test logging in.
 pub async fn test_app() -> (TestApp, SqlitePool) {
     let pool = pool().await;
-    Admin::create(&pool, USERNAME, "not-a-real-hash")
+    Admin::setup(&pool, USERNAME, "not-a-real-hash", "UTC")
         .await
         .expect("admin");
     let session = Session::create(&pool).await.expect("session");
@@ -96,7 +96,9 @@ pub async fn test_app() -> (TestApp, SqlitePool) {
 pub async fn app_with_admin() -> (TestApp, SqlitePool) {
     let pool = pool().await;
     let hash = uptime_monitoring::auth::hash_password(PASSWORD).expect("hash");
-    Admin::create(&pool, USERNAME, &hash).await.expect("admin");
+    Admin::setup(&pool, USERNAME, &hash, "UTC")
+        .await
+        .expect("admin");
     (build(AppState::new(pool.clone()), None), pool)
 }
 

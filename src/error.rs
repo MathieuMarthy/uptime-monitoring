@@ -9,7 +9,7 @@ pub enum AppError {
     MethodNotAllowed,
     /// Missing or wrong CSRF or setup token.
     Forbidden,
-    /// Too many failed login attempts.
+    /// Too many login attempts, or the password hasher is saturated.
     TooManyRequests,
     /// A request the framework could not parse (malformed form body, wrong content type, too large).
     InvalidRequest(StatusCode),
@@ -39,7 +39,7 @@ impl IntoResponse for AppError {
             ),
             Self::TooManyRequests => (
                 StatusCode::TOO_MANY_REQUESTS,
-                "Too many failed login attempts. Try again in 15 minutes.",
+                "Too many login attempts. Try again later.",
             ),
             Self::InvalidRequest(status) => (status, "Invalid request"),
             Self::Internal(e) => {

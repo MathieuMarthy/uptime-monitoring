@@ -93,15 +93,21 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 ## Authentication
 
 - **First launch.** While no admin exists, a one-time token is generated at startup (in memory, new on each restart)
-  and `/setup?token=…` is printed in the logs. Every page redirects to `/setup`, which only shows the account form with
+  and `/setup?token=…` is printed on stderr (whatever `RUST_LOG` says). If the admin row disappears while running, the
+  next login attempt starts setup again. Every page redirects to `/setup`, which only shows the account form with
   the right token. The browser's timezone is sent in a hidden field (`static/js/setup.js`); anything that does not look
   like an IANA name falls back to `UTC`.
 - **Passwords.** Argon2id with the `argon2` crate defaults (19 MiB, t=2, p=1), run on the blocking pool, one at a
-  time (`AppState::password_hashing`). Login always verifies the password, so timing does not reveal the username.
+  time (`AppState::password_hashing`); a request that waits more than 5 s for its turn gets a 429. Login always verifies the password and compares usernames through their SHA-256, so timing does not reveal the
+  username.
 - **Sessions.** 32 random bytes, hex, in the `__Host-session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`),
   valid 30 days from login. Only the SHA-256 is stored. Expired sessions are purged at each login. Because the cookie is
-  `Secure`, logging in over plain HTTP only works on `localhost`.
-- **Rate limit.** 10 failed logins per IP per 15 minutes, then 429 until the window ends. In memory, at most 10 000 IPs.
+  `Secure`, logging in over plain HTTP only works on `localhost`; public pages show a warning otherwise
+  (`static/js/insecure-warning.js`).
+- **Rate limit.** 10 login attempts per client per 15 minutes, then 429 until the window ends; a successful login
+  resets the count. Attempts are counted before the password check, so concurrent requests cannot exceed the budget.
+  IPv6 clients are keyed on their /64. In memory, at most 10 000 clients: when full, unknown clients are refused until
+  entries expire (the table is swept at most once a minute).
 - **Headers.** Every response carries a strict CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and
   `Referrer-Policy: same-origin`; protected pages add `Cache-Control: no-store`. HSTS is left to the reverse proxy.
 

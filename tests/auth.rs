@@ -295,3 +295,14 @@ async fn protected_pages_are_not_cached() {
     let (app, _) = common::test_app().await;
     assert_eq!(get(&app, "/").await.headers["cache-control"], "no-store");
 }
+
+#[tokio::test]
+async fn login_without_admin_restarts_setup() {
+    let (app, pool) = common::app_with_admin().await;
+    sqlx::query("DELETE FROM admin")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_redirect(&login(&app, USERNAME, PASSWORD).await, "/setup");
+    assert!(app.state.setup_pending());
+}

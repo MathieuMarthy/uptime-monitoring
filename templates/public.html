@@ -11,6 +11,11 @@
 </header>
 
 <main>
+    <div class="error-banner insecure-warning" id="insecure-warning" role="alert" hidden>
+        This page is served over plain HTTP: the browser will refuse the login cookie. Use HTTPS (through your reverse
+        proxy) or open it on localhost.
+    </div>
     {% block content %}{% endblock %}
 </main>
+<script src="/static/js/insecure-warning.js" defer></script>
 {% endblock %}

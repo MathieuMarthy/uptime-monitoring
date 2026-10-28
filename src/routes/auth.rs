@@ -1,6 +1,6 @@
 use crate::auth::{
-    SESSION_COOKIE, cookie, expired_session_cookie, hash_password, secrets_match, session_cookie,
-    verify_password,
+    SESSION_COOKIE, cookie, expired_session_cookie, hash_password, print_setup_url, secrets_match,
+    session_cookie, sha256_hex, verify_password,
 };
 use crate::error::AppError;
 use crate::forms::auth::{LoginForm, SetupForm};
@@ -18,9 +18,10 @@ use axum::routing::get;
 use axum::{Extension, Form, Router};
 use serde::Deserialize;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 const LOGIN_FAILED: &str = "Invalid username or password.";
+const HASHING_WAIT: Duration = Duration::from_secs(5);
 
 /// Routes reachable without a session.
 pub fn public_router() -> Router<AppState> {
@@ -134,30 +135,34 @@ async fn login(
         return Ok(Redirect::to("/setup").into_response());
     }
     let form = form_or_invalid(form)?;
-    if state
+    if !state
         .login_limiter
         .lock()
         .unwrap()
-        .is_blocked(ip, Instant::now())
+        .try_attempt(ip, Instant::now())
     {
         return Err(AppError::TooManyRequests);
     }
 
-    let admin = Admin::find(&state.db).await?.ok_or(AppError::NotFound)?;
-    // The password is always checked, so the response time does not reveal whether the
-    // username was right.
+    let Some(admin) = Admin::find(&state.db).await? else {
+        // The admin row was removed while running: back to first-launch setup.
+        if let Some(token) = state.start_setup_if_needed().await? {
+            print_setup_url(&token);
+        }
+        return Ok(Redirect::to("/setup").into_response());
+    };
+    // The password is always checked and usernames are compared through their digests, so the
+    // response time reveals nothing about the username.
     let password = form.password.clone();
     let hash = admin.password_hash.clone();
     let password_ok =
         with_password_hashing(&state, move || verify_password(&password, &hash)).await?;
-    let username_ok = secrets_match(form.username.trim(), &admin.username);
+    let username_ok = secrets_match(
+        &sha256_hex(form.username.trim()),
+        &sha256_hex(&admin.username),
+    );
 
     if !(password_ok && username_ok) {
-        state
-            .login_limiter
-            .lock()
-            .unwrap()
-            .record_failure(ip, Instant::now());
         tracing::warn!(%ip, "failed login attempt");
         return Ok(LoginTemplate {
             username: form.username,
@@ -191,15 +196,15 @@ async fn start_session(state: &AppState) -> Result<Response, AppError> {
         .into_response())
 }
 
-/// Runs an Argon2 computation on the blocking pool, one at a time.
+/// Runs an Argon2 computation on the blocking pool, one at a time. A request that cannot get
+/// its turn within `HASHING_WAIT` is refused, so a flood cannot queue up without bound.
 async fn with_password_hashing<T: Send + 'static>(
     state: &AppState,
     work: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, AppError> {
-    let _permit = state
-        .password_hashing
-        .acquire()
+    let _permit = tokio::time::timeout(HASHING_WAIT, state.password_hashing.acquire())
         .await
+        .map_err(|_| AppError::TooManyRequests)?
         .map_err(|e| AppError::Internal(Box::new(e)))?;
     tokio::task::spawn_blocking(work)
         .await

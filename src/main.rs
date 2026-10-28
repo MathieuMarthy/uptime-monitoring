@@ -36,9 +36,7 @@ async fn main() {
 
     let state = AppState::new(pool).with_trust_proxy_headers(config.trust_proxy_headers);
     match state.start_setup_if_needed().await {
-        Ok(Some(token)) => tracing::warn!(
-            "No admin account yet. Create it by opening /setup?token={token} on this instance."
-        ),
+        Ok(Some(token)) => uptime_monitoring::auth::print_setup_url(&token),
         Ok(None) => {}
         Err(e) => {
             eprintln!("Cannot read the admin account: {e}");

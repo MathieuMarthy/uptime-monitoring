@@ -13,6 +13,11 @@ use subtle::ConstantTimeEq;
 pub const SESSION_COOKIE: &str = "__Host-session";
 pub const SESSION_TTL_MS: i64 = 30 * 24 * 60 * 60 * 1000;
 
+/// Prints the first-launch URL to stderr, whatever `RUST_LOG` filters out.
+pub fn print_setup_url(token: &str) {
+    eprintln!("No admin account yet. Create it by opening /setup?token={token} on this instance.");
+}
+
 /// Hashes a password with Argon2id and the crate's default (OWASP) parameters. CPU and memory
 /// heavy: call it from a blocking task.
 pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
