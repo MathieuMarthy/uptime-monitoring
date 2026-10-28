@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}{{ status }} - Uptime Monitoring{% endblock %}
+
+{% block content %}
+<section class="error-page">
+    <h1>{{ status }}</h1>
+    <p>{{ message }}</p>
+    <a class="button-secondary" href="/">Back to monitors</a>
+</section>
+{% endblock %}

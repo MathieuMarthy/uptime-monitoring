@@ -224,3 +224,21 @@ main {
     flex-direction: column;
     align-items: center;
 }
+
+.error-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 96px 24px;
+    text-align: center;
+}
+
+.error-page h1 {
+    font-size: 48px;
+    font-weight: 700;
+}
+
+.error-page p {
+    color: var(--text-color-muted);
+}

@@ -1,5 +1,5 @@
 use crate::models::incident::Incident;
-use crate::models::monitor::Monitor;
+use crate::views::monitor_view::Monitor;
 use crate::models::service::{Service, ServiceStatus};
 use askama::Template;
 use askama_web::WebTemplate;

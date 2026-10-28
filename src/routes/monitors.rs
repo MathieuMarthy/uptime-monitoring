@@ -1,6 +1,7 @@
-use crate::models::{Incident, Monitor, Service, ServiceFormInput, ServiceStatus};
+use crate::models::{Incident, Service, ServiceFormInput, ServiceStatus};
+use crate::views::monitor_view::Monitor;
 use crate::state::AppState;
-use crate::templates::monitors::{
+use crate::views::monitors::{
     MonitorDetailTemplate, MonitorFormTemplate, MonitorIndexTemplate,
 };
 use axum::extract::{Path, State};

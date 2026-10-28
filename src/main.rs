@@ -1,44 +1,39 @@
-use tower_http::services::ServeDir;
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-
-mod db;
-mod models;
-mod routes;
-mod state;
-mod templates;
-
-use crate::state::AppState;
+use uptime_monitoring::config::Config;
+use uptime_monitoring::state::AppState;
+use uptime_monitoring::{app, db};
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "uptime_monitoring=debug,tower_http=debug,axum=trace".into()),
+                .unwrap_or_else(|_| "uptime_monitoring=info,tower_http=info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://uptime.db".to_string());
-    let pool = db::init_pool(&database_url)
+    let config = match Config::from_env() {
+        Ok(config) => config,
+        Err(message) => {
+            eprintln!("Invalid configuration: {message}");
+            std::process::exit(1);
+        }
+    };
+
+    let pool = db::init_pool(&config.database_url)
         .await
         .expect("Failed to initialize SQLite database");
-    let state = AppState::new(pool);
 
-    let app = routes::all()
-        .nest_service("/static", ServeDir::new("static"))
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
-    let addr = "0.0.0.0:8080";
-
-    tracing::info!("uptime-monitoring is running on http://{}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app)
+    let listener = tokio::net::TcpListener::bind(config.bind_addr)
+        .await
+        .expect("Failed to bind address");
+    tracing::info!("uptime-monitoring is running on http://{}", config.bind_addr);
+    axum::serve(listener, app(AppState::new(pool)))
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .unwrap();
+        .expect("Server error");
 }
 
 async fn shutdown_signal() {
