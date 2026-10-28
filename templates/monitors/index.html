@@ -9,15 +9,19 @@
 <section aria-label="Status overview" class="stats">
     <div class="stat-item">
         <span class="stat-label">Up</span>
-        <span class="stat-value text-green">{{ up_count }}</span>
+        <span class="stat-value text-green" data-count="up">{{ up }}</span>
     </div>
     <div class="stat-item">
         <span class="stat-label">Down</span>
-        <span class="stat-value text-red">{{ down_count }}</span>
+        <span class="stat-value text-red" data-count="down">{{ down }}</span>
+    </div>
+    <div class="stat-item">
+        <span class="stat-label">Pending</span>
+        <span class="stat-value text-muted" data-count="pending">{{ pending }}</span>
     </div>
     <div class="stat-item">
         <span class="stat-label">Paused</span>
-        <span class="stat-value text-blue">{{ paused_count }}</span>
+        <span class="stat-value text-blue" data-count="paused">{{ paused }}</span>
     </div>
 </section>
 
@@ -37,27 +41,28 @@
     </div>
 
     <ul class="monitor-grid">
-        {% for monitor in monitors %}
+        {% for view in monitors %}
         <li>
-            <a class="service-monitor-card" href="/monitors/{{ monitor.service.id }}">
+            <a class="monitor-card" href="/monitors/{{ view.monitor.id }}">
                 <div class="card-header">
                     <div class="card-title-group">
-                        <h2 class="card-title">{{ monitor.service.name }}</h2>
+                        <h2 class="card-title">{{ view.monitor.name }}</h2>
+                        <span class="card-status {{ view.status_class() }}">{{ view.status_label() }}</span>
                     </div>
-                    {% match monitor.last_ping_ms %}
-                        {% when Some with (ping) %}
-                            <span class="card-ping">{{ ping }}ms</span>
+                    {% match view.state.last_latency_ms %}
+                        {% when Some with (latency) %}
+                            <span class="card-ping">{{ latency }}ms</span>
                         {% when None %}
-                            <span class="card-ping">-</span>
+                            <span class="card-ping">—</span>
                     {% endmatch %}
                 </div>
                 <div class="card-uptime-row">
-                    <span class="card-uptime">{{ "{:.2}"|format(monitor.uptime_rate) }}%</span>
+                    <span class="card-uptime">—</span>
                     <span class="card-duration">24h</span>
                 </div>
                 <div class="heartbeat-bar" role="img" aria-label="History of checks">
-                    {% for tick in monitor.ticks %}
-                    <span class="tick {{ tick.class }}" title="{{ tick.tooltip }}"></span>
+                    {% for _ in 0..24 %}
+                    <span class="tick tick-gray" title="No data yet"></span>
                     {% endfor %}
                 </div>
             </a>

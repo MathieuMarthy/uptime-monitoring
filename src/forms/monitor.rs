@@ -1,3 +1,4 @@
+use crate::models::Monitor;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -65,6 +66,28 @@ impl MonitorForm {
             keyword: String::new(),
             follow_redirects: Some("on".to_string()),
             active: Some("on".to_string()),
+        }
+    }
+
+    pub fn from_monitor(m: &Monitor) -> Self {
+        let checkbox = |on: bool| on.then(|| "on".to_string());
+        Self {
+            name: m.name.clone(),
+            url: m.url.clone(),
+            method: m.method.clone(),
+            accepted_statuses: m.accepted_statuses.clone(),
+            interval_s: m.interval_s.to_string(),
+            timeout_s: m.timeout_s.to_string(),
+            failure_threshold: m.failure_threshold.to_string(),
+            tls_expiry_warn_days: m
+                .tls_expiry_warn_days
+                .map(|d| d.to_string())
+                .unwrap_or_default(),
+            headers: m.headers.clone().unwrap_or_default(),
+            body: m.body.clone().unwrap_or_default(),
+            keyword: m.keyword.clone().unwrap_or_default(),
+            follow_redirects: checkbox(m.follow_redirects),
+            active: checkbox(!m.paused),
         }
     }
 

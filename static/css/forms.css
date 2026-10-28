@@ -219,3 +219,8 @@
         text-align: center;
     }
 }
+
+.field-error {
+    color: var(--text-color-red);
+    font-size: 13px;
+}

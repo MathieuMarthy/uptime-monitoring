@@ -1,39 +1,27 @@
 {% extends "base.html" %}
 
-{% block title %}
-{% if is_edit %}
-Edit Monitor - Uptime Monitoring
-{% else %}
-Add New Monitor - Uptime Monitoring
-{% endif %}
-{% endblock %}
+{% block title %}{% if self.is_edit() %}Edit Monitor{% else %}Add New Monitor{% endif %} - Uptime Monitoring{% endblock %}
 
 {% block styles %}
 <link href="/static/css/forms.css" rel="stylesheet">
 {% endblock %}
 
+{% macro field_error(field) %}
+{% if let Some(message) = self.error(field) %}<p class="field-error">{{ message }}</p>{% endif %}
+{% endmacro %}
+
 {% block content %}
 <div class="form-container">
     <div class="form-header">
-        <h1 class="form-title">
-            {% if is_edit %}
-            Edit Monitor
-            {% else %}
-            Create a New Monitor
-            {% endif %}
-        </h1>
-        <p class="form-subtitle">
-            Configure URL, interval, threshold, and payload for uptime checks.
-        </p>
+        <h1 class="form-title">{% if self.is_edit() %}Edit Monitor{% else %}Create a New Monitor{% endif %}</h1>
+        <p class="form-subtitle">Configure URL, interval, threshold, and payload for uptime checks.</p>
     </div>
 
-    {% match error_message %}
-    {% when Some with (err) %}
+    {% if !errors.is_empty() %}
     <div class="error-banner" role="alert">
-        <span>⚠️ {{ err }}</span>
+        <span>Please fix the {{ errors.len() }} highlighted field(s).</span>
     </div>
-    {% when None %}
-    {% endmatch %}
+    {% endif %}
 
     <div class="form-card">
         <form action="{{ action_url }}" method="POST">
@@ -42,42 +30,27 @@ Add New Monitor - Uptime Monitoring
 
                 <div class="form-group">
                     <label class="form-label" for="name">Monitor Name *</label>
-                    <input
-                        class="form-input"
-                        id="name"
-                        name="name"
-                        type="text"
-                        placeholder="e.g. Production API, Landing Page"
-                        required
-                        value="{% match service %}{% when Some with (s) %}{{ s.name }}{% when None %}{% endmatch %}"
-                    />
+                    <input class="form-input" id="name" name="name" type="text" maxlength="100"
+                           placeholder="e.g. Production API, Landing Page" required value="{{ form.name }}"/>
+                    {% call field_error("name") %}{% endcall %}
                 </div>
 
                 <div class="form-row">
                     <div class="form-group" style="flex: 2;">
                         <label class="form-label" for="url">URL to monitor *</label>
-                        <input
-                            class="form-input"
-                            id="url"
-                            name="url"
-                            type="url"
-                            placeholder="https://example.com/health"
-                            required
-                            value="{% match service %}{% when Some with (s) %}{{ s.url }}{% when None %}https://{% endmatch %}"
-                        />
+                        <input class="form-input" id="url" name="url" type="url"
+                               placeholder="https://example.com/health" required value="{{ form.url }}"/>
+                        {% call field_error("url") %}{% endcall %}
                     </div>
 
                     <div class="form-group" style="flex: 1;">
                         <label class="form-label" for="method">HTTP Method</label>
                         <select class="form-select" id="method" name="method">
-                            {% let current_method = self.current_method() %}
-                            <option value="GET" {% if current_method == "GET" %}selected{% endif %}>GET</option>
-                            <option value="POST" {% if current_method == "POST" %}selected{% endif %}>POST</option>
-                            <option value="PUT" {% if current_method == "PUT" %}selected{% endif %}>PUT</option>
-                            <option value="DELETE" {% if current_method == "DELETE" %}selected{% endif %}>DELETE</option>
-                            <option value="HEAD" {% if current_method == "HEAD" %}selected{% endif %}>HEAD</option>
-                            <option value="PATCH" {% if current_method == "PATCH" %}selected{% endif %}>PATCH</option>
+                            {% for method in self.methods() %}
+                            <option value="{{ method }}" {% if form.method == **method %}selected{% endif %}>{{ method }}</option>
+                            {% endfor %}
                         </select>
+                        {% call field_error("method") %}{% endcall %}
                     </div>
                 </div>
             </div>
@@ -87,63 +60,58 @@ Add New Monitor - Uptime Monitoring
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label" for="interval_seconds">Check Interval (seconds)</label>
-                        <input
-                            class="form-input"
-                            id="interval_seconds"
-                            name="interval_seconds"
-                            type="number"
-                            min="5"
-                            step="1"
-                            value="{% match service %}{% when Some with (s) %}{{ s.interval_seconds }}{% when None %}60{% endmatch %}"
-                        />
-                        <span class="form-hint">Minimum 5 seconds. Default: 60s.</span>
+                        <label class="form-label" for="interval_s">Check Interval (seconds)</label>
+                        <input class="form-input" id="interval_s" name="interval_s" type="number"
+                               min="5" max="86400" step="1" value="{{ form.interval_s }}"/>
+                        <span class="form-hint">Between 5 seconds and 24 hours. Default: 60s.</span>
+                        {% call field_error("interval_s") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="timeout_seconds">Request Timeout (seconds)</label>
-                        <input
-                            class="form-input"
-                            id="timeout_seconds"
-                            name="timeout_seconds"
-                            type="number"
-                            min="1"
-                            step="1"
-                            value="{% match service %}{% when Some with (s) %}{{ s.timeout_seconds }}{% when None %}10{% endmatch %}"
-                        />
-                        <span class="form-hint">Must be smaller than interval. Default: 10s.</span>
+                        <label class="form-label" for="timeout_s">Request Timeout (seconds)</label>
+                        <input class="form-input" id="timeout_s" name="timeout_s" type="number"
+                               min="1" max="120" step="1" value="{{ form.timeout_s }}"/>
+                        <span class="form-hint">At most 120s and no longer than the interval. Default: 10s.</span>
+                        {% call field_error("timeout_s") %}{% endcall %}
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label" for="expected_status">Expected HTTP Status Code</label>
-                        <input
-                            class="form-input"
-                            id="expected_status"
-                            name="expected_status"
-                            type="number"
-                            min="100"
-                            max="599"
-                            step="1"
-                            value="{% match service %}{% when Some with (s) %}{{ s.expected_status }}{% when None %}200{% endmatch %}"
-                        />
-                        <span class="form-hint">Usually 200 (or 204 for empty responses).</span>
+                        <label class="form-label" for="accepted_statuses">Accepted Status Codes</label>
+                        <input class="form-input" id="accepted_statuses" name="accepted_statuses" type="text"
+                               placeholder="200-299" value="{{ form.accepted_statuses }}"/>
+                        <span class="form-hint">Codes or ranges, e.g. 200-299,301.</span>
+                        {% call field_error("accepted_statuses") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="max_retries">Retry Threshold</label>
-                        <input
-                            class="form-input"
-                            id="max_retries"
-                            name="max_retries"
-                            type="number"
-                            min="1"
-                            max="10"
-                            step="1"
-                            value="{% match service %}{% when Some with (s) %}{{ s.max_retries }}{% when None %}1{% endmatch %}"
-                        />
+                        <label class="form-label" for="failure_threshold">Failure Threshold</label>
+                        <input class="form-input" id="failure_threshold" name="failure_threshold" type="number"
+                               min="1" max="10" step="1" value="{{ form.failure_threshold }}"/>
                         <span class="form-hint">Consecutive failures required before marking Down.</span>
+                        {% call field_error("failure_threshold") %}{% endcall %}
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="tls_expiry_warn_days">Certificate Expiry Warning (days)</label>
+                        <input class="form-input" id="tls_expiry_warn_days" name="tls_expiry_warn_days" type="number"
+                               min="1" max="365" step="1" value="{{ form.tls_expiry_warn_days }}"/>
+                        <span class="form-hint">Leave empty to disable. Default: 14 days.</span>
+                        {% call field_error("tls_expiry_warn_days") %}{% endcall %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-group" for="follow_redirects">
+                            <input type="checkbox" id="follow_redirects" name="follow_redirects"
+                                   {% if form.follow_redirects.is_some() %}checked{% endif %}/>
+                            <div class="checkbox-label-group">
+                                <span class="form-label">Follow Redirects</span>
+                                <span class="form-hint">Judge the final response instead of the redirect.</span>
+                            </div>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -152,50 +120,33 @@ Add New Monitor - Uptime Monitoring
                 <h2 class="section-title">Advanced Options (Optional)</h2>
 
                 <div class="form-group">
-                    <label class="form-label" for="keyword_match">Keyword Verification</label>
-                    <input
-                        class="form-input"
-                        id="keyword_match"
-                        name="keyword_match"
-                        type="text"
-                        placeholder="e.g. status: ok, Welcome"
-                        value="{% match service %}{% when Some with (s) %}{% match s.keyword_match %}{% when Some with (k) %}{{ k }}{% when None %}{% endmatch %}{% when None %}{% endmatch %}"
-                    />
+                    <label class="form-label" for="keyword">Keyword Verification</label>
+                    <input class="form-input" id="keyword" name="keyword" type="text"
+                           placeholder="e.g. status: ok, Welcome" value="{{ form.keyword }}"/>
                     <span class="form-hint">The response body must contain this text to be marked as Up.</span>
+                    {% call field_error("keyword") %}{% endcall %}
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="headers">Request Headers (JSON or plain text)</label>
-                    <textarea
-                        class="form-textarea"
-                        id="headers"
-                        name="headers"
-                        placeholder='{"Authorization": "Bearer token"}'
-                    >{% match service %}{% when Some with (s) %}{% match s.headers %}{% when Some with (h) %}{{ h }}{% when None %}{% endmatch %}{% when None %}{% endmatch %}</textarea>
+                    <label class="form-label" for="headers">Request Headers (JSON object)</label>
+                    <textarea class="form-textarea" id="headers" name="headers"
+                              placeholder='{"Authorization": "Bearer token"}'>{{ form.headers }}</textarea>
+                    {% call field_error("headers") %}{% endcall %}
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="body">Request Body (for POST / PUT)</label>
-                    <textarea
-                        class="form-textarea"
-                        id="body"
-                        name="body"
-                        placeholder='{"ping": true}'
-                    >{% match service %}{% when Some with (s) %}{% match s.body %}{% when Some with (b) %}{{ b }}{% when None %}{% endmatch %}{% when None %}{% endmatch %}</textarea>
+                    <label class="form-label" for="body">Request Body (for POST / PUT / PATCH)</label>
+                    <textarea class="form-textarea" id="body" name="body"
+                              placeholder='{"ping": true}'>{{ form.body }}</textarea>
+                    {% call field_error("body") %}{% endcall %}
                 </div>
             </div>
 
             <div class="form-section">
                 <h2 class="section-title">Status</h2>
 
-                <label class="checkbox-group" for="is_enabled">
-                    {% let enabled = self.is_enabled() %}
-                    <input
-                        type="checkbox"
-                        id="is_enabled"
-                        name="is_enabled"
-                        {% if enabled %}checked{% endif %}
-                    />
+                <label class="checkbox-group" for="active">
+                    <input type="checkbox" id="active" name="active" {% if form.active.is_some() %}checked{% endif %}/>
                     <div class="checkbox-label-group">
                         <span class="form-label">Active Monitoring</span>
                         <span class="form-hint">When unchecked, the monitor is paused and checks are suspended.</span>
@@ -206,39 +157,26 @@ Add New Monitor - Uptime Monitoring
             <div class="form-actions">
                 <div class="form-actions-left">
                     <button class="button-primary" type="submit">
-                        {% if is_edit %}
-                        Save Changes
-                        {% else %}
-                        Create Monitor
-                        {% endif %}
+                        {% if self.is_edit() %}Save Changes{% else %}Create Monitor{% endif %}
                     </button>
                     <a class="button-secondary" href="{{ cancel_url }}">Cancel</a>
                 </div>
             </div>
         </form>
 
-        {% if is_edit %}
-        {% match service %}
-        {% when Some with (s) %}
+        {% if let Some(id) = monitor_id %}
         <div style="padding-top: 16px; border-top: 1px solid var(--color-stroke);">
-            <form
-                action="/monitors/{{ s.id }}/delete"
-                method="POST"
-                onsubmit="return confirm('Are you sure you want to permanently delete this monitor and all its history?');"
-            >
+            <form action="/monitors/{{ id }}/delete" method="POST"
+                  onsubmit="return confirm('Are you sure you want to permanently delete this monitor and all its history?');">
                 <div class="form-actions" style="border-top: none; padding-top: 0;">
                     <div>
                         <span style="font-size: 13px; font-weight: 600; color: var(--text-color-red);">Danger Zone</span>
-                        <p class="form-hint">Permanently delete this monitor and all associated metrics.</p>
+                        <p class="form-hint">Permanently delete this monitor and all its history.</p>
                     </div>
-                    <button class="button-danger" type="submit">
-                        Delete Monitor
-                    </button>
+                    <button class="button-danger" type="submit">Delete Monitor</button>
                 </div>
             </form>
         </div>
-        {% when None %}
-        {% endmatch %}
         {% endif %}
     </div>
 </div>
