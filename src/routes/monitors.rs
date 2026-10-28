@@ -1,10 +1,11 @@
 use crate::error::AppError;
 use crate::forms::monitor::{FieldErrors, MonitorForm};
 use crate::models::{Monitor, is_unique_violation};
-use crate::routes::parse_id;
+use crate::routes::{MonitorId, form_or_invalid};
 use crate::state::AppState;
 use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate, MonitorView};
-use axum::extract::{Path, State};
+use axum::extract::State;
+use axum::extract::rejection::FormRejection;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Form, Router};
@@ -27,9 +28,8 @@ async fn index(State(state): State<AppState>) -> Result<IndexTemplate, AppError>
 
 async fn detail(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    MonitorId(id): MonitorId,
 ) -> Result<DetailTemplate, AppError> {
-    let id = parse_id(&id)?;
     Ok(DetailTemplate {
         view: MonitorView::load(&state.db, id).await?,
     })
@@ -41,8 +41,9 @@ async fn new_form() -> FormTemplate {
 
 async fn create(
     State(state): State<AppState>,
-    Form(form): Form<MonitorForm>,
+    form: Result<Form<MonitorForm>, FormRejection>,
 ) -> Result<Response, AppError> {
+    let form = form_or_invalid(form)?;
     let input = match form.validate() {
         Ok(input) => input,
         Err(errors) => return Ok(create_page(form, errors).into_response()),
@@ -57,9 +58,8 @@ async fn create(
 
 async fn edit_form(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    MonitorId(id): MonitorId,
 ) -> Result<FormTemplate, AppError> {
-    let id = parse_id(&id)?;
     let monitor = Monitor::find(&state.db, id)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -72,14 +72,14 @@ async fn edit_form(
 
 async fn update(
     State(state): State<AppState>,
-    Path(id): Path<String>,
-    Form(form): Form<MonitorForm>,
+    MonitorId(id): MonitorId,
+    form: Result<Form<MonitorForm>, FormRejection>,
 ) -> Result<Response, AppError> {
-    let id = parse_id(&id)?;
     if Monitor::find(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound);
     }
 
+    let form = form_or_invalid(form)?;
     let input = match form.validate() {
         Ok(input) => input,
         Err(errors) => return Ok(edit_page(id, form, errors).into_response()),
@@ -95,9 +95,8 @@ async fn update(
 
 async fn delete(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    MonitorId(id): MonitorId,
 ) -> Result<Redirect, AppError> {
-    let id = parse_id(&id)?;
     if Monitor::delete(&state.db, id).await? {
         Ok(Redirect::to("/"))
     } else {
@@ -107,9 +106,8 @@ async fn delete(
 
 async fn toggle_pause(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    MonitorId(id): MonitorId,
 ) -> Result<Redirect, AppError> {
-    let id = parse_id(&id)?;
     if Monitor::toggle_pause(&state.db, id).await? {
         Ok(Redirect::to(&format!("/monitors/{id}")))
     } else {

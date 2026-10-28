@@ -22,9 +22,16 @@ async fn main() {
         }
     };
 
-    let pool = db::init_pool(&config.database_url)
-        .await
-        .expect("Failed to initialize SQLite database");
+    let pool = match db::init_pool(&config.database_url).await {
+        Ok(pool) => pool,
+        Err(e) => {
+            eprintln!(
+                "Cannot open the database at DATABASE_URL={:?}: {e}",
+                config.database_url
+            );
+            std::process::exit(1);
+        }
+    };
 
     let listener = tokio::net::TcpListener::bind(config.bind_addr)
         .await

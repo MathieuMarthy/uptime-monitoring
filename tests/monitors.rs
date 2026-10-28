@@ -183,3 +183,68 @@ async fn pages_have_no_service_wording() {
         assert!(!body.contains("service"), "{uri} mentions 'service'");
     }
 }
+
+#[tokio::test]
+async fn malformed_form_bodies_render_html_error_page() {
+    use axum::body::Body;
+    use axum::http::Request;
+
+    let (app, pool) = common::test_app().await;
+    let duplicate_field = post_form(&app, "/monitors/new", &form("API", "&name=Other")).await;
+    let duplicate_checkbox = post_form(&app, "/monitors/new", &form("API", "&active=on")).await;
+    let wrong_type = common::send(
+        &app,
+        Request::post("/monitors/new")
+            .header("content-type", "text/plain")
+            .body(Body::from(form("API", "")))
+            .unwrap(),
+    )
+    .await;
+    let too_large = post_form(
+        &app,
+        "/monitors/new",
+        &form("API", &format!("&body={}", "a".repeat(200 * 1024))),
+    )
+    .await;
+
+    for r in [duplicate_field, duplicate_checkbox, wrong_type, too_large] {
+        assert!(r.status.is_client_error(), "status {}", r.status);
+        assert!(r.body.contains("Invalid request"), "body: {}", r.body);
+        assert!(
+            !r.body.contains("Failed to"),
+            "raw rejection leaked: {}",
+            r.body
+        );
+        assert!(
+            !r.body.contains("Content-Type"),
+            "raw rejection leaked: {}",
+            r.body
+        );
+    }
+    assert_eq!(count_monitors(&pool).await, 0);
+}
+
+#[tokio::test]
+async fn malformed_edit_on_unknown_id_is_404() {
+    let (app, _) = common::test_app().await;
+    let r = post_form(&app, "/monitors/999/edit", &form("API", "&name=Other")).await;
+    assert_eq!(r.status, 404);
+    assert!(r.body.contains("Page not found"));
+}
+
+#[tokio::test]
+async fn non_utf8_path_segments_return_404_page() {
+    let (app, _) = common::test_app().await;
+    let responses = [
+        get(&app, "/monitors/%FF").await,
+        get(&app, "/monitors/%FF/edit").await,
+        post_form(&app, "/monitors/%FF/edit", &form("API", "")).await,
+        post_form(&app, "/monitors/%FF/delete", "").await,
+        post_form(&app, "/monitors/%FF/toggle-pause", "").await,
+        get(&app, "/static/%FF").await,
+    ];
+    for r in responses {
+        assert_eq!(r.status, 404, "body: {}", r.body);
+        assert!(r.body.contains("Page not found"));
+    }
+}

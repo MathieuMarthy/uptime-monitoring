@@ -6,6 +6,8 @@ use axum::response::{Html, IntoResponse, Response};
 #[derive(Debug)]
 pub enum AppError {
     NotFound,
+    /// A request the framework could not parse (malformed form body, wrong content type, too large).
+    InvalidRequest(StatusCode),
     Internal(Box<dyn std::error::Error + Send + Sync>),
 }
 
@@ -25,6 +27,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             Self::NotFound => (StatusCode::NOT_FOUND, "Page not found"),
+            Self::InvalidRequest(status) => (status, "Invalid request"),
             Self::Internal(e) => {
                 tracing::error!(error = %e, "request failed");
                 (
