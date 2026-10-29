@@ -211,7 +211,10 @@ async fn pause_ends_incident_at_the_last_check() {
         &pool,
         id,
         1,
-        &[fail_at(1_000, ErrorKind::Timeout), fail_at(3_000, ErrorKind::Timeout)],
+        &[
+            fail_at(1_000, ErrorKind::Timeout),
+            fail_at(3_000, ErrorKind::Timeout),
+        ],
     )
     .await;
     Monitor::toggle_pause(&pool, id).await.unwrap();

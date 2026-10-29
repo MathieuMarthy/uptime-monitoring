@@ -68,7 +68,9 @@ async fn duplicate_name_ignores_unicode_normalization() {
     let pool = pool().await;
     // "é" as one code point, then as "e" followed by a combining accent: same name on screen.
     Monitor::create(&pool, &input("Caf\u{e9}")).await.unwrap();
-    let err = Monitor::create(&pool, &input("Cafe\u{301}")).await.unwrap_err();
+    let err = Monitor::create(&pool, &input("Cafe\u{301}"))
+        .await
+        .unwrap_err();
     assert!(is_unique_violation(&err));
 }
 
