@@ -259,8 +259,8 @@ impl IndexTemplate {
 
 /// Incidents and checks listed on a monitor's page.
 const RECENT: i64 = 20;
-/// Height of the latency chart's drawing, in SVG units; each hour is 10 wide.
-const LATENCY_HEIGHT: i64 = 60;
+/// Heights a latency bar can take, the slowest hour reaching the last.
+const LATENCY_LEVELS: i64 = 20;
 
 #[derive(Template, WebTemplate)]
 #[template(path = "monitors/detail.html")]
@@ -282,13 +282,13 @@ pub struct DetailTemplate {
     pub csrf_token: String,
 }
 
-/// One hour of the latency chart, in SVG units.
+/// One hour of the latency chart. The CSP forbids inline styles, so its height is one of
+/// `LATENCY_LEVELS` classes (`lat-1` to `lat-20`); 0 without a response that hour.
 pub struct LatencyBar {
-    pub x: i64,
-    pub y: i64,
-    pub height: i64,
+    pub level: i64,
     /// `latency-down` for an hour with downtime.
     pub class: &'static str,
+    /// The tooltip; empty without a response.
     pub title: String,
 }
 
@@ -384,22 +384,21 @@ fn latency_bars(hourly: &Heartbeat) -> (Vec<LatencyBar>, Option<i64>) {
     let Some(max) = max.filter(|&m| m > 0) else {
         return (Vec::new(), None);
     };
-    let bars = (0..)
-        .zip(&hourly.ticks)
-        .filter_map(|(i, tick)| {
-            let ms = tick.latency_ms?;
-            let height = (ms * (LATENCY_HEIGHT - 4) / max).max(2);
-            Some(LatencyBar {
-                x: i * 10 + 1,
-                y: LATENCY_HEIGHT - height,
-                height,
-                class: if matches!(tick.class, "tick-down" | "tick-dip") {
-                    "latency-down"
-                } else {
-                    "latency"
-                },
-                title: format!("{ms} ms on average"),
-            })
+    let bars = hourly
+        .ticks
+        .iter()
+        .map(|tick| LatencyBar {
+            level: tick.latency_ms.map_or(0, |ms| {
+                ((ms * LATENCY_LEVELS + max - 1) / max).clamp(1, LATENCY_LEVELS)
+            }),
+            class: if matches!(tick.class, "tick-down" | "tick-dip") {
+                "latency-down"
+            } else {
+                "latency"
+            },
+            title: tick.latency_ms.map_or_else(String::new, |ms| {
+                format!("{}: {ms} ms on average", tick.span)
+            }),
         })
         .collect();
     (bars, Some(max))
@@ -476,6 +475,45 @@ impl FormTemplate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::views::heartbeat::Tick;
+
+    fn tick(class: &'static str, span: &str, latency_ms: Option<i64>) -> Tick {
+        Tick {
+            class,
+            title: String::new(),
+            span: span.to_string(),
+            checks: 1,
+            failed: 0,
+            uptime: String::new(),
+            latency_ms,
+        }
+    }
+
+    #[test]
+    fn latency_bars_scale_to_the_slowest_hour() {
+        let hourly = Heartbeat {
+            ticks: vec![
+                tick("tick-up", "00:00–01:00", Some(200)),
+                tick("tick-none", "01:00–02:00", None),
+                tick("tick-down", "02:00–03:00", Some(100)),
+                tick("tick-up", "03:00–04:00", Some(1)),
+            ],
+            monitored_ms: 0,
+            downtime_ms: 0,
+            latency_avg_ms: None,
+        };
+        let (bars, max) = latency_bars(&hourly);
+        assert_eq!(max, Some(200));
+        let levels: Vec<_> = bars.iter().map(|b| b.level).collect();
+        assert_eq!(
+            levels,
+            [20, 0, 10, 1],
+            "one bar per hour, empty without a response"
+        );
+        assert_eq!(bars[2].class, "latency-down");
+        assert_eq!(bars[0].title, "00:00–01:00: 200 ms on average");
+        assert_eq!(bars[1].title, "");
+    }
 
     fn named(headline: &Headline) -> String {
         headline

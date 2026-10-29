@@ -10,6 +10,9 @@ announcer.className = "visually-hidden";
 announcer.setAttribute("aria-live", "polite");
 document.body.append(announcer);
 
+// The bars rise once on load (CSS); blocks swapped in later stay still.
+setTimeout(() => document.documentElement.classList.add("settled"), 1000);
+
 const announced = (root) => root.querySelector("[data-announce]")?.textContent.trim() ?? "";
 
 async function refresh() {

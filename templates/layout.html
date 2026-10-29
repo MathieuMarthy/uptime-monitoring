@@ -14,6 +14,7 @@
         </nav>
     </div>
     <div class="site-header-group">
+        {% include "partials/theme-switch.html" %}
         <a href="/settings" class="header-link" {% block nav_settings %}{% endblock %}>Settings</a>
         <form action="/logout" method="POST" class="inline-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

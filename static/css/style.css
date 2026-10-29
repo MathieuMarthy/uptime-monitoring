@@ -1,68 +1,48 @@
 /* Signal-box look: an enamel panel, round lamps and traces whose height tells the state.
-   The palette follows the system theme. */
+   Each colour is light-dark(day, night): the system theme picks one, unless the header's switch
+   set `data-theme` on <html> (static/js/theme.js). */
 :root {
-    color-scheme: light;
-    --ground: #D6DAD0;
-    --plate: #E9ECE4;
-    --plate-deep: #F2F4EE;
-    --ink: #1E2620;
-    --ink-soft: #3B443C;
-    --muted: #545D55;
-    --on-ink: #E9ECE4;
-    --rule: #BEC4B8;
-    --rule-soft: #D3D8CC;
-    --rule-strong: #A9B0A3;
-    --go: #14876A;
-    --go-ink: #0F5E49;
-    --go-wash: #D3E6DC;
-    --stop: #C42E24;
-    --stop-ink: #A3241B;
-    --stop-wash: #F1DEDA;
-    --stop-line: #DDB5AE;
-    --on-stop: #FFFFFF;
-    --caution: #9A6A00;
-    --caution-ink: #7A5600;
-    --caution-wash: #F3E4BC;
-    --off: #6E776D;
-    --halo-stop: 0 0 0 4px rgba(196, 46, 36, 0.2);
-    --halo-caution: 0 0 0 4px rgba(154, 106, 0, 0.2);
-    --halo-go: none;
-    --shadow-tip: 0 6px 16px rgba(30, 38, 32, 0.25);
+    color-scheme: light dark;
+    --ground: light-dark(#D6DAD0, #191E1B);
+    --plate: light-dark(#E9ECE4, #222823);
+    --plate-deep: light-dark(#F2F4EE, #1D231F);
+    --ink: light-dark(#1E2620, #DCE2D8);
+    --ink-soft: light-dark(#3B443C, #B4BDB1);
+    --muted: light-dark(#545D55, #98A296);
+    --on-ink: light-dark(#E9ECE4, #191E1B);
+    --rule: light-dark(#BEC4B8, #343B35);
+    --rule-soft: light-dark(#D3D8CC, #2C332D);
+    --rule-strong: light-dark(#A9B0A3, #4A524B);
+    --go: light-dark(#14876A, #3FCB98);
+    --go-ink: light-dark(#0F5E49, #5FD7AA);
+    --go-wash: light-dark(#D3E6DC, #1E3329);
+    --stop: light-dark(#C42E24, #FF5A4C);
+    --stop-ink: light-dark(#A3241B, #FF8A7F);
+    --stop-wash: light-dark(#F1DEDA, #3A2522);
+    --stop-line: light-dark(#DDB5AE, #5A2F2A);
+    --on-stop: light-dark(#FFFFFF, #191E1B);
+    --caution: light-dark(#9A6A00, #F2B630);
+    --caution-ink: light-dark(#7A5600, #F2B630);
+    --caution-wash: light-dark(#F3E4BC, #3A3220);
+    --off: light-dark(#6E776D, #7E887D);
+    /* Day lamps wear a ring, night lamps glow. */
+    --halo-stop: 0 0 0 4px light-dark(rgba(196, 46, 36, 0.2), transparent),
+                 0 0 10px light-dark(transparent, rgba(255, 90, 76, 0.7));
+    --halo-caution: 0 0 0 4px light-dark(rgba(154, 106, 0, 0.2), transparent),
+                    0 0 10px light-dark(transparent, rgba(242, 182, 48, 0.55));
+    --halo-go: 0 0 6px light-dark(transparent, rgba(63, 203, 152, 0.35));
+    --shadow-tip: 0 6px 16px light-dark(rgba(30, 38, 32, 0.25), rgba(0, 0, 0, 0.45));
 
     --font-text: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --font-title: 'Barlow Semi Condensed', 'Barlow', system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        color-scheme: dark;
-        --ground: #191E1B;
-        --plate: #222823;
-        --plate-deep: #1D231F;
-        --ink: #DCE2D8;
-        --ink-soft: #B4BDB1;
-        --muted: #98A296;
-        --on-ink: #191E1B;
-        --rule: #343B35;
-        --rule-soft: #2C332D;
-        --rule-strong: #4A524B;
-        --go: #3FCB98;
-        --go-ink: #5FD7AA;
-        --go-wash: #1E3329;
-        --stop: #FF5A4C;
-        --stop-ink: #FF8A7F;
-        --stop-wash: #3A2522;
-        --stop-line: #5A2F2A;
-        --on-stop: #191E1B;
-        --caution: #F2B630;
-        --caution-ink: #F2B630;
-        --caution-wash: #3A3220;
-        --off: #7E887D;
-        --halo-stop: 0 0 10px rgba(255, 90, 76, 0.7);
-        --halo-caution: 0 0 10px rgba(242, 182, 48, 0.55);
-        --halo-go: 0 0 6px rgba(63, 203, 152, 0.35);
-        --shadow-tip: 0 6px 16px rgba(0, 0, 0, 0.45);
-    }
+:root[data-theme="light"] {
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
 }
 
 @font-face {
@@ -202,6 +182,7 @@ h1, h2, h3 {
     color: var(--muted);
     font-weight: 500;
     text-decoration: none;
+    transition: color 120ms ease, background-color 120ms ease;
 }
 
 .site-nav a:hover,
@@ -214,6 +195,40 @@ h1, h2, h3 {
     color: var(--ink);
     background: var(--plate);
     box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+.theme-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 120ms ease, background-color 120ms ease;
+}
+
+.theme-switch:hover {
+    color: var(--ink);
+    background: var(--plate);
+}
+
+.theme-switch[hidden] {
+    display: none;
+}
+
+.theme-icon {
+    display: none;
+}
+
+.theme-switch[data-mode="system"] .theme-icon-system,
+.theme-switch[data-mode="light"] .theme-icon-light,
+.theme-switch[data-mode="dark"] .theme-icon-dark {
+    display: block;
 }
 
 /* Page frame */
@@ -349,7 +364,24 @@ main {
 }
 
 .lamp-up { background: var(--go); box-shadow: var(--halo-go); }
-.lamp-down { background: var(--stop); box-shadow: var(--halo-stop); }
+.lamp-down { position: relative; background: var(--stop); box-shadow: var(--halo-stop); }
+
+/* A down lamp sends out a ring three times when it appears, then holds still: enough to catch
+   the eye, short of the 5 s after which moving content must be pausable. */
+.lamp-down::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--stop);
+    opacity: 0;
+    animation: ping 1.6s ease-out 3;
+}
+
+@keyframes ping {
+    from { transform: scale(1); opacity: 0.7; }
+    to { transform: scale(2.6); opacity: 0; }
+}
 .lamp-pending { background: var(--caution); box-shadow: var(--halo-caution); }
 .lamp-paused { background: transparent; border: 2px solid var(--off); }
 
@@ -399,6 +431,28 @@ main {
     flex: 1;
     margin: 0 1px;
     border-radius: 1px 1px 0 0;
+    transition: filter 120ms ease;
+}
+
+.tick:hover::before {
+    filter: brightness(1.2) saturate(1.1);
+}
+
+/* On load, bars rise from the baseline once. live.js marks the page settled after that, so the
+   blocks it swaps in every 30 s do not rise again. */
+.tick::before,
+.lat::before {
+    transform-origin: bottom;
+    animation: rise 480ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.settled .tick::before,
+.settled .lat::before {
+    animation: none;
+}
+
+@keyframes rise {
+    from { transform: scaleY(0); }
 }
 
 .trace-90 .tick::before {
@@ -417,7 +471,8 @@ main {
 
 /* Tooltip of a bar, from its data-tip: a mouse convenience, the detail page lists the same
    figures in a table. Opens towards the middle of the trace so it stays on screen. */
-.tick[data-tip]:hover::after {
+.tick[data-tip]:hover::after,
+.lat[data-tip]:hover::after {
     content: attr(data-tip);
     position: absolute;
     right: 0;
@@ -435,10 +490,16 @@ main {
     text-align: left;
     box-shadow: var(--shadow-tip);
     pointer-events: none;
+    animation: tip-in 120ms ease-out;
+}
+
+@keyframes tip-in {
+    from { opacity: 0; transform: translateY(-3px); }
 }
 
 .trace-24 .tick:nth-child(-n+12):hover::after,
-.trace-90 .tick:nth-child(-n+45):hover::after {
+.trace-90 .tick:nth-child(-n+45):hover::after,
+.latency-chart .lat:nth-child(-n+12):hover::after {
     right: auto;
     left: 0;
 }
@@ -489,6 +550,13 @@ main {
     font-weight: 600;
     text-decoration: none;
     cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+
+.button-primary:active,
+.button-secondary:active,
+.button-danger:active {
+    transform: translateY(1px);
 }
 
 .button-primary {
@@ -548,6 +616,7 @@ main {
     background: var(--plate);
     color: var(--ink);
     text-decoration: none;
+    transition: background-color 120ms ease, color 120ms ease;
 }
 
 .segmented a:focus-visible {

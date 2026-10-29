@@ -331,7 +331,15 @@ async fn dashboard_shows_uptime_and_hourly_heartbeat() {
     assert_eq!(idle.matches("tick tick-none").count(), 24);
     assert!(!idle.contains('%'));
     assert!(api.contains(r#"data-search="API https://example.com""#));
-    for script in ["/static/js/live.js", "/static/js/search.js"] {
+    assert!(
+        body.contains(r#"id="theme-switch""#),
+        "theme switch in the header"
+    );
+    for script in [
+        "/static/js/live.js",
+        "/static/js/search.js",
+        "/static/js/theme.js",
+    ] {
         assert!(body.contains(script));
         assert_eq!(get(&app, script).await.status, 200, "{script}");
     }
@@ -389,7 +397,7 @@ async fn detail_shows_history_incidents_and_recent_checks() {
     // The status line, the incident, its failed check and the latest checks.
     assert_eq!(body.matches("HTTP 503 Service Unavailable").count(), 4);
     assert!(
-        body.contains(r#"<rect class="latency"#),
+        body.contains(r#"<span class="lat latency"#),
         "latency chart: {body}"
     );
     let hourly = body

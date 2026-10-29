@@ -239,7 +239,7 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   Bars (`Tick::class`): a dot without checks, short green, mid-height orange with failures but no downtime, red with
   downtime, full height once it reaches a tenth of the bar's time. Uptime is truncated, never rounded up to 100 %.
 - **Detail page.** A status sentence (from `monitor_state` and the latest incident), 24 h and 30 d uptime, 24 h average
-  latency, days left on the certificate, 24 hourly bars with the hourly average latency drawn as an inline SVG under
+  latency, days left on the certificate, 24 hourly bars with the hourly average latency drawn as bars under
   them, 90 daily bars (daily stats, then raw checks for the days not rolled up yet), the last 20 incidents unfolded
   like on the Activity page, the last 20 checks, then the configuration.
 - **Live refresh.** `static/js/live.js` refetches the page every 30 s while the tab is visible and swaps the elements
@@ -264,15 +264,20 @@ alerts follow the checks retention: older incidents only show their facts.
 ## Look
 
 - **Theme.** One stylesheet of tokens (`static/css/style.css`): an enamel grey-green ground, plates for panels, round
-  status lamps (hollow when paused). The dark palette replaces the tokens under `prefers-color-scheme: dark`: the
-  system theme decides, there is no switch.
+  status lamps (hollow when paused). Each colour is `light-dark(day, night)`: the system theme picks one, unless the
+  header's switch (system, light, dark) set `data-theme` on `<html>`. `static/js/theme.js`, loaded without `defer`
+  in `<head>`, applies the choice before the page is drawn; it is kept in `localStorage`, so per browser. The status
+  page has no switch but follows a choice made in the admin.
 - **Fonts.** Barlow (text) and Barlow Semi Condensed (titles), self-hosted woff2 under the SIL Open Font License
   (`static/fonts/OFL.txt`), tabular figures everywhere.
 - **Traces.** The height of a bar tells the state, its colour only confirms it, so the bars read without colour.
   Their tooltip is CSS (`data-tip`), a mouse convenience: the detail page lists the same figures in an *Hourly
   figures* table, and dashboard rows hide the trace from screen readers (the row reads name, state, uptime and
-  response). Anything drawn at a computed size is SVG geometry (the latency chart), never a `style` attribute, which
-  the CSP forbids.
+  response). A computed height is never a `style` attribute, which the CSP forbids: the latency bars take one of 20
+  height classes (`lat-1` to `lat-20`).
+- **Motion.** Bars rise once on load (`live.js` then marks the page `settled`, so swapped blocks stay still), a down
+  lamp sends out a ring three times (under the 5 s after which moving content must be pausable), tooltips and
+  unfolded incidents fade in. `prefers-reduced-motion` turns all of it off.
 - **Accessibility.** Colour pairs meet WCAG AA in both palettes (4.5:1 for text, 3:1 for lamps and bars); a state is
   always written out next to its lamp, except *Up* (visually hidden).
 - **Menu.** A page marks its menu entry by filling the matching `nav_*` block of `layout.html`.

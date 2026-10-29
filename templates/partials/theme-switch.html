@@ -1,0 +1,16 @@
+{# Cycles system, light and dark themes; shown by static/js/theme.js, useless without it. #}
+<button class="theme-switch" id="theme-switch" type="button" data-mode="system" hidden>
+    <svg class="theme-icon theme-icon-system" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16">
+        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/>
+    </svg>
+    <svg class="theme-icon theme-icon-light" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16">
+        <circle cx="8" cy="8" r="3" fill="currentColor"/>
+        <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6L13 13M3 13l1.4-1.4M11.6 4.4L13 3"
+              stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <svg class="theme-icon theme-icon-dark" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16">
+        <path d="M13.5 9.5A6 6 0 0 1 6.5 2.5a6 6 0 1 0 7 7z" fill="currentColor"/>
+    </svg>
+    <span class="visually-hidden">Theme: </span><span data-theme-label>System</span>
+</button>

@@ -76,12 +76,13 @@
                 </span>
                 <span class="chart-label">Response time</span>
                 {% if let Some(max) = latency_max_ms %}
-                <svg class="latency-chart" viewBox="0 0 240 60" preserveAspectRatio="none" role="img"
-                     aria-label="Average response time per hour, slowest {{ latency_slowest }}: {{ max }} ms">
-                    {% for bar in latency %}
-                    <rect class="{{ bar.class }}" x="{{ bar.x }}" y="{{ bar.y }}" width="8" height="{{ bar.height }}"><title>{{ bar.title }}</title></rect>
-                    {% endfor %}
-                </svg>
+                <span class="latency-chart" role="img"
+                      aria-label="Average response time per hour, slowest {{ latency_slowest }}: {{ max }} ms">
+                    {%- for bar in latency -%}
+                    <span class="lat {{ bar.class }} lat-{{ bar.level }}{% if loop.index0 > 0 && loop.index0 % hour_axis.step == 0 %} tick-guide{% endif %}"
+                          {%- if !bar.title.is_empty() %} data-tip="{{ bar.title }}"{% endif %}></span>
+                    {%- endfor -%}
+                </span>
                 {% else %}
                 <span class="section-note">No response in the last 24 hours.</span>
                 {% endif %}

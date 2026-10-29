@@ -71,15 +71,54 @@
 }
 
 .latency-chart {
-    display: block;
-    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(24, minmax(0, 1fr));
+    align-items: end;
     height: 64px;
     border-bottom: 1px solid var(--rule-strong);
     border-right: 2px solid var(--ink);
 }
 
-.latency { fill: var(--off); }
-.latency-down { fill: var(--stop); opacity: 0.6; }
+/* One hour; its height is one of 20 classes, since the CSP forbids inline styles. */
+.lat {
+    position: relative;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+}
+
+.lat::before {
+    content: "";
+    flex: 1;
+    margin: 0 2px;
+    border-radius: 1px 1px 0 0;
+    background: var(--off);
+    transition: background-color 120ms ease;
+}
+
+.latency-down::before { background: var(--stop); opacity: 0.6; }
+.lat[data-tip]:hover::before { background: var(--ink-soft); opacity: 1; }
+.lat-0::before { height: 0; }
+.lat-1::before { height: 5%; }
+.lat-2::before { height: 10%; }
+.lat-3::before { height: 15%; }
+.lat-4::before { height: 20%; }
+.lat-5::before { height: 25%; }
+.lat-6::before { height: 30%; }
+.lat-7::before { height: 35%; }
+.lat-8::before { height: 40%; }
+.lat-9::before { height: 45%; }
+.lat-10::before { height: 50%; }
+.lat-11::before { height: 55%; }
+.lat-12::before { height: 60%; }
+.lat-13::before { height: 65%; }
+.lat-14::before { height: 70%; }
+.lat-15::before { height: 75%; }
+.lat-16::before { height: 80%; }
+.lat-17::before { height: 85%; }
+.lat-18::before { height: 90%; }
+.lat-19::before { height: 95%; }
+.lat-20::before { height: 100%; }
 
 .hourly-figures summary {
     align-self: flex-start;
