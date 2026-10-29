@@ -7,27 +7,18 @@ use uptime_monitoring::engine::guard::Guard;
 use uptime_monitoring::models::Settings;
 use uptime_monitoring::notify::Notifier;
 use uptime_monitoring::state::AppState;
-use uptime_monitoring::{app, db, engine, healthcheck, maintenance};
+use uptime_monitoring::{app, db, engine, healthcheck, maintenance, privileges};
 
-#[tokio::main]
-async fn main() {
-    match std::env::args().nth(1).as_deref() {
-        None => {}
-        Some("healthcheck") => healthcheck().await,
+fn main() {
+    let command = std::env::args().nth(1);
+    let serving = match command.as_deref() {
+        None => true,
+        Some("healthcheck") => false,
         Some(other) => {
             eprintln!("Unknown command {other:?}. Run without arguments, or with `healthcheck`.");
             std::process::exit(2);
         }
-    }
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "uptime_monitoring=info,tower_http=info".into()),
-        )
-        // No colour codes in `docker logs` or a log file.
-        .with(tracing_subscriber::fmt::layer().with_ansi(std::io::stdout().is_terminal()))
-        .init();
+    };
 
     let config = match Config::from_env() {
         Ok(config) => config,
@@ -36,6 +27,40 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    // Before any thread, file or socket: root only lasts long enough to hand over the database.
+    if privileges::is_root() {
+        let (uid, gid) = (config.puid, config.pgid);
+        let handed = match serving {
+            true => privileges::hand_over_database(&config.database_url, uid, gid),
+            false => Ok(()),
+        };
+        if let Err(e) = handed.and_then(|()| privileges::become_user(uid, gid)) {
+            eprintln!("Cannot switch from root to user {uid}:{gid} (PUID, PGID): {e}");
+            std::process::exit(1);
+        }
+    }
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to start the async runtime");
+    if serving {
+        runtime.block_on(serve(config));
+    } else {
+        runtime.block_on(healthcheck(config));
+    }
+}
+
+async fn serve(config: Config) {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "uptime_monitoring=info,tower_http=info".into()),
+        )
+        // No colour codes in `docker logs` or a log file.
+        .with(tracing_subscriber::fmt::layer().with_ansi(std::io::stdout().is_terminal()))
+        .init();
 
     let pool = match db::init_pool(&config.database_url).await {
         Ok(pool) => pool,
@@ -100,12 +125,8 @@ async fn main() {
 }
 
 /// Exits 0 when the instance at `BIND_ADDR` answers `/health`, 1 otherwise.
-async fn healthcheck() -> ! {
-    let result = match Config::from_env() {
-        Ok(config) => healthcheck::probe(healthcheck::target(config.bind_addr)).await,
-        Err(message) => Err(format!("Invalid configuration: {message}")),
-    };
-    match result {
+async fn healthcheck(config: Config) -> ! {
+    match healthcheck::probe(healthcheck::target(config.bind_addr)).await {
         Ok(()) => std::process::exit(0),
         Err(message) => {
             eprintln!("{message}");

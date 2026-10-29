@@ -1,18 +1,46 @@
-# uptime-monitoring
+<h1 align="center">uptime-monitoring</h1>
 
-A lightweight, self-hosted uptime monitor: a single binary with SQLite, built to watch about a hundred HTTP(S)
-endpoints from an instance exposed on the Internet, using as little memory as possible.
+<p align="center">
+  A lightweight, self-hosted uptime monitor: one binary, one SQLite file, about 3 MiB of RAM.
+</p>
 
-- HTTP(S) checks: method, headers, body, accepted status codes, keyword, redirects, timeouts.
-- Down after *N* consecutive failures, faster re-checks while a failure is being confirmed.
-- Alerts when a monitor goes down or comes back up, and before a TLS certificate expires: webhook, Discord, ntfy.
-- Uptime computed from the actual downtime, hourly and daily bars, incidents, latency.
-- Public status pages, each with its own slug and selection of monitors.
-- One admin account: Argon2 password, session cookie, CSRF protection, login rate limit, strict CSP.
-- Optional blocking of private addresses (localhost, private networks, cloud metadata), resistant to DNS
-  rebinding.
+<p align="center">
+  <a href="https://github.com/MathieuMarthy/uptime-monitoring/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MathieuMarthy/uptime-monitoring/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/MathieuMarthy/uptime-monitoring/pkgs/container/uptime-monitoring"><img alt="Docker image" src="https://img.shields.io/badge/image-ghcr.io-1E2620"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-14876A"></a>
+</p>
 
-About 3 MiB of RAM at rest; a 21 MB Docker image.
+<p align="center">
+  <img src="docs/images/home_page.png" alt="Dashboard: two monitors down at the top, then one row per monitor with its last 24 hours as bars on a shared time axis" width="900">
+</p>
+
+Built to watch about a hundred HTTP(S) endpoints from an instance exposed on the Internet: secure by default, and
+small enough to run next to the sites it watches.
+
+## Features
+
+**Checks**
+- HTTP(S) with method, headers, body, accepted status codes, expected keyword, redirects and timeouts.
+- Down after *N* consecutive failures, with faster re-checks while a failure is being confirmed.
+- TLS certificate expiry tracked on every check.
+
+**What you see**
+- A dashboard that says what is down in one sentence, then every monitor on one shared time axis: an outage hitting
+  several sites at the same hour lines up.
+- Uptime computed from the actual downtime, 24-hour and 90-day bars, hourly response times, incidents.
+- An activity feed of outages, failed checks and certificate warnings, each unfolding to its failed checks and the
+  alerts sent.
+- Public status pages, each with its own address, monitors and display names; URLs and errors are never shown.
+- Light and dark themes, following the system or picked in the header.
+
+**Alerts**
+- When a monitor goes down, comes back up, or its certificate is about to expire.
+- Webhook, Discord and ntfy, retried, with a delivery log.
+
+**Security**
+- One admin account: Argon2 password, `Secure` session cookie, CSRF protection, login rate limit, strict CSP.
+- Optional blocking of private addresses (localhost, private networks, cloud metadata), resistant to DNS rebinding.
+- A 21 MB distroless image that drops root before doing anything.
 
 ## Run it with Docker
 
@@ -26,8 +54,8 @@ docker run -d --name uptime-monitoring \
 docker logs uptime-monitoring   # prints the one-time setup URL
 ```
 
-With a bind mount (`-v ./data:/data`) instead of a named volume, the directory must belong to the image's user:
-`sudo chown 65532:65532 ./data`.
+A bind mount (`-v ./data:/data`) works as well, even when Docker creates the directory as root: the container
+starts as root only to hand the database files to its user (65532, or `PUID`/`PGID`), then drops root for good.
 
 Open the setup URL from the logs to create the admin account. Until then, the instance only shows a page
 pointing to the logs, so nobody else can claim it. A `compose.yaml` example is in the repository.
@@ -44,6 +72,7 @@ nginx). Over plain HTTP, logging in only works on `localhost`.
 | `PUBLIC_URL`          | unset                                    | Address users reach, e.g. `https://status.example.com`: alerts link to the monitor's page |
 | `TRUST_PROXY_HEADERS` | `false`                                  | Take the client IP from `X-Forwarded-For`; enable only behind a proxy |
 | `RUST_LOG`            | `uptime_monitoring=info,tower_http=info` | Log filter |
+| `PUID`, `PGID`        | `65532`                                  | User and group the process runs as when started as root; they own the database files. Ignored when started as another user (`user:` in Compose) |
 
 Timezone, data retention, private-address blocking and the password are changed from the *Settings* page.
 

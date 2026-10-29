@@ -2454,6 +2454,7 @@ dependencies = [
  "http",
  "http-body-util",
  "jiff",
+ "libc",
  "memchr",
  "reqwest",
  "rust-embed",

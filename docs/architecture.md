@@ -128,6 +128,7 @@ uptime-monitoring/
 | `TRUST_PROXY_HEADERS` | `false`                          |
 | `PUBLIC_URL`   | unset                                   |
 | `RUST_LOG`     | `uptime_monitoring=info,tower_http=info` |
+| `PUID`, `PGID` | `65532` (only used when started as root) |
 
 An invalid value stops startup with a message.
 
@@ -324,8 +325,14 @@ alerts follow the checks retention: older incidents only show their facts.
 ## Deployment
 
 - **Image.** `Dockerfile` builds a static musl binary (dependencies in their own layer) and copies it onto
-  `gcr.io/distroless/static-debian12:nonroot`, which has the CA certificates and runs as uid 65532. `DATABASE_URL`
-  points to the `/data` volume. About 21 MB, under 3 MiB of RAM at rest. amd64 only.
+  `gcr.io/distroless/static-debian12`, which has the CA certificates and no shell. `DATABASE_URL` points to the
+  `/data` volume. About 21 MB, under 3 MiB of RAM at rest. amd64 only.
+- **Privileges** (`privileges.rs`). The image starts as root, like official images whose entrypoint runs `chown`
+  then `gosu`, but without a shell: before the async runtime, any file or socket, the binary gives the database's
+  directory, the database and its journals (nothing else) to `PUID:PGID` (default 65532), without following
+  symlinks, then drops supplementary groups, sets its gid and uid, and checks that root cannot be regained. A
+  bind-mounted directory created by Docker as root thus works as is. Started as another user (`user:` in Compose,
+  Kubernetes), it changes nothing. The `healthcheck` subcommand drops root too, without touching files.
 - **Health.** No shell in the image: `HEALTHCHECK` runs `uptime-monitoring healthcheck`, which sends `GET /health` to
   `BIND_ADDR` (loopback when it is unspecified) and exits 0 on a 200 within 5 s.
 - **Logs.** No colour codes unless stdout is a terminal.

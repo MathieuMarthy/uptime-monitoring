@@ -3,6 +3,8 @@ use url::Url;
 
 const DEFAULT_DATABASE_URL: &str = "sqlite://uptime.db";
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
+/// The Docker image's `nonroot` user and group.
+const DEFAULT_ID: u32 = 65532;
 
 #[derive(Debug)]
 pub struct Config {
@@ -11,6 +13,9 @@ pub struct Config {
     pub trust_proxy_headers: bool,
     /// Where users reach the instance, without a trailing `/`: links in alerts and the setup URL.
     pub public_url: Option<String>,
+    /// Who the process becomes when started as root (`PUID`, `PGID`): see `privileges`.
+    pub puid: u32,
+    pub pgid: u32,
 }
 
 impl Config {
@@ -45,11 +50,20 @@ impl Config {
             })?),
         };
 
+        let id = |key: &str| match get(key) {
+            None => Ok(DEFAULT_ID),
+            Some(raw) => raw.trim().parse().ok().filter(|&id| id > 0).ok_or_else(|| {
+                format!("{key} must be a user or group id other than 0 (root), got {raw:?}")
+            }),
+        };
+
         Ok(Self {
             database_url,
             bind_addr,
             trust_proxy_headers,
             public_url,
+            puid: id("PUID")?,
+            pgid: id("PGID")?,
         })
     }
 }
@@ -76,6 +90,23 @@ mod tests {
         assert_eq!(config.database_url, "sqlite://uptime.db");
         assert_eq!(config.bind_addr.to_string(), "0.0.0.0:8080");
         assert!(!config.trust_proxy_headers);
+    }
+
+    #[test]
+    fn run_as_defaults_to_the_image_user() {
+        let config = Config::from_lookup(|_| None).unwrap();
+        assert_eq!((config.puid, config.pgid), (65532, 65532));
+        let with = |puid: &'static str, pgid: &'static str| {
+            Config::from_lookup(move |key| match key {
+                "PUID" => Some(puid.to_string()),
+                "PGID" => Some(pgid.to_string()),
+                _ => None,
+            })
+        };
+        let config = with("1000", "100").unwrap();
+        assert_eq!((config.puid, config.pgid), (1000, 100));
+        assert!(with("0", "100").unwrap_err().contains("PUID"), "never root");
+        assert!(with("1000", "x").unwrap_err().contains("PGID"));
     }
 
     #[test]
