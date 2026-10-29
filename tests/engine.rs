@@ -6,8 +6,10 @@ use common::post_form;
 use sqlx::SqlitePool;
 use std::time::Duration;
 use uptime_monitoring::engine;
+use uptime_monitoring::engine::guard::Guard;
 use uptime_monitoring::forms::monitor::MonitorForm;
 use uptime_monitoring::models::{Monitor, MonitorState, MonitorStatus};
+use uptime_monitoring::notify::Notifier;
 
 async fn target() -> String {
     let app = Router::new().route("/ok", get(|| async { "ok" }));
@@ -15,6 +17,12 @@ async fn target() -> String {
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     format!("http://{addr}/ok")
+}
+
+async fn start(pool: &SqlitePool) -> engine::EngineHandle {
+    engine::start(pool.clone(), Guard::new(false), Notifier::default())
+        .await
+        .unwrap()
 }
 
 async fn create(pool: &SqlitePool, url: &str) -> i64 {
@@ -52,7 +60,7 @@ async fn wait_for_checks(pool: &SqlitePool, id: i64, n: i64) {
 #[tokio::test]
 async fn reload_checks_a_new_monitor_at_once() {
     let pool = common::test_app().await.1;
-    let handle = engine::start(pool.clone()).await.unwrap();
+    let handle = start(&pool).await;
     let id = create(&pool, &target().await).await;
     handle.reload(id);
     wait_for_checks(&pool, id, 1).await;
@@ -63,7 +71,7 @@ async fn reload_checks_a_new_monitor_at_once() {
 #[tokio::test]
 async fn reload_after_edit_checks_again_at_once() {
     let pool = common::test_app().await.1;
-    let handle = engine::start(pool.clone()).await.unwrap();
+    let handle = start(&pool).await;
     let id = create(&pool, &target().await).await;
     handle.reload(id);
     wait_for_checks(&pool, id, 1).await;
@@ -74,7 +82,7 @@ async fn reload_after_edit_checks_again_at_once() {
 #[tokio::test]
 async fn paused_monitor_is_not_checked() {
     let pool = common::test_app().await.1;
-    let handle = engine::start(pool.clone()).await.unwrap();
+    let handle = start(&pool).await;
     let id = create(&pool, &target().await).await;
     Monitor::toggle_pause(&pool, id).await.unwrap();
     handle.reload(id);
@@ -89,7 +97,7 @@ async fn paused_monitor_is_not_checked() {
 #[tokio::test]
 async fn deleted_monitor_stops_being_checked() {
     let pool = common::test_app().await.1;
-    let handle = engine::start(pool.clone()).await.unwrap();
+    let handle = start(&pool).await;
     let id = create(&pool, &target().await).await;
     // Created first: SQLite would reuse the deleted id.
     let other = create(&pool, &target().await).await;

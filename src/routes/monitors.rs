@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::forms::monitor::{FieldErrors, MonitorForm};
-use crate::models::{Monitor, Session, is_unique_violation};
-use crate::routes::{MonitorId, form_or_invalid};
+use crate::models::{Channel, Monitor, Session, is_unique_violation};
+use crate::routes::{PathId, form_or_invalid};
 use crate::state::AppState;
 use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate};
 use axum::extract::State;
@@ -32,17 +32,29 @@ async fn index(
 async fn detail(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
-    MonitorId(id): MonitorId,
+    PathId(id): PathId,
 ) -> Result<DetailTemplate, AppError> {
     DetailTemplate::load(&state.db, id, session.csrf_token).await
 }
 
-async fn new_form(Extension(session): Extension<Session>) -> FormTemplate {
-    create_page(
-        MonitorForm::new_defaults(),
+async fn new_form(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+) -> Result<FormTemplate, AppError> {
+    let channels = Channel::all(&state.db).await?;
+    let mut form = MonitorForm::new_defaults();
+    let enabled: Vec<i64> = channels
+        .iter()
+        .filter(|c| c.enabled)
+        .map(|c| c.id)
+        .collect();
+    form.set_channels(&enabled);
+    Ok(create_page(
+        form,
         FieldErrors::new(),
         session.csrf_token,
-    )
+        channels,
+    ))
 }
 
 async fn create(
@@ -53,7 +65,10 @@ async fn create(
     let form = form_or_invalid(form)?;
     let input = match form.validate() {
         Ok(input) => input,
-        Err(errors) => return Ok(create_page(form, errors, session.csrf_token).into_response()),
+        Err(errors) => {
+            let channels = Channel::all(&state.db).await?;
+            return Ok(create_page(form, errors, session.csrf_token, channels).into_response());
+        }
     };
 
     match Monitor::create(&state.db, &input).await {
@@ -62,7 +77,8 @@ async fn create(
             Ok(Redirect::to(&format!("/monitors/{id}")).into_response())
         }
         Err(e) if is_unique_violation(&e) => {
-            Ok(create_page(form, name_taken(), session.csrf_token).into_response())
+            let channels = Channel::all(&state.db).await?;
+            Ok(create_page(form, name_taken(), session.csrf_token, channels).into_response())
         }
         Err(e) => Err(e.into()),
     }
@@ -71,23 +87,27 @@ async fn create(
 async fn edit_form(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
-    MonitorId(id): MonitorId,
+    PathId(id): PathId,
 ) -> Result<FormTemplate, AppError> {
     let monitor = Monitor::find(&state.db, id)
         .await?
         .ok_or(AppError::NotFound)?;
+    let mut form = MonitorForm::from_monitor(&monitor);
+    form.set_channels(&Channel::ids_for_monitor(&state.db, id).await?);
+    let channels = Channel::all(&state.db).await?;
     Ok(edit_page(
         id,
-        MonitorForm::from_monitor(&monitor),
+        form,
         FieldErrors::new(),
         session.csrf_token,
+        channels,
     ))
 }
 
 async fn update(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
-    MonitorId(id): MonitorId,
+    PathId(id): PathId,
     form: Result<Form<MonitorForm>, FormRejection>,
 ) -> Result<Response, AppError> {
     if Monitor::find(&state.db, id).await?.is_none() {
@@ -97,7 +117,10 @@ async fn update(
     let form = form_or_invalid(form)?;
     let input = match form.validate() {
         Ok(input) => input,
-        Err(errors) => return Ok(edit_page(id, form, errors, session.csrf_token).into_response()),
+        Err(errors) => {
+            let channels = Channel::all(&state.db).await?;
+            return Ok(edit_page(id, form, errors, session.csrf_token, channels).into_response());
+        }
     };
 
     match Monitor::update(&state.db, id, &input).await {
@@ -107,16 +130,14 @@ async fn update(
         }
         Ok(false) => Err(AppError::NotFound),
         Err(e) if is_unique_violation(&e) => {
-            Ok(edit_page(id, form, name_taken(), session.csrf_token).into_response())
+            let channels = Channel::all(&state.db).await?;
+            Ok(edit_page(id, form, name_taken(), session.csrf_token, channels).into_response())
         }
         Err(e) => Err(e.into()),
     }
 }
 
-async fn delete(
-    State(state): State<AppState>,
-    MonitorId(id): MonitorId,
-) -> Result<Redirect, AppError> {
+async fn delete(State(state): State<AppState>, PathId(id): PathId) -> Result<Redirect, AppError> {
     if Monitor::delete(&state.db, id).await? {
         state.engine.reload(id);
         Ok(Redirect::to("/"))
@@ -127,7 +148,7 @@ async fn delete(
 
 async fn toggle_pause(
     State(state): State<AppState>,
-    MonitorId(id): MonitorId,
+    PathId(id): PathId,
 ) -> Result<Redirect, AppError> {
     if Monitor::toggle_pause(&state.db, id).await? {
         state.engine.reload(id);
@@ -137,7 +158,12 @@ async fn toggle_pause(
     }
 }
 
-fn create_page(form: MonitorForm, errors: FieldErrors, csrf_token: String) -> FormTemplate {
+fn create_page(
+    form: MonitorForm,
+    errors: FieldErrors,
+    csrf_token: String,
+    channels: Vec<Channel>,
+) -> FormTemplate {
     FormTemplate {
         form,
         errors,
@@ -145,10 +171,17 @@ fn create_page(form: MonitorForm, errors: FieldErrors, csrf_token: String) -> Fo
         action_url: "/monitors/new".to_string(),
         cancel_url: "/".to_string(),
         monitor_id: None,
+        channels,
     }
 }
 
-fn edit_page(id: i64, form: MonitorForm, errors: FieldErrors, csrf_token: String) -> FormTemplate {
+fn edit_page(
+    id: i64,
+    form: MonitorForm,
+    errors: FieldErrors,
+    csrf_token: String,
+    channels: Vec<Channel>,
+) -> FormTemplate {
     FormTemplate {
         form,
         errors,
@@ -156,6 +189,7 @@ fn edit_page(id: i64, form: MonitorForm, errors: FieldErrors, csrf_token: String
         action_url: format!("/monitors/{id}/edit"),
         cancel_url: format!("/monitors/{id}"),
         monitor_id: Some(id),
+        channels,
     }
 }
 

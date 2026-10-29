@@ -2,6 +2,9 @@ use std::net::SocketAddr;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use uptime_monitoring::config::Config;
+use uptime_monitoring::engine::guard::Guard;
+use uptime_monitoring::models::Settings;
+use uptime_monitoring::notify::Notifier;
 use uptime_monitoring::state::AppState;
 use uptime_monitoring::{app, db, engine, maintenance};
 
@@ -34,7 +37,15 @@ async fn main() {
         }
     };
 
-    let engine = match engine::start(pool.clone()).await {
+    let guard = match Settings::load(&pool).await {
+        Ok(settings) => Guard::new(settings.block_private_targets),
+        Err(e) => {
+            eprintln!("Cannot read the settings: {e}");
+            std::process::exit(1);
+        }
+    };
+    let notifier = Notifier::start(pool.clone(), guard.clone());
+    let engine = match engine::start(pool.clone(), guard, notifier.clone()).await {
         Ok(engine) => engine,
         Err(e) => {
             eprintln!("Cannot start the check engine: {e}");
@@ -46,7 +57,8 @@ async fn main() {
 
     let state = AppState::new(pool)
         .with_trust_proxy_headers(config.trust_proxy_headers)
-        .with_engine(engine);
+        .with_engine(engine)
+        .with_notifier(notifier);
     match state.start_setup_if_needed().await {
         Ok(Some(token)) => uptime_monitoring::auth::print_setup_url(&token),
         Ok(None) => {}

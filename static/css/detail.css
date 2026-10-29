@@ -395,6 +395,13 @@
     margin-top: 8px;
 }
 
+.table-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    white-space: nowrap;
+}
+
 .table-scroll {
     overflow-x: auto;
 }

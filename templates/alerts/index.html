@@ -1,0 +1,91 @@
+{% extends "layout.html" %}
+
+{% block title %}Alerts - Uptime Monitoring{% endblock %}
+
+{% block styles %}
+<link href="/static/css/detail.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="detail-container">
+    <div class="detail-header">
+        <div class="detail-title-group">
+            <h1 class="detail-title">Alerts</h1>
+            <p class="text-muted">Channels receive an alert when a linked monitor goes down, comes back up, or its certificate is about to expire. Link monitors from their edit page.</p>
+        </div>
+        <div class="detail-actions">
+            <a class="button-primary" href="/alerts/new">Add Channel</a>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <h2 class="section-card-title">Notification Channels</h2>
+
+        {% if channels.is_empty() %}
+        <div class="empty-state">
+            <p class="empty-state-text">No notification channel yet. Add a webhook, Discord or ntfy channel to receive alerts.</p>
+        </div>
+        {% else %}
+        <div class="table-scroll">
+            <table class="incidents-table">
+                <thead>
+                <tr><th>Name</th><th>Type</th><th>Monitors</th><th>Status</th><th>Last Delivery</th><th></th></tr>
+                </thead>
+                <tbody>
+                {% for channel in channels %}
+                <tr>
+                    <td>{{ channel.name }}</td>
+                    <td>{{ channel.kind }}</td>
+                    <td>{{ channel.monitors }}</td>
+                    {% if channel.enabled %}<td class="text-green">Enabled</td>{% else %}<td class="text-muted">Disabled</td>{% endif %}
+                    {% match channel.last %}
+                    {% when Some with ((time, ok)) %}
+                    <td>{{ time }} {% if *ok %}<span class="text-green">Sent</span>{% else %}<span class="text-red">Failed</span>{% endif %}</td>
+                    {% when None %}<td class="text-muted">—</td>
+                    {% endmatch %}
+                    <td class="table-actions">
+                        <form action="/alerts/{{ channel.id }}/test" method="POST" class="inline-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button class="button-secondary" type="submit">Test</button>
+                        </form>
+                        <a class="button-secondary" href="/alerts/{{ channel.id }}/edit">Edit</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="section-card">
+        <h2 class="section-card-title">Recent Deliveries</h2>
+
+        {% if deliveries.is_empty() %}
+        <div class="empty-state">
+            <p class="empty-state-text">No alert sent yet.</p>
+        </div>
+        {% else %}
+        <div class="table-scroll">
+            <table class="incidents-table">
+                <thead>
+                <tr><th>Time</th><th>Channel</th><th>Monitor</th><th>Event</th><th>Result</th><th>Error</th></tr>
+                </thead>
+                <tbody>
+                {% for delivery in deliveries %}
+                <tr>
+                    <td>{{ delivery.time }}</td>
+                    <td>{{ delivery.channel }}</td>
+                    <td>{{ delivery.monitor }}</td>
+                    <td>{{ delivery.event }}</td>
+                    {% if delivery.ok %}<td class="text-green">Sent</td>{% else %}<td class="text-red">Failed</td>{% endif %}
+                    <td>{{ delivery.error }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

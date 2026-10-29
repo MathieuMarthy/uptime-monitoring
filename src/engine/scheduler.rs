@@ -1,8 +1,9 @@
 //! The loop that checks one monitor, forever, at its own pace.
 
 use crate::engine::http::HttpChecker;
-use crate::engine::verdict::{self, Transition};
-use crate::models::{Monitor, MonitorState};
+use crate::engine::verdict::{self, CheckOutcome, Health, Transition};
+use crate::models::{Monitor, MonitorState, Recorded};
+use crate::notify::{Event, MonitorRef, Notification, Notifier};
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,6 +15,7 @@ pub struct Scheduler {
     pub checker: HttpChecker,
     /// Caps checks running at the same time.
     pub permits: Semaphore,
+    pub notifier: Notifier,
 }
 
 impl Scheduler {
@@ -48,12 +50,24 @@ impl Scheduler {
                 &outcome,
                 health,
                 monitor.failure_threshold,
+                monitor.tls_expiry_warn_days,
             )
             .await
             {
-                Ok(Some((next, transition))) => {
-                    health = next;
-                    log_transition(&monitor, transition, outcome.failure.as_ref());
+                Ok(Some(recorded)) => {
+                    log_transition(&monitor, recorded.transition, outcome.failure.as_ref());
+                    for event in events(health, &recorded, &outcome) {
+                        self.notifier.notify(Notification {
+                            monitor: Some(MonitorRef {
+                                id: monitor.id,
+                                name: monitor.name.clone(),
+                                url: monitor.url.clone(),
+                            }),
+                            event,
+                            at: outcome.checked_at,
+                        });
+                    }
+                    health = recorded.health;
                 }
                 Ok(None) => return,
                 Err(e) => {
@@ -70,6 +84,30 @@ impl Scheduler {
             tokio::time::sleep_until(started + Duration::from_secs(delay.unsigned_abs())).await;
         }
     }
+}
+
+/// What to alert about after a check; `before` is the health the check started from.
+fn events(before: Health, recorded: &Recorded, outcome: &CheckOutcome) -> Vec<Event> {
+    let mut events = Vec::new();
+    match recorded.transition {
+        Some(Transition::WentDown { since }) => events.push(Event::Down {
+            since,
+            cause: outcome
+                .failure
+                .as_ref()
+                .map(|f| f.message.clone())
+                .unwrap_or_default(),
+        }),
+        Some(Transition::Recovered) => events.push(Event::Up {
+            // A down monitor's series started when its incident did.
+            down_since: before.failing_since.unwrap_or(outcome.checked_at),
+        }),
+        None => {}
+    }
+    if let Some(expires_at) = recorded.tls_warning {
+        events.push(Event::TlsExpiring { expires_at });
+    }
+    events
 }
 
 fn log_transition(

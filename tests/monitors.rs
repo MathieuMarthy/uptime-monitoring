@@ -356,3 +356,82 @@ async fn detail_shows_history_incidents_and_recent_checks() {
         assert!(body.contains(&format!(r#"id="{id}" data-live"#)), "{id}");
     }
 }
+
+async fn add_channel(pool: &SqlitePool, name: &str, enabled: bool) -> i64 {
+    sqlx::query_scalar(
+        "INSERT INTO notification_channels (name, kind, config, enabled, created_at)
+         VALUES (?, 'webhook', '{\"url\":\"https://hooks.example.com\"}', ?, 0) RETURNING id",
+    )
+    .bind(name)
+    .bind(enabled)
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn linked_channels(pool: &SqlitePool, monitor_id: i64) -> Vec<i64> {
+    sqlx::query_scalar(
+        "SELECT channel_id FROM monitor_channels WHERE monitor_id = ? ORDER BY channel_id",
+    )
+    .bind(monitor_id)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn new_form_checks_enabled_channels() {
+    let (app, pool) = common::test_app().await;
+    let on = add_channel(&pool, "Ops", true).await;
+    let off = add_channel(&pool, "Old", false).await;
+    let r = get(&app, "/monitors/new").await;
+    assert!(
+        r.body.contains(&format!(r#"name="channel_{on}" checked"#)),
+        "{}",
+        r.body
+    );
+    assert!(r.body.contains(&format!(r#"name="channel_{off}"/>"#)));
+}
+
+#[tokio::test]
+async fn monitor_form_links_checked_channels() {
+    let (app, pool) = common::test_app().await;
+    let a = add_channel(&pool, "A", true).await;
+    let b = add_channel(&pool, "B", true).await;
+    let r = post_form(
+        &app,
+        "/monitors/new",
+        &form("API", &format!("&channel_{a}=on&channel_999=on")),
+    )
+    .await;
+    assert_redirect(&r, "/monitors/1");
+    assert_eq!(
+        linked_channels(&pool, 1).await,
+        vec![a],
+        "unknown ids are ignored"
+    );
+
+    let r = get(&app, "/monitors/1/edit").await;
+    assert!(r.body.contains(&format!(r#"name="channel_{a}" checked"#)));
+    assert!(r.body.contains(&format!(r#"name="channel_{b}"/>"#)));
+
+    let r = post_form(
+        &app,
+        "/monitors/1/edit",
+        &form("API", &format!("&channel_{b}=on")),
+    )
+    .await;
+    assert_redirect(&r, "/monitors/1");
+    assert_eq!(linked_channels(&pool, 1).await, vec![b]);
+
+    let r = post_form(
+        &app,
+        "/monitors/1/edit",
+        &form("", &format!("&channel_{a}=on")),
+    )
+    .await;
+    assert!(
+        r.body.contains(&format!(r#"name="channel_{a}" checked"#)),
+        "kept on error"
+    );
+}

@@ -13,6 +13,17 @@ pub enum MonitorStatus {
     Down,
 }
 
+const DAY_MS: i64 = 86_400_000;
+
+/// What recording a check changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Recorded {
+    pub health: Health,
+    pub transition: Option<Transition>,
+    /// The certificate expiry to warn about, the first time it comes within the warning period.
+    pub tls_warning: Option<i64>,
+}
+
 /// A monitor's runtime state, written only by the check engine.
 #[derive(Debug, Clone, FromRow)]
 pub struct MonitorState {
@@ -45,17 +56,20 @@ impl MonitorState {
         }
     }
 
-    /// Records a check in one transaction: state, raw check, and the incident it opens or
-    /// resolves. `health` is the state the caller last knew. Returns `None`, recording nothing,
-    /// when the monitor is paused or deleted, or when its state no longer matches `health`
-    /// (a pause reset it meanwhile): the caller must stop and let a fresh task take over.
+    /// Records a check in one transaction: state, raw check, the incident it opens or resolves,
+    /// and the certificate warning it triggers (once per expiry date, when the known certificate
+    /// expires within `tls_warn_days`). `health` is the state the caller last knew. Returns
+    /// `None`, recording nothing, when the monitor is paused or deleted, or when its state no
+    /// longer matches `health` (a pause reset it meanwhile): the caller must stop and let a
+    /// fresh task take over.
     pub async fn record(
         pool: &SqlitePool,
         monitor_id: i64,
         outcome: &CheckOutcome,
         health: Health,
         failure_threshold: i64,
-    ) -> Result<Option<(Health, Option<Transition>)>, sqlx::Error> {
+        tls_warn_days: Option<i64>,
+    ) -> Result<Option<Recorded>, sqlx::Error> {
         let (next, transition) =
             verdict::apply(health, outcome.ok(), outcome.checked_at, failure_threshold);
         let mut tx = pool.begin().await?;
@@ -101,8 +115,28 @@ impl MonitorState {
             None => {}
         }
 
+        let tls_warning = match tls_warn_days {
+            Some(days) => {
+                sqlx::query_scalar(
+                    "UPDATE monitor_state SET tls_warned_for = tls_expires_at
+                     WHERE monitor_id = ? AND tls_expires_at < ?
+                       AND tls_warned_for IS NOT tls_expires_at
+                     RETURNING tls_expires_at",
+                )
+                .bind(monitor_id)
+                .bind(outcome.checked_at + days * DAY_MS)
+                .fetch_optional(&mut *tx)
+                .await?
+            }
+            None => None,
+        };
+
         tx.commit().await?;
-        Ok(Some((next, transition)))
+        Ok(Some(Recorded {
+            health: next,
+            transition,
+            tls_warning,
+        }))
     }
 
     /// On pause: resolves the open incident at `now` and puts the monitor back to `pending`.

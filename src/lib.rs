@@ -12,6 +12,7 @@ pub mod forms;
 pub mod maintenance;
 pub mod middleware;
 pub mod models;
+pub mod notify;
 pub mod routes;
 pub mod state;
 pub mod time;

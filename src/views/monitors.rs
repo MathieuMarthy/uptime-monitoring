@@ -1,9 +1,9 @@
 use crate::error::AppError;
 use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm};
 use crate::models::{
-    Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
+    Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
 };
-use crate::time::{day_of, format_datetime, now_ms};
+use crate::time::{day_of, format_datetime, format_duration, now_ms};
 use crate::views::heartbeat::{DailyHistory, Heartbeat};
 use askama::Template;
 use askama_web::WebTemplate;
@@ -209,18 +209,6 @@ impl DetailTemplate {
     }
 }
 
-/// `45 s`, `3 min`, `1 h 05 min`, `2 d 3 h`.
-fn format_duration(ms: i64) -> String {
-    let s = ms.max(0) / 1000;
-    let (d, h, m) = (s / 86_400, s / 3600 % 24, s / 60 % 60);
-    match () {
-        _ if d > 0 => format!("{d} d {h} h"),
-        _ if h > 0 => format!("{h} h {m:02} min"),
-        _ if m > 0 => format!("{m} min"),
-        _ => format!("{s} s"),
-    }
-}
-
 #[derive(Template, WebTemplate)]
 #[template(path = "monitors/form.html")]
 pub struct FormTemplate {
@@ -230,6 +218,8 @@ pub struct FormTemplate {
     pub action_url: String,
     pub cancel_url: String,
     pub monitor_id: Option<i64>,
+    /// Every channel, sorted by name, for the alert checkboxes.
+    pub channels: Vec<Channel>,
 }
 
 impl FormTemplate {
@@ -243,21 +233,5 @@ impl FormTemplate {
 
     pub fn methods(&self) -> &'static [&'static str] {
         &METHODS
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn durations_keep_two_units_at_most() {
-        assert_eq!(format_duration(45_000), "45 s");
-        assert_eq!(format_duration(185_000), "3 min");
-        assert_eq!(format_duration(3_900_000), "1 h 05 min");
-        assert_eq!(
-            format_duration(2 * 86_400_000 + 3 * 3_600_000 + 60_000),
-            "2 d 3 h"
-        );
     }
 }

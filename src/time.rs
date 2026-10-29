@@ -70,6 +70,18 @@ pub fn format_time(tz: &TimeZone, ms: i64) -> String {
     zoned(tz, ms).strftime("%H:%M").to_string()
 }
 
+/// `45 s`, `3 min`, `1 h 05 min`, `2 d 3 h`.
+pub fn format_duration(ms: i64) -> String {
+    let s = ms.max(0) / 1000;
+    let (d, h, m) = (s / 86_400, s / 3600 % 24, s / 60 % 60);
+    match () {
+        _ if d > 0 => format!("{d} d {h} h"),
+        _ if h > 0 => format!("{h} h {m:02} min"),
+        _ if m > 0 => format!("{m} min"),
+        _ => format!("{s} s"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +141,17 @@ mod tests {
         assert_eq!(
             format_datetime(&paris, ms("2026-10-28T14:05:00Z")),
             "2026-10-28 15:05"
+        );
+    }
+
+    #[test]
+    fn durations_keep_two_units_at_most() {
+        assert_eq!(format_duration(45_000), "45 s");
+        assert_eq!(format_duration(185_000), "3 min");
+        assert_eq!(format_duration(3_900_000), "1 h 05 min");
+        assert_eq!(
+            format_duration(2 * 86_400_000 + 3 * 3_600_000 + 60_000),
+            "2 d 3 h"
         );
     }
 }

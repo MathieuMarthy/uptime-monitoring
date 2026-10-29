@@ -5,6 +5,7 @@ use axum::extract::{Form, FromRequestParts, Path};
 use axum::http::request::Parts;
 use axum::{Router, middleware};
 
+mod alerts;
 mod auth;
 mod health;
 mod monitors;
@@ -13,6 +14,7 @@ mod monitors;
 pub fn all(state: &AppState) -> Router<AppState> {
     let protected = Router::new()
         .merge(monitors::router())
+        .merge(alerts::router())
         .merge(auth::protected_router())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -35,11 +37,11 @@ pub fn parse_id(raw: &str) -> Result<i64, AppError> {
         .ok_or(AppError::NotFound)
 }
 
-/// A monitor id taken from the `{id}` path segment. Anything that is not a
+/// An id taken from the `{id}` path segment. Anything that is not a
 /// positive integer, including a segment that is not valid UTF-8, is a 404.
-pub struct MonitorId(pub i64);
+pub struct PathId(pub i64);
 
-impl<S: Send + Sync> FromRequestParts<S> for MonitorId {
+impl<S: Send + Sync> FromRequestParts<S> for PathId {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {

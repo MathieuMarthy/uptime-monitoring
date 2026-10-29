@@ -1,5 +1,5 @@
 use crate::forms::monitor::MonitorInput;
-use crate::models::{MonitorState, MonitorStatus};
+use crate::models::{Channel, MonitorState, MonitorStatus};
 use crate::time::now_ms;
 use sqlx::{FromRow, SqlitePool};
 
@@ -123,6 +123,7 @@ impl Monitor {
             .bind(id)
             .execute(&mut *tx)
             .await?;
+        Channel::set_for_monitor(&mut tx, id, &input.channel_ids).await?;
 
         tx.commit().await?;
         Ok(id)
@@ -172,6 +173,7 @@ impl Monitor {
         if input.paused {
             MonitorState::reset_for_pause(&mut tx, id, now).await?;
         }
+        Channel::set_for_monitor(&mut tx, id, &input.channel_ids).await?;
         tx.commit().await?;
         Ok(true)
     }

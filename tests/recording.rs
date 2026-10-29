@@ -2,6 +2,8 @@ mod common;
 
 use sqlx::SqlitePool;
 use uptime_monitoring::engine::verdict::{CheckOutcome, ErrorKind, Failure, Health, Transition};
+
+const DAY_MS: i64 = 86_400_000;
 use uptime_monitoring::forms::monitor::{MonitorForm, MonitorInput};
 use uptime_monitoring::models::{Incident, Monitor, MonitorState, MonitorStatus};
 
@@ -59,12 +61,12 @@ async fn record_all(
         .health();
     let mut transitions = Vec::new();
     for outcome in outcomes {
-        let (next, transition) = MonitorState::record(pool, id, outcome, health, threshold)
+        let recorded = MonitorState::record(pool, id, outcome, health, threshold, None)
             .await
             .unwrap()
             .expect("monitor is active");
-        health = next;
-        transitions.push(transition);
+        health = recorded.health;
+        transitions.push(recorded.transition);
     }
     transitions
 }
@@ -169,14 +171,14 @@ async fn recovery_resolves_incident() {
 async fn paused_or_deleted_monitor_is_not_recorded() {
     let (pool, id) = monitor("1").await;
     Monitor::toggle_pause(&pool, id).await.unwrap();
-    let recorded = MonitorState::record(&pool, id, &ok_at(1_000), Health::PENDING, 1)
+    let recorded = MonitorState::record(&pool, id, &ok_at(1_000), Health::PENDING, 1, None)
         .await
         .unwrap();
     assert_eq!(recorded, None);
     assert_eq!(count(&pool, "checks").await, 0);
 
     Monitor::delete(&pool, id).await.unwrap();
-    let recorded = MonitorState::record(&pool, id, &ok_at(2_000), Health::PENDING, 1)
+    let recorded = MonitorState::record(&pool, id, &ok_at(2_000), Health::PENDING, 1, None)
         .await
         .unwrap();
     assert_eq!(recorded, None);
@@ -248,12 +250,13 @@ async fn stale_health_is_not_recorded() {
             failing_since: Some(1_000),
         },
         1,
+        None,
     )
     .await
     .unwrap();
     assert_eq!(down, None, "the state was reset meanwhile");
     assert!(
-        MonitorState::record(&pool, id, &ok_at(3_000), stale, 1)
+        MonitorState::record(&pool, id, &ok_at(3_000), stale, 1, None)
             .await
             .unwrap()
             .is_some(),
@@ -275,9 +278,16 @@ async fn incident_opens_even_without_the_first_failed_check() {
         .unwrap()
         .unwrap()
         .health();
-    MonitorState::record(&pool, id, &fail_at(2_000, ErrorKind::Timeout), health, 2)
-        .await
-        .unwrap();
+    MonitorState::record(
+        &pool,
+        id,
+        &fail_at(2_000, ErrorKind::Timeout),
+        health,
+        2,
+        None,
+    )
+    .await
+    .unwrap();
     let incidents = Incident::for_monitor(&pool, id).await.unwrap();
     assert_eq!(incidents.len(), 1);
     assert_eq!(
@@ -328,4 +338,81 @@ async fn checks_record_the_time_they_cover_and_whether_it_was_downtime() {
             (1000 * s, 0, false),
         ]
     );
+}
+
+fn ok_with_cert(at: i64, expires_at: i64) -> CheckOutcome {
+    CheckOutcome {
+        tls_expires_at: Some(expires_at),
+        ..ok_at(at)
+    }
+}
+
+/// Records one check with a 14-day certificate warning and returns the expiry it warns about.
+async fn record_cert(pool: &SqlitePool, id: i64, outcome: &CheckOutcome) -> Option<i64> {
+    let health = MonitorState::find(pool, id)
+        .await
+        .unwrap()
+        .unwrap()
+        .health();
+    MonitorState::record(pool, id, outcome, health, 1, Some(14))
+        .await
+        .unwrap()
+        .expect("monitor is active")
+        .tls_warning
+}
+
+#[tokio::test]
+async fn certificate_warning_is_given_once_per_expiry_date() {
+    let (pool, id) = monitor("1").await;
+    let soon = 20 * DAY_MS;
+    assert_eq!(
+        record_cert(&pool, id, &ok_with_cert(0, soon)).await,
+        None,
+        "20 days left"
+    );
+    assert_eq!(
+        record_cert(&pool, id, &ok_with_cert(7 * DAY_MS, soon)).await,
+        Some(soon),
+        "13 days left"
+    );
+    assert_eq!(
+        record_cert(&pool, id, &ok_with_cert(8 * DAY_MS, soon)).await,
+        None,
+        "already warned"
+    );
+    let renewed = 98 * DAY_MS;
+    assert_eq!(
+        record_cert(&pool, id, &ok_with_cert(9 * DAY_MS, renewed)).await,
+        None
+    );
+    assert_eq!(
+        record_cert(&pool, id, &ok_with_cert(85 * DAY_MS, renewed)).await,
+        Some(renewed),
+        "the renewed certificate expires soon in turn"
+    );
+}
+
+#[tokio::test]
+async fn certificate_warning_needs_a_threshold_and_a_certificate() {
+    let (pool, id) = monitor("1").await;
+    let health = MonitorState::find(&pool, id)
+        .await
+        .unwrap()
+        .unwrap()
+        .health();
+    let recorded = MonitorState::record(&pool, id, &ok_with_cert(0, DAY_MS), health, 1, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(recorded.tls_warning, None, "warning disabled");
+    assert_eq!(
+        record_cert(&pool, id, &fail_at(1_000, ErrorKind::Timeout)).await,
+        Some(DAY_MS),
+        "a check without a response keeps the last certificate"
+    );
+    let plain = CheckOutcome {
+        tls_expires_at: None,
+        ..ok_at(2_000)
+    };
+    assert_eq!(record_cert(&pool, id, &plain).await, None, "no TLS");
 }

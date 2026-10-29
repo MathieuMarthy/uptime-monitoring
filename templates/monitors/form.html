@@ -168,6 +168,29 @@
             </div>
 
             <div class="form-section">
+                <h2 class="section-title">Alerts</h2>
+
+                {% if channels.is_empty() %}
+                <p class="form-hint">No notification channel yet. <a href="/alerts/new">Add one</a> to be alerted when this monitor goes down.</p>
+                {% else %}
+                <div class="form-row">
+                    {% for channel in channels %}
+                    <div class="form-group">
+                        <label class="checkbox-group" for="channel_{{ channel.id }}">
+                            <input type="checkbox" id="channel_{{ channel.id }}" name="channel_{{ channel.id }}"
+                                   {%- if form.has_channel(*channel.id) %} checked{% endif %}/>
+                            <div class="checkbox-label-group">
+                                <span class="form-label">{{ channel.name }}</span>
+                                <span class="form-hint">{{ channel.kind }}{% if !channel.enabled %} (disabled){% endif %}</span>
+                            </div>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="form-section">
                 <h2 class="section-title">Status</h2>
 
                 <label class="checkbox-group" for="active">

@@ -11,7 +11,8 @@ pub mod verdict;
 use crate::engine::guard::Guard;
 use crate::engine::http::HttpChecker;
 use crate::engine::scheduler::Scheduler;
-use crate::models::{Monitor, Settings};
+use crate::models::Monitor;
+use crate::notify::Notifier;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -41,13 +42,18 @@ impl EngineHandle {
     }
 }
 
-/// Starts the engine: one task per active monitor, first checks spread at random.
-pub async fn start(pool: SqlitePool) -> Result<EngineHandle, sqlx::Error> {
-    let guard = Guard::new(Settings::load(&pool).await?.block_private_targets);
+/// Starts the engine: one task per active monitor, first checks spread at random. Alerts go to
+/// `notifier`.
+pub async fn start(
+    pool: SqlitePool,
+    guard: Guard,
+    notifier: Notifier,
+) -> Result<EngineHandle, sqlx::Error> {
     let scheduler = Arc::new(Scheduler {
         pool: pool.clone(),
         checker: HttpChecker::new(guard),
         permits: Semaphore::new(MAX_CONCURRENT_CHECKS),
+        notifier,
     });
     let mut supervisor = Supervisor {
         pool,

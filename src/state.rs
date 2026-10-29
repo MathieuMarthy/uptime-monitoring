@@ -2,6 +2,7 @@ use crate::auth::random_token;
 use crate::auth::rate_limit::LoginLimiter;
 use crate::engine::EngineHandle;
 use crate::models::Admin;
+use crate::notify::Notifier;
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
@@ -17,6 +18,8 @@ pub struct AppState {
     pub trust_proxy_headers: bool,
     /// Told about every monitor change; disconnected unless the engine was started.
     pub engine: EngineHandle,
+    /// Sends channel tests; alerts themselves come from the engine.
+    pub notifier: Notifier,
 }
 
 impl AppState {
@@ -28,6 +31,7 @@ impl AppState {
             password_hashing: Arc::new(Semaphore::new(1)),
             trust_proxy_headers: false,
             engine: EngineHandle::default(),
+            notifier: Notifier::default(),
         }
     }
 
@@ -38,6 +42,11 @@ impl AppState {
 
     pub fn with_engine(mut self, engine: EngineHandle) -> Self {
         self.engine = engine;
+        self
+    }
+
+    pub fn with_notifier(mut self, notifier: Notifier) -> Self {
+        self.notifier = notifier;
         self
     }
 

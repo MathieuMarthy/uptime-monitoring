@@ -1,19 +1,23 @@
 pub mod admin;
+pub mod channel;
 pub mod check;
 pub mod daily_stat;
 pub mod incident;
 pub mod monitor;
 pub mod monitor_state;
+pub mod notification_log;
 pub mod session;
 pub mod settings;
 pub mod stats;
 
 pub use admin::Admin;
+pub use channel::{Channel, ChannelSummary};
 pub use check::{Check, RecentCheck};
 pub use daily_stat::DailyStat;
 pub use incident::Incident;
 pub use monitor::{Monitor, MonitorSummary};
-pub use monitor_state::{MonitorState, MonitorStatus};
+pub use monitor_state::{MonitorState, MonitorStatus, Recorded};
+pub use notification_log::{Delivery, LogEntry, NotificationLog};
 pub use session::{NewSession, Session};
 pub use settings::Settings;
 pub use stats::Bucket;

@@ -33,7 +33,12 @@ pub struct MonitorForm {
     pub follow_redirects: Option<String>,
     pub ignore_tls_errors: Option<String>,
     pub active: Option<String>,
+    /// Every other field. The checkbox of channel 3 is `channel_3`: a form cannot send a list.
+    #[serde(flatten)]
+    pub other: BTreeMap<String, String>,
 }
+
+const CHANNEL_PREFIX: &str = "channel_";
 
 /// A validated monitor configuration, ready to be stored.
 #[derive(Debug, Clone, PartialEq)]
@@ -53,6 +58,8 @@ pub struct MonitorInput {
     pub failure_threshold: i64,
     pub tls_expiry_warn_days: Option<i64>,
     pub paused: bool,
+    /// The notification channels its alerts go to.
+    pub channel_ids: Vec<i64>,
 }
 
 impl MonitorForm {
@@ -73,6 +80,7 @@ impl MonitorForm {
             follow_redirects: Some("on".to_string()),
             ignore_tls_errors: None,
             active: Some("on".to_string()),
+            other: BTreeMap::new(),
         }
     }
 
@@ -97,6 +105,29 @@ impl MonitorForm {
             follow_redirects: checkbox(m.follow_redirects),
             ignore_tls_errors: checkbox(m.ignore_tls_errors),
             active: checkbox(!m.paused),
+            other: BTreeMap::new(),
+        }
+    }
+
+    /// Ids of the checked channels.
+    pub fn channel_ids(&self) -> Vec<i64> {
+        self.other
+            .keys()
+            .filter_map(|key| key.strip_prefix(CHANNEL_PREFIX)?.parse().ok())
+            .filter(|id| *id > 0)
+            .collect()
+    }
+
+    pub fn has_channel(&self, id: i64) -> bool {
+        self.other.contains_key(&format!("{CHANNEL_PREFIX}{id}"))
+    }
+
+    /// Checks exactly these channels.
+    pub fn set_channels(&mut self, ids: &[i64]) {
+        self.other.retain(|key, _| !key.starts_with(CHANNEL_PREFIX));
+        for id in ids {
+            self.other
+                .insert(format!("{CHANNEL_PREFIX}{id}"), "on".to_string());
         }
     }
 
@@ -219,6 +250,7 @@ impl MonitorForm {
             failure_threshold: failure_threshold.unwrap(),
             tls_expiry_warn_days,
             paused: self.active.is_none(),
+            channel_ids: self.channel_ids(),
         })
     }
 }
@@ -280,7 +312,7 @@ fn non_empty(raw: &str) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
-fn validate_url(raw: &str) -> Result<(), String> {
+pub(crate) fn validate_url(raw: &str) -> Result<(), String> {
     if raw.len() > URL_MAX_BYTES {
         return Err(format!("URL must be at most {URL_MAX_BYTES} characters."));
     }
