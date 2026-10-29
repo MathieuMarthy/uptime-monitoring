@@ -138,13 +138,20 @@ impl MonitorState {
         }))
     }
 
-    /// On pause: resolves the open incident at `now` and puts the monitor back to `pending`.
+    /// On pause: resolves the open incident at the last check (nothing is known after it, so ending later would count
+    /// unseen time as an outage) and puts the monitor back to `pending`.
     pub async fn reset_for_pause(
         conn: &mut SqliteConnection,
         monitor_id: i64,
         now: i64,
     ) -> Result<(), sqlx::Error> {
-        Incident::resolve(conn, monitor_id, now).await?;
+        let last_check: Option<(Option<i64>,)> =
+            sqlx::query_as("SELECT last_check_at FROM monitor_state WHERE monitor_id = ?")
+                .bind(monitor_id)
+                .fetch_optional(&mut *conn)
+                .await?;
+        let end = last_check.and_then(|(at,)| at).unwrap_or(now);
+        Incident::resolve(&mut *conn, monitor_id, end).await?;
         sqlx::query(
             "UPDATE monitor_state
              SET status = 'pending', consecutive_failures = 0, failing_since = NULL

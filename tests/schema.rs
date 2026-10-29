@@ -138,3 +138,26 @@ async fn retentions_keep_enough_for_the_rollups() {
         assert_eq!(result.is_ok(), ok, "{checks} / {history:?}");
     }
 }
+
+#[tokio::test]
+async fn foreign_keys_are_indexed() {
+    // Deleting a parent row looks up its children: without an index, SQLite scans the whole child table.
+    let (_, pool) = common::test_app().await;
+    let lookups = [
+        "SELECT 1 FROM monitor_channels WHERE channel_id = 1",
+        "SELECT 1 FROM notification_log WHERE channel_id = 1",
+        "SELECT 1 FROM notification_log WHERE monitor_id = 1",
+        "SELECT 1 FROM status_page_monitors WHERE monitor_id = 1",
+    ];
+    for lookup in lookups {
+        let plan: Vec<(i64, i64, i64, String)> =
+            sqlx::query_as(sqlx::AssertSqlSafe(format!("EXPLAIN QUERY PLAN {lookup}")))
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert!(
+            plan.iter().all(|(.., detail)| detail.contains("INDEX")),
+            "not indexed: {lookup} → {plan:?}"
+        );
+    }
+}

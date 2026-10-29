@@ -172,6 +172,7 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **State machine** (`verdict.rs`). A success makes the monitor `up` (and resolves the incident if it was `down`);
   `failure_threshold` consecutive failures make it `down` and open an incident dated from the first failure of the
   series, with that failure's error. The transition is logged and turned into alerts.
+  A pause resolves the open incident at the last check: nothing is known after it.
 - **Recording.** One transaction per check. Its first statement updates `monitor_state` only if the monitor is still
   active and its state is still the one the task knows, so a check that finishes after a pause, an unpause or a
   deletion is dropped and its task ends. A response without TLS clears `tls_expires_at`; a check without a response

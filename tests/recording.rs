@@ -204,6 +204,22 @@ async fn toggle_pause_closes_incident_and_resets_state() {
 }
 
 #[tokio::test]
+async fn pause_ends_incident_at_the_last_check() {
+    // Nothing is known after the last check: ending later would count time no check saw as downtime.
+    let (pool, id) = monitor("1").await;
+    record_all(
+        &pool,
+        id,
+        1,
+        &[fail_at(1_000, ErrorKind::Timeout), fail_at(3_000, ErrorKind::Timeout)],
+    )
+    .await;
+    Monitor::toggle_pause(&pool, id).await.unwrap();
+    let incidents = Incident::for_monitor(&pool, id).await.unwrap();
+    assert_eq!(incidents[0].resolved_at, Some(3_000));
+}
+
+#[tokio::test]
 async fn pausing_through_the_form_closes_incident_and_resets_state() {
     let (pool, id) = monitor("1").await;
     record_all(&pool, id, 1, &[fail_at(1_000, ErrorKind::Timeout)]).await;

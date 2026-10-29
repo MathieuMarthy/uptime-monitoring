@@ -2,6 +2,7 @@ use crate::forms::monitor::MonitorInput;
 use crate::models::{Channel, MonitorState, MonitorStatus};
 use crate::time::now_ms;
 use sqlx::{FromRow, SqlitePool};
+use unicode_normalization::UnicodeNormalization;
 
 const COLUMNS: &str = "id, name, kind, url, method, headers, body, keyword, accepted_statuses, \
     follow_redirects, ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold, tls_expiry_warn_days, paused, \
@@ -212,7 +213,8 @@ impl Monitor {
     }
 }
 
-/// The key that makes names unique and sorts them: `COLLATE NOCASE` only folds ASCII letters.
+/// The key that makes names unique and sorts them: `COLLATE NOCASE` only folds ASCII letters, and an accented letter
+/// can be typed as one code point or as a letter plus a combining accent (NFC makes them equal).
 fn name_key(name: &str) -> String {
-    name.to_lowercase()
+    name.to_lowercase().nfc().collect()
 }

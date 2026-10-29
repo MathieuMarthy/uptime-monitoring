@@ -1,6 +1,6 @@
 # Database Schema
 
-SQLite schema of **uptime-monitoring**. The source of truth is `migrations/20261028000000_init.sql`.
+SQLite schema of **uptime-monitoring**. The source of truth is `migrations/` (the init migration, then later changes).
 
 ## Engine configuration
 
@@ -41,7 +41,7 @@ erDiagram
 |---|---|---|---|
 | `id` | INTEGER | PK | |
 | `name` | TEXT | NOT NULL | |
-| `name_key` | TEXT | NOT NULL UNIQUE | Unicode lowercase of `name`, computed by the application: uniqueness and sort order (`COLLATE NOCASE` only folds ASCII) |
+| `name_key` | TEXT | NOT NULL UNIQUE | Unicode lowercase of `name` in NFC, computed by the application: uniqueness and sort order (`COLLATE NOCASE` only folds ASCII) |
 | `kind` | TEXT | NOT NULL DEFAULT `'http'`, CHECK IN (`'http'`) | extension point for future check types |
 | `url` | TEXT | NOT NULL | |
 | `method` | TEXT | NOT NULL DEFAULT `'GET'`, CHECK IN (GET, HEAD, POST, PUT, PATCH, DELETE) | |
@@ -79,7 +79,7 @@ downtime: an incident was open when the check was recorded, or opened later from
 
 ### `incidents` — outage periods, long retention
 
-`id`, `monitor_id`, `started_at` (first failed check of the series), `resolved_at` (NULL while open), `error_kind`,
+`id`, `monitor_id`, `started_at` (first failed check of the series), `resolved_at` (NULL while open; on pause, the last check's time), `error_kind`,
 `cause`.
 Indexes: `(monitor_id, started_at DESC)`; unique partial index on `monitor_id WHERE resolved_at IS NULL` — at most one
 open incident per monitor.
@@ -97,14 +97,14 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
 
 - `notification_channels`: `id`, `name` (UNIQUE NOCASE), `kind` (`webhook` \| `discord` \| `ntfy`), `config` (JSON,
   validated per kind: `{url}` for webhook and Discord, `{server, topic, token?}` for ntfy), `enabled`, `created_at`.
-- `monitor_channels`: `(monitor_id, channel_id)` PK, both FK cascade.
+- `monitor_channels`: `(monitor_id, channel_id)` PK, both FK cascade; index on `channel_id`.
 - `notification_log`: `id`, `channel_id`, `monitor_id` (both FK `SET NULL`), `event` (`down` \| `up` \|
-  `tls_expiring` \| `test`), `sent_at`, `ok`, `error`. Purged with `checks`.
+  `tls_expiring` \| `test`), `sent_at`, `ok`, `error`. Purged with `checks`. Indexes on `channel_id` and `monitor_id`.
 
 ### Public status pages
 
 - `status_pages`: `id`, `slug` (UNIQUE), `title`, `description`, `published`, `created_at`, `updated_at`.
-- `status_page_monitors`: `(page_id, monitor_id)` PK, both FK cascade, `display_name` (NULL = monitor name),
+- `status_page_monitors`: `(page_id, monitor_id)` PK, both FK cascade, index on `monitor_id`, `display_name` (NULL = monitor name),
   `position` (display order, from 0). Written as a whole with its page, in one transaction.
 
 ### Authentication
