@@ -44,26 +44,35 @@ uptime-monitoring/
 │   │   ├── http.rs               # One HTTP(S) check → CheckOutcome
 │   │   ├── verdict.rs            # Pure pending/up/down state machine
 │   │   └── guard.rs              # Private-target blocking (resolver, literal IPs, redirects)
+│   ├── notify/                   # Alerts
+│   │   ├── mod.rs                # Notifier: queue, dispatcher, retries, delivery log
+│   │   ├── message.rs            # Title and text of an event, whatever the channel
+│   │   └── channel.rs            # Webhook / Discord / ntfy config and request
 │   ├── models/                   # Entities and their SQL queries
 │   │   ├── admin.rs              # The single admin account
+│   │   ├── channel.rs            # Notification channels + monitor links
 │   │   ├── check.rs              # Raw check results
 │   │   ├── daily_stat.rs         # Daily rollups
 │   │   ├── incident.rs           # Outage periods
 │   │   ├── monitor.rs            # Monitor configuration + CRUD
-│   │   ├── monitor_state.rs      # Runtime state; record() writes a check, its state and incident
+│   │   ├── monitor_state.rs      # Runtime state; record() writes a check, its state, incident, cert warning
+│   │   ├── notification_log.rs   # Deliveries, final result after retries
 │   │   ├── session.rs            # Login sessions (token stored as SHA-256)
 │   │   ├── settings.rs           # The single settings row
 │   │   └── stats.rs              # Bucket: availability summed over a time bucket
 │   ├── forms/
 │   │   ├── auth.rs               # SetupForm, LoginForm
+│   │   ├── channel.rs            # ChannelForm → ChannelInput | FieldErrors
 │   │   └── monitor.rs            # MonitorForm (raw strings) → MonitorInput | FieldErrors
 │   ├── views/                    # Askama template structs and view models
+│   │   ├── alerts.rs
 │   │   ├── auth.rs
 │   │   ├── errors.rs
 │   │   ├── heartbeat.rs          # Hourly and daily bars, uptime labels
 │   │   └── monitors.rs
 │   └── routes/                   # Handlers, grouped by domain
 │       ├── mod.rs                # Router assembly (public / protected) + parse_id()
+│       ├── alerts.rs             # /alerts/*
 │       ├── auth.rs               # /setup, /login, /logout
 │       ├── health.rs             # GET /health
 │       └── monitors.rs           # /, /monitors/*
@@ -80,7 +89,7 @@ uptime-monitoring/
   user only sees a generic 500 page. No SQL or framework error text reaches a response.
 - **Forms.** Every form field is deserialized as a `String`, so a blank or malformed value becomes a field error shown
   under its input instead of a raw 422. Validation reports all errors at once.
-- **Ids.** Integer ids. Path ids are parsed with `routes::parse_id`; anything that is not a positive integer is a 404.
+- **Ids.** Integer ids. Path ids are parsed with `routes::parse_id` (the `PathId` extractor); anything that is not a positive integer is a 404.
 - **Time.** Timestamps are Unix epoch milliseconds (`i64`), from `time::now_ms()`.
 - **Protected by default.** `routes::all` merges a protected router, behind `middleware::require_session`, and a
   public one (`/health`, `/setup`, `/login`, static assets). A new route goes in the protected router unless it must be
@@ -143,17 +152,36 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `monitor_state.tls_expires_at`; with redirects, it is the last hop's.
 - **State machine** (`verdict.rs`). A success makes the monitor `up` (and resolves the incident if it was `down`);
   `failure_threshold` consecutive failures make it `down` and open an incident dated from the first failure of the
-  series, with that failure's error. The transition is logged and returned, for notifications to hook onto.
+  series, with that failure's error. The transition is logged and turned into alerts.
 - **Recording.** One transaction per check. Its first statement updates `monitor_state` only if the monitor is still
   active and its state is still the one the task knows, so a check that finishes after a pause, an unpause or a
   deletion is dropped and its task ends. A response without TLS clears `tls_expires_at`; a check without a response
   keeps it.
+- **Certificate warning.** When a check leaves `tls_expires_at` within the monitor's `tls_expiry_warn_days`, the
+  same transaction sets `tls_warned_for` to that date: one warning per expiry date, again after a renewal.
 - **Private targets.** With `settings.block_private_targets`, loopback, private, link-local (cloud metadata), CGNAT,
   benchmarking, multicast and reserved addresses are refused, including when embedded in IPv6 (mapped, NAT64, 6to4): by the DNS resolver (the connection uses exactly the checked
   addresses, so DNS rebinding cannot slip through), for literal IP hosts, and on every redirect. The check fails with
   `error_kind = blocked`. The flag is read at startup (`Guard::set_block_private` changes it at runtime).
 - **Certificates.** Verified against the system store (`rustls-platform-verifier`): the Docker image needs
   `ca-certificates`, and an internal CA added to the host store is trusted.
+
+## Alerts
+
+- **Events.** After recording a check, the scheduler hands the notifier `down` (cause, start of the outage), `up`
+  (downtime) and `tls_expiring` events. Only transitions alert: nothing on startup, pause or deletion.
+- **Dispatch** (`notify/mod.rs`). A bounded queue (1 000; beyond, alerts are dropped and logged) feeds one task. It
+  reads the enabled channels linked to the monitor and sends to each, at most 5 requests at a time. Each delivery is
+  tried at once, then after 10 s and 60 s; a 4xx other than 408/429 is not retried. The final result goes to
+  `notification_log`. Alerts still queued when the process stops are lost.
+- **Requests.** One client: 10 s timeout, no redirect, no proxy, no idle connection, and the engine's `Guard` (with
+  `block_private_targets`, private destinations are refused like check targets). Webhook: JSON
+  `{event, monitor: {id, name, url} | null, title, message, at}`. Discord: one embed coloured by severity. ntfy: JSON
+  publishing to the server root (`topic`, `title`, `message`, `priority` 4 for down, `tags`), bearer token if set.
+- **UI.** `/alerts` lists channels (monitor count, last delivery) and the last 50 deliveries; *Test* sends once and
+  waits. The ntfy token is never sent back to the browser: left blank, the stored one is kept. Monitors pick their
+  channels in their form (checkboxes `channel_<id>`, gathered by `MonitorForm::other`); a new monitor starts with
+  every enabled channel checked.
 
 ## Data and pages
 
@@ -191,5 +219,5 @@ cargo clippy --all-targets -- -D warnings
 Integration tests build the router on an in-memory database (`tests/common/mod.rs`) and call it with
 `tower::ServiceExt::oneshot`; no server or network is involved. `test_app()` is already logged in (`get` sends the
 session cookie, `post_form` also adds the CSRF token); `app_with_admin()` and `fresh_app()` cover login and first
-launch; `test_app_with_engine()` also runs the check engine. Engine and HTTP check tests start a local axum server on
-`127.0.0.1:0` as their target; `tests/fixtures/cert.der` is a certificate with a known expiry. The `argon2` and `blake2` crates are built optimized in the dev profile so hashing stays fast in tests.
+launch; `test_app_with_engine()` also runs the check engine. Engine, HTTP check and alert tests start a local axum server on
+`127.0.0.1:0` as their target or receiver (`Notifier::start_with` shortens the retry delays); `tests/fixtures/cert.der` is a certificate with a known expiry. The `argon2` and `blake2` crates are built optimized in the dev profile so hashing stays fast in tests.
