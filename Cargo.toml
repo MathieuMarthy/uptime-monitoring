@@ -2,6 +2,7 @@
 name = "uptime-monitoring"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 
 [dependencies]
 askama = "0.16.1"

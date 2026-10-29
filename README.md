@@ -59,3 +59,7 @@ The binary is self-contained and runs from any directory. TLS certificates are c
 store.
 
 Design notes: [`docs/architecture.md`](docs/architecture.md), [`docs/database-schema.md`](docs/database-schema.md).
+
+## License
+
+[MIT](LICENSE)
