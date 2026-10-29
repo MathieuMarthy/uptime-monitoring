@@ -3,12 +3,13 @@ use crate::forms::monitor::{FieldErrors, MonitorForm};
 use crate::models::{Channel, Monitor, Session, is_unique_violation};
 use crate::routes::{PathId, form_or_invalid};
 use crate::state::AppState;
-use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate};
-use axum::extract::State;
-use axum::extract::rejection::FormRejection;
+use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate, Range};
+use axum::extract::rejection::{FormRejection, QueryRejection};
+use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Form, Router};
+use serde::Deserialize;
 
 const DUPLICATE_NAME: &str = "This name is already used.";
 
@@ -22,11 +23,23 @@ pub fn router() -> Router<AppState> {
         .route("/monitors/{id}/toggle-pause", post(toggle_pause))
 }
 
+#[derive(Deserialize)]
+struct IndexQuery {
+    range: Option<String>,
+}
+
 async fn index(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
+    query: Result<Query<IndexQuery>, QueryRejection>,
 ) -> Result<IndexTemplate, AppError> {
-    IndexTemplate::load(&state.db, session.csrf_token).await
+    let range = query.ok().and_then(|Query(q)| q.range);
+    IndexTemplate::load(
+        &state.db,
+        Range::parse(range.as_deref()),
+        session.csrf_token,
+    )
+    .await
 }
 
 async fn detail(

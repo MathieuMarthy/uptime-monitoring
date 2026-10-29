@@ -1,0 +1,147 @@
+/* Incidents and other events, folded to a line and unfolded with <details>. */
+.event-list {
+    overflow: hidden;
+}
+
+.event + .event {
+    border-top: 1px solid var(--rule-soft);
+}
+
+.event-summary {
+    display: grid;
+    grid-template-columns: var(--event-time-width, 130px) 12px minmax(0, 1fr) auto 14px;
+    gap: 16px;
+    align-items: center;
+    padding: 13px 20px;
+    list-style: none;
+    cursor: pointer;
+}
+
+.event-summary:focus-visible {
+    outline-offset: -3px;
+}
+
+.event-summary::-webkit-details-marker {
+    display: none;
+}
+
+.event-summary:hover .event-title {
+    color: var(--go);
+}
+
+.event-down > .event-summary,
+.event-down > .event-body {
+    background: var(--stop-wash);
+}
+
+.event-time,
+.event-title {
+    font-family: var(--font-title);
+    font-weight: 600;
+    font-size: 17px;
+}
+
+.event-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.event-subtitle {
+    font-size: 14px;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+}
+
+.event-chevron {
+    color: var(--muted);
+    transition: transform 150ms ease;
+}
+
+.event[open] > .event-summary .event-chevron {
+    transform: rotate(90deg);
+}
+
+.event-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 4px 20px 20px calc(20px + var(--event-time-width, 130px) + 44px);
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px 24px;
+}
+
+.facts dt {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.facts dd {
+    font-weight: 500;
+}
+
+.event-part {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.event-part h3 {
+    font-family: var(--font-text);
+    font-size: 14px;
+}
+
+.event-table {
+    border: 1px solid var(--rule-soft);
+    border-radius: 4px;
+    background: var(--plate-deep);
+}
+
+.alert-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 14px;
+}
+
+.alert-list li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+}
+
+.alert-time {
+    min-width: 44px;
+    color: var(--muted);
+}
+
+.alert-channel {
+    font-weight: 600;
+}
+
+.event-link {
+    align-self: flex-start;
+}
+
+@media (max-width: 700px) {
+    .event-summary {
+        grid-template-columns: 12px minmax(0, 1fr) 14px;
+        gap: 4px 12px;
+        padding-inline: 16px;
+    }
+
+    .event-time { grid-column: 1 / -1; grid-row: 1; font-size: 14px; color: var(--muted); }
+    .event-summary .lamp { grid-column: 1; grid-row: 2; }
+    .event-text { grid-column: 2; grid-row: 2; }
+    .event-chevron { grid-column: 3; grid-row: 2; }
+    .event-summary .chip { grid-column: 2; grid-row: 3; justify-self: start; }
+
+    .event-body {
+        padding: 4px 16px 18px;
+    }
+}

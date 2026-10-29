@@ -1,10 +1,11 @@
 {% extends "layout.html" %}
 
 {% block title %}{{ view.monitor.name }} - Uptime Monitoring{% endblock %}
+{% block nav_monitors %}aria-current="page"{% endblock %}
 
 {% block styles %}
-<link href="/static/css/monitors.css" rel="stylesheet">
 <link href="/static/css/detail.css" rel="stylesheet">
+<link href="/static/css/events.css" rel="stylesheet">
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/live.js" defer></script>
@@ -12,245 +13,194 @@
 
 {% block content %}
 {% let m = view.monitor %}
-<div class="detail-container">
-    <nav class="detail-nav" aria-label="Breadcrumb">
-        <a class="back-link" href="/">
-            <img src="/static/images/arrow-back.svg" alt="" aria-hidden="true" width="16" height="14" />
-            <span>Monitors</span>
-        </a>
-    </nav>
+<div class="page">
+    <a class="back-link" href="/">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
+            <path d="M9 3L5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                  stroke-linejoin="round"/>
+        </svg>
+        Monitors
+    </a>
 
-    <div class="detail-header">
-        <div class="detail-title-group">
-            <h1 class="detail-title">{{ m.name }}</h1>
-            <a class="detail-url" href="{{ m.url }}" target="_blank" rel="noopener noreferrer">
-                <span>{{ m.url }}</span>
-                <img src="/static/images/open-external-link.svg" alt="" aria-hidden="true" width="14" height="14" />
-            </a>
-        </div>
+    <div class="page-head">
+        <section aria-label="Status" class="detail-status" id="live-status" data-live>
+            <h1 class="headline">
+                <span class="lamp lamp-lg lamp-{{ view.status_key() }}" aria-hidden="true"></span>{{ m.name }}
+            </h1>
+            <p class="detail-status-line status-{{ view.status_key() }}" data-announce>
+                <span class="visually-hidden">{{ view.status_label() }}. </span>{{ status_line }}
+            </p>
+            <p class="detail-config">
+                <a href="{{ m.url }}" target="_blank" rel="noopener noreferrer">{{ m.url }}</a>,
+                {{ m.method }} every {{ m.interval_s }} s, down after {{ m.failure_threshold }}
+                {% if m.failure_threshold == 1 %}failure{% else %}failures in a row{% endif %}.
+            </p>
+        </section>
 
-        <div class="detail-actions">
+        <div class="toolbar">
             <form action="/monitors/{{ m.id }}/toggle-pause" method="POST" class="inline-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 {% if m.paused %}
-                <button class="button-primary" type="submit" title="Resume monitoring checks">Resume</button>
+                <button class="button-primary" type="submit">Resume</button>
                 {% else %}
-                <button class="button-secondary" type="submit" title="Pause monitoring checks">Pause</button>
+                <button class="button-secondary" type="submit">Pause</button>
                 {% endif %}
             </form>
-
-            <a class="button-secondary" href="/monitors/{{ m.id }}/edit">Edit Monitor</a>
+            <a class="button-primary" href="/monitors/{{ m.id }}/edit">Edit monitor</a>
         </div>
     </div>
 
-    <div class="hero-strip" id="live-hero" data-live>
-        <div class="hero-strip-top">
-            <div class="hero-status">
-                <div class="hero-status-indicator">
-                    <span class="hero-status-text {{ view.status_class() }}">{{ view.status_label() }}</span>
-                </div>
-                <span class="hero-status-sub">
-                    {{ m.method }} every {{ m.interval_s }}s • Timeout {{ m.timeout_s }}s
+    <div class="detail-live" id="live-history" data-live>
+        <dl class="figures">
+            <div><dt>Uptime, 24 hours</dt><dd>{{ hourly.uptime_label() }}</dd></div>
+            <div><dt>Uptime, 30 days</dt><dd>{{ daily.uptime_30d }}</dd></div>
+            <div>
+                <dt>Response, 24 h average</dt>
+                <dd>{% if let Some(latency) = hourly.latency_avg_ms %}{{ latency }} ms{% else %}—{% endif %}</dd>
+            </div>
+            <div><dt>Certificate</dt><dd>{{ certificate }}</dd></div>
+        </dl>
+
+        <section class="panel panel-pad" aria-labelledby="history-24h">
+            <div class="section-head">
+                <h2 class="section-title" id="history-24h">Last 24 hours</h2>
+                <span class="section-note">One bar per hour. The table below gives each hour's figures.</span>
+            </div>
+            <div class="chart-grid">
+                <span class="chart-label">Availability</span>
+                <span class="trace trace-24 trace-tall" role="img"
+                      aria-label="Availability over the last 24 hours: {{ hourly.uptime_label() }}">
+                    {%- for tick in hourly.ticks -%}
+                    <span class="tick {{ tick.class }}{% if loop.index0 > 0 && loop.index0 % hour_axis.step == 0 %} tick-guide{% endif %}" data-tip="{{ tick.title }}"></span>
+                    {%- endfor -%}
+                </span>
+                <span class="chart-label">Response time</span>
+                {% if let Some(max) = latency_max_ms %}
+                <svg class="latency-chart" viewBox="0 0 240 60" preserveAspectRatio="none" role="img"
+                     aria-label="Average response time per hour, slowest {{ latency_slowest }}: {{ max }} ms">
+                    {% for bar in latency %}
+                    <rect class="{{ bar.class }}" x="{{ bar.x }}" y="{{ bar.y }}" width="8" height="{{ bar.height }}"><title>{{ bar.title }}</title></rect>
+                    {% endfor %}
+                </svg>
+                {% else %}
+                <span class="section-note">No response in the last 24 hours.</span>
+                {% endif %}
+                <span></span>
+                <span class="trace-axis trace-24">
+                    {%- for label in hour_axis.labels %}<span>{{ label }}</span>{% endfor -%}
                 </span>
             </div>
-
-            <div class="hero-metrics">
-                <div class="hero-metric-item">
-                    <span class="hero-metric-value">{{ hourly.uptime_label() }}</span>
-                    <span class="hero-metric-label">24h Uptime</span>
+            {% if let Some(max) = latency_max_ms %}
+            <p class="section-note">Response time bars are scaled to the slowest hour, {{ max }} ms.</p>
+            {% endif %}
+            <details class="hourly-figures" id="hourly-figures">
+                <summary>Hourly figures</summary>
+                <div class="table-scroll" tabindex="0" role="region" aria-label="Hourly figures">
+                    <table class="data-table">
+                        <thead>
+                        <tr><th>Hour</th><th class="num">Checks</th><th class="num">Failed</th><th class="num">Uptime</th><th class="num">Response</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for tick in hourly.ticks.iter().rev() %}
+                        <tr>
+                            <td>{{ tick.span }}</td>
+                            <td class="num">{{ tick.checks }}</td>
+                            <td class="num{% if tick.failed > 0 %} text-red{% endif %}">{{ tick.failed }}</td>
+                            <td class="num">{{ tick.uptime }}</td>
+                            <td class="num">{% if let Some(ms) = tick.latency_ms %}{{ ms }} ms{% else %}—{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+            </details>
+        </section>
 
-                <div class="hero-metric-divider"></div>
-
-                <div class="hero-metric-item">
-                    <span class="hero-metric-value">{{ daily.uptime_30d }}</span>
-                    <span class="hero-metric-label">30d Uptime</span>
-                </div>
-
-                <div class="hero-metric-divider"></div>
-
-                <div class="hero-metric-item">
-                    {% match hourly.latency_avg_ms %}
-                    {% when Some with (latency) %}
-                    <span class="hero-metric-value">{{ latency }}ms</span>
-                    {% when None %}
-                    <span class="hero-metric-value text-muted">—</span>
-                    {% endmatch %}
-                    <span class="hero-metric-label">24h Avg Response</span>
-                </div>
-
-                <div class="hero-metric-divider"></div>
-
-                <div class="hero-metric-item">
-                    {% match tls_expiry %}
-                    {% when Some with (expiry) %}
-                    <span class="hero-metric-value">{{ expiry }}</span>
-                    {% when None %}
-                    <span class="hero-metric-value text-muted">—</span>
-                    {% endmatch %}
-                    <span class="hero-metric-label">Certificate Expiry</span>
-                </div>
+        <section class="panel panel-pad" aria-labelledby="history-90d">
+            <div class="section-head">
+                <h2 class="section-title" id="history-90d">Last 90 days</h2>
+                <span class="section-note">{{ daily.uptime_90d }} uptime. One bar per day.</span>
             </div>
-        </div>
-
-        <div class="hero-strip-bottom">
-            <div class="heartbeat-header">
-                <h3>Last 24 Hours</h3>
-                <span class="heartbeat-range">1 bar = 1 hour</span>
-            </div>
-
-            <div class="heartbeat-bar-large" role="img" aria-label="Last 24 hours, one bar per hour">
-                {% for tick in hourly.ticks %}
-                <span class="tick {{ tick.class }}" title="{{ tick.title }}"></span>
-                {% endfor %}
-            </div>
-        </div>
-
-        <div class="hero-strip-bottom">
-            <div class="heartbeat-header">
-                <h3>Last 90 Days</h3>
-                <span class="heartbeat-range">1 bar = 1 day</span>
-            </div>
-
-            <div class="heartbeat-bar-large" role="img" aria-label="Last 90 days, one bar per day">
-                {% for tick in daily.bars.ticks %}
-                <span class="tick {{ tick.class }}" title="{{ tick.title }}"></span>
-                {% endfor %}
-            </div>
-        </div>
+            <span class="trace trace-90 trace-tall" role="img"
+                  aria-label="Availability over the last 90 days: {{ daily.uptime_90d }}">
+                {%- for tick in daily.bars.ticks -%}
+                <span class="tick {{ tick.class }}{% if loop.index0 > 0 && loop.index0 % day_axis.step == 0 %} tick-guide{% endif %}" data-tip="{{ tick.title }}"></span>
+                {%- endfor -%}
+            </span>
+            <span class="trace-axis trace-90">
+                {%- for label in day_axis.labels %}<span>{{ label }}</span>{% endfor -%}
+            </span>
+        </section>
     </div>
 
-    <div class="section-card">
-        <h2 class="section-card-title">Configuration Details</h2>
-
-        <div class="info-grid">
-            <div class="info-item">
-                <span class="info-label">Accepted Status Codes</span>
-                <span class="info-value">{{ m.accepted_statuses }}</span>
-            </div>
-
-            <div class="info-item">
-                <span class="info-label">Request Timeout</span>
-                <span class="info-value">{{ m.timeout_s }} seconds</span>
-            </div>
-
-            <div class="info-item">
-                <span class="info-label">Retry Interval</span>
-                <span class="info-value">{{ m.retry_interval_s }} seconds</span>
-            </div>
-
-            <div class="info-item">
-                <span class="info-label">Failure Threshold</span>
-                <span class="info-value">{{ m.failure_threshold }} consecutive failure(s)</span>
-            </div>
-
-            <div class="info-item">
-                <span class="info-label">Follow Redirects</span>
-                <span class="info-value">{% if m.follow_redirects %}Yes{% else %}No{% endif %}</span>
-            </div>
-
-            <div class="info-item">
-                <span class="info-label">Ignore TLS Errors</span>
-                <span class="info-value">{% if m.ignore_tls_errors %}Yes{% else %}No{% endif %}</span>
-            </div>
-
-            <div class="info-item">
-                <span class="info-label">Certificate Expiry Warning</span>
-                <span class="info-value">
-                    {% match m.tls_expiry_warn_days %}
-                    {% when Some with (days) %}{{ days }} days before expiry
-                    {% when None %}Disabled
-                    {% endmatch %}
-                </span>
-            </div>
-
-            <div class="info-item">
-                <span class="info-label">Monitoring State</span>
-                <span class="info-value">{% if m.paused %}Paused{% else %}Active{% endif %}</span>
-            </div>
+    <section class="section" aria-labelledby="incidents-title" id="live-incidents" data-live>
+        <div class="section-head">
+            <h2 class="section-title" id="incidents-title">Incidents</h2>
+            <a href="/activity?monitor={{ m.id }}">All activity of {{ m.name }}</a>
         </div>
+        <div class="panel event-list">
+            {% for incident in incidents %}
+            {% include "partials/incident.html" %}
+            {% else %}
+            <p class="empty-state">No outage recorded for this monitor.</p>
+            {% endfor %}
+        </div>
+    </section>
 
+    <section class="section" aria-labelledby="checks-title" id="live-checks" data-live>
+        <h2 class="section-title" id="checks-title">Latest checks</h2>
+        <div class="panel">
+            {% if checks.is_empty() %}
+            <p class="empty-state">No check yet.</p>
+            {% else %}
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                    <tr><th>Time</th><th>Result</th><th>HTTP status</th><th class="num">Response</th><th>Error</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for check in checks %}
+                    <tr>
+                        <td>{{ check.time }}</td>
+                        {% if check.ok %}<td class="text-green">OK</td>{% else %}<td class="text-red">Failed</td>{% endif %}
+                        <td>{% if let Some(code) = check.status_code %}{{ code }}{% else %}—{% endif %}</td>
+                        <td class="num">{% if let Some(latency) = check.latency_ms %}{{ latency }} ms{% else %}—{% endif %}</td>
+                        <td>{% if let Some(error) = check.error %}{{ error }}{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="section" aria-labelledby="config-title">
+        <h2 class="section-title" id="config-title">Configuration</h2>
+        <dl class="panel config-list">
+            <div><dt>Method</dt><dd>{{ m.method }}</dd></div>
+            <div><dt>Interval</dt><dd>Every {{ m.interval_s }} s</dd></div>
+            <div><dt>Retry interval</dt><dd>Every {{ m.retry_interval_s }} s</dd></div>
+            <div><dt>Down after</dt><dd>{{ m.failure_threshold }} {% if m.failure_threshold == 1 %}failure{% else %}failures in a row{% endif %}</dd></div>
+            <div><dt>Timeout</dt><dd>{{ m.timeout_s }} s</dd></div>
+            <div><dt>Accepted statuses</dt><dd>{{ m.accepted_statuses }}</dd></div>
+            <div><dt>Follow redirects</dt><dd>{% if m.follow_redirects %}Yes{% else %}No{% endif %}</dd></div>
+            <div><dt>Ignore TLS errors</dt><dd>{% if m.ignore_tls_errors %}Yes{% else %}No{% endif %}</dd></div>
+            <div>
+                <dt>Certificate warning</dt>
+                <dd>{% match m.tls_expiry_warn_days %}{% when Some with (days) %}{{ days }} days before expiry{% when None %}Off{% endmatch %}</dd>
+            </div>
+            <div><dt>State</dt><dd>{% if m.paused %}Paused{% else %}Active{% endif %}</dd></div>
+        </dl>
         {% if let Some(keyword) = m.keyword %}
-        <div class="info-item info-item-spaced">
-            <span class="info-label">Expected Response Keyword</span>
-            <div class="code-block">{{ keyword }}</div>
-        </div>
+        <div class="config-block"><h3>Expected keyword</h3><pre class="code-block">{{ keyword }}</pre></div>
         {% endif %}
-
         {% if let Some(headers) = m.headers %}
-        <div class="info-item info-item-spaced">
-            <span class="info-label">Custom Request Headers</span>
-            <div class="code-block">{{ headers }}</div>
-        </div>
+        <div class="config-block"><h3>Request headers</h3><pre class="code-block">{{ headers }}</pre></div>
         {% endif %}
-
         {% if let Some(body) = m.body %}
-        <div class="info-item info-item-spaced">
-            <span class="info-label">Request Body Payload</span>
-            <div class="code-block">{{ body }}</div>
-        </div>
+        <div class="config-block"><h3>Request body</h3><pre class="code-block">{{ body }}</pre></div>
         {% endif %}
-    </div>
-
-    <div class="section-card" id="live-incidents" data-live>
-        <h2 class="section-card-title">Recent Incidents</h2>
-
-        {% if incidents.is_empty() %}
-        <div class="empty-state">
-            <span class="text-green empty-state-icon">✓</span>
-            <p class="empty-state-text">No incidents recorded for this monitor.</p>
-        </div>
-        {% else %}
-        <div class="table-scroll">
-            <table class="incidents-table">
-                <thead>
-                <tr><th>Started</th><th>Resolved</th><th>Duration</th><th>Cause</th></tr>
-                </thead>
-                <tbody>
-                {% for incident in incidents %}
-                <tr>
-                    <td>{{ incident.started }}</td>
-                    {% match incident.resolved %}
-                    {% when Some with (resolved) %}<td>{{ resolved }}</td>
-                    {% when None %}<td class="text-red">Ongoing</td>
-                    {% endmatch %}
-                    <td>{{ incident.duration }}</td>
-                    <td>{{ incident.cause }}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-    </div>
-
-    <div class="section-card" id="live-checks" data-live>
-        <h2 class="section-card-title">Recent Checks</h2>
-
-        {% if checks.is_empty() %}
-        <div class="empty-state">
-            <p class="empty-state-text">No checks recorded yet.</p>
-        </div>
-        {% else %}
-        <div class="table-scroll">
-            <table class="incidents-table">
-                <thead>
-                <tr><th>Time</th><th>Result</th><th>Status</th><th>Response</th><th>Error</th></tr>
-                </thead>
-                <tbody>
-                {% for check in checks %}
-                <tr>
-                    <td>{{ check.time }}</td>
-                    {% if check.ok %}<td class="text-green">OK</td>{% else %}<td class="text-red">Failed</td>{% endif %}
-                    <td>{% if let Some(code) = check.status_code %}{{ code }}{% else %}—{% endif %}</td>
-                    <td>{% if let Some(latency) = check.latency_ms %}{{ latency }}ms{% else %}—{% endif %}</td>
-                    <td>{% if let Some(error) = check.error %}{{ error }}{% endif %}</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-    </div>
+    </section>
 </div>
 {% endblock %}

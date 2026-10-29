@@ -1,184 +1,103 @@
-/* Status overview stats */
-.stats {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 32px 16px;
-    gap: 40px;
+/* Dashboard: every monitor on one shared clock, so outages at the same hour line up. */
+.toolbar .search-bar {
+    width: 240px;
+    max-width: 100%;
 }
 
-.stat-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-}
-
-.stat-label {
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-color-muted);
-}
-
-.stat-value {
-    font-size: 28px;
-    font-weight: 700;
-    line-height: 1;
-}
-
-/* Monitors main container */
-.monitors {
-    width: 100%;
-    max-width: 1280px;
-    padding: 0 24px 48px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-}
-
-/* Search and actions toolbar */
-.search {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-}
-
-/* Monitor cards grid (3 to 4 cards per row on desktop) */
-.monitor-grid {
-    list-style: none;
+.monitor-head,
+.monitor-row {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-    gap: 16px;
-    margin: 0;
-    padding: 0;
+    grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 76px 76px;
+    gap: 20px;
+    align-items: center;
+    padding-inline: 22px;
 }
 
-.monitor-card {
-    background: var(--background-secondary);
-    border: 1px solid var(--color-stroke);
-    border-radius: 12px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+.monitor-head {
+    padding-block: 12px 6px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.monitor-list {
+    list-style: none;
+}
+
+.monitor-list li {
+    border-top: 1px solid var(--rule-soft);
+}
+
+.monitor-list li:last-child .monitor-row {
+    border-radius: 0 0 6px 6px;
+}
+
+.monitor-row {
+    padding-block: 8px;
+    color: var(--ink);
     text-decoration: none;
-    color: inherit;
-    transition: border-color 150ms ease, transform 150ms ease;
 }
 
-.monitor-card:hover {
-    border-color: rgba(255, 255, 255, 0.22);
-    transform: translateY(-2px);
+.monitor-row:hover {
+    color: var(--ink);
+    background: var(--plate-deep);
 }
 
-/* Card Header: Name, status dot and ping */
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
+.row-down,
+.row-down:hover {
+    background: var(--stop-wash);
 }
 
-.card-title-group {
+.monitor-name {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     min-width: 0;
 }
 
-
-.card-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-color);
-    white-space: nowrap;
+.monitor-name-text {
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-.card-ping {
-    font-size: 12px;
+    white-space: nowrap;
+    font-family: var(--font-title);
     font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-color-muted);
-    flex-shrink: 0;
+    font-size: 17px;
 }
 
-/* Card Uptime Stats */
-.card-uptime-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-}
-
-.card-uptime {
-    font-size: 13px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-
-.card-duration {
-    font-size: 12px;
-    color: var(--text-color-muted);
-}
-
-/* Heartbeat ticks bar (suite de petits bâtons sur toute la largeur de la carte) */
-.heartbeat-bar {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    width: 100%;
-    padding-top: 2px;
-}
-
-.tick {
-    flex: 1;
-    min-width: 3px;
-    height: 18px;
-    border-radius: 2px;
-    cursor: default;
-}
-
-.tick-green {
-    background-color: var(--text-color-green);
-}
-
-.tick-orange {
-    background-color: var(--text-color-orange);
-}
-
-.tick-red {
-    background-color: var(--text-color-red);
-}
-
-.tick-gray {
-    background-color: var(--color-stroke);
-}
-
-/* Responsive adjustments */
-@media (max-width: 640px) {
-    .monitors {
-        padding: 0 16px 32px 16px;
-    }
-
-    .search {
-        flex-direction: column-reverse;
-        align-items: stretch;
-    }
-
-    .search-bar {
-        width: 100%;
-    }
-
-    .monitor-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.card-status {
+.row-state {
+    flex: none;
     font-size: 13px;
     font-weight: 600;
+}
+
+.state-down { color: var(--stop-ink); }
+.state-pending { color: var(--caution-ink); }
+.state-paused { color: var(--muted); }
+
+.row-paused .monitor-name-text {
+    color: var(--muted);
+}
+
+.monitor-uptime {
+    font-weight: 500;
+}
+
+.monitor-latency {
+    color: var(--ink-soft);
+}
+
+@media (max-width: 760px) {
+    .monitor-head {
+        display: none;
+    }
+
+    .monitor-row {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 6px 14px;
+        padding-inline: 16px;
+    }
+
+    .monitor-row .trace {
+        grid-column: 1 / -1;
+        grid-row: 2;
+    }
 }

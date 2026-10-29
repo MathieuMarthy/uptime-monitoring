@@ -1,0 +1,32 @@
+/* Activity: one feed of events, grouped by day. */
+.activity-filters {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px 24px;
+}
+
+.activity-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.day-title {
+    font-family: var(--font-text);
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.event-list-timed {
+    --event-time-width: 54px;
+}
+
+.lamp-caution {
+    border-color: var(--caution);
+}
+
+.activity-older {
+    align-self: flex-start;
+}

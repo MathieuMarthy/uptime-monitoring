@@ -4,7 +4,7 @@ use crate::time::DAY_MS;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
 const COLUMNS: &str = "monitor_id, status, consecutive_failures, failing_since, last_check_at, last_latency_ms, \
-    last_error, tls_expires_at, tls_warned_for";
+    last_error, tls_expires_at, tls_warned_for, tls_warned_at";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "TEXT", rename_all = "lowercase")]
@@ -35,9 +35,52 @@ pub struct MonitorState {
     pub last_error: Option<String>,
     pub tls_expires_at: Option<i64>,
     pub tls_warned_for: Option<i64>,
+    /// When the warning about `tls_warned_for` was given.
+    pub tls_warned_at: Option<i64>,
+}
+
+/// A certificate warning, for the Activity page.
+#[derive(Debug, Clone, FromRow)]
+pub struct CertificateWarning {
+    pub monitor_id: i64,
+    pub monitor_name: String,
+    pub warned_at: i64,
+    /// The expiry warned about.
+    pub expires_at: i64,
+    /// The certificate seen by the last check: a later date means it was renewed.
+    pub current_expiry: Option<i64>,
 }
 
 impl MonitorState {
+    /// Up to `limit` warnings given from `from` to `before`, latest first; those at `before`
+    /// itself are kept when their monitor id is below `tie_id`. Only the last warning of each
+    /// monitor is kept.
+    pub async fn warnings_between(
+        pool: &SqlitePool,
+        monitor_id: Option<i64>,
+        from: i64,
+        before: i64,
+        tie_id: i64,
+        limit: i64,
+    ) -> Result<Vec<CertificateWarning>, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT s.monitor_id, m.name AS monitor_name, s.tls_warned_at AS warned_at,
+                    s.tls_warned_for AS expires_at, s.tls_expires_at AS current_expiry
+             FROM monitor_state s JOIN monitors m ON m.id = s.monitor_id
+             WHERE s.tls_warned_at >= ?1
+               AND (s.tls_warned_at < ?2 OR (s.tls_warned_at = ?2 AND s.monitor_id < ?5))
+               AND s.tls_warned_for IS NOT NULL AND (?3 IS NULL OR s.monitor_id = ?3)
+             ORDER BY s.tls_warned_at DESC, s.monitor_id DESC LIMIT ?4",
+        )
+        .bind(from)
+        .bind(before)
+        .bind(monitor_id)
+        .bind(limit)
+        .bind(tie_id)
+        .fetch_all(pool)
+        .await
+    }
+
     pub async fn find(pool: &SqlitePool, monitor_id: i64) -> Result<Option<Self>, sqlx::Error> {
         sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM monitor_state WHERE monitor_id = ?"
@@ -114,21 +157,21 @@ impl MonitorState {
             None => {}
         }
 
-        let tls_warning = match tls_warn_days {
-            Some(days) => {
-                sqlx::query_scalar(
-                    "UPDATE monitor_state SET tls_warned_for = tls_expires_at
+        let tls_warning =
+            match tls_warn_days {
+                Some(days) => sqlx::query_scalar(
+                    "UPDATE monitor_state SET tls_warned_for = tls_expires_at, tls_warned_at = ?
                      WHERE monitor_id = ? AND tls_expires_at < ?
                        AND tls_warned_for IS NOT tls_expires_at
                      RETURNING tls_expires_at",
                 )
+                .bind(outcome.checked_at)
                 .bind(monitor_id)
                 .bind(outcome.checked_at + days * DAY_MS)
                 .fetch_optional(&mut *tx)
-                .await?
-            }
-            None => None,
-        };
+                .await?,
+                None => None,
+            };
 
         tx.commit().await?;
         Ok(Some(Recorded {

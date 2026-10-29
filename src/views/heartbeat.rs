@@ -19,10 +19,19 @@ pub const DAYS: i64 = 90;
 /// The 30-day uptime covers the last 30 bars.
 const UPTIME_DAYS: i64 = 30;
 
-/// One bar: its colour class and tooltip.
+/// One bar: its class, tooltip and average latency. The class is `tick-down` when a tenth of
+/// the bucket or more was downtime, `tick-dip` for less, `tick-partial` for failures without
+/// downtime, `tick-up` or `tick-none`.
 pub struct Tick {
     pub class: &'static str,
     pub title: String,
+    /// `14:00–15:00` or the date.
+    pub span: String,
+    pub checks: i64,
+    pub failed: i64,
+    /// `—` without checks.
+    pub uptime: String,
+    pub latency_ms: Option<i64>,
 }
 
 /// Consecutive bars over a window, and the availability over all of it.
@@ -80,8 +89,13 @@ impl Heartbeat {
             .map(|i| match buckets.iter().find(|b| b.index == i) {
                 Some(b) => tick(b, label(i)),
                 None => Tick {
-                    class: "tick-gray",
-                    title: format!("{} · No data", label(i)),
+                    class: "tick-none",
+                    title: format!("{}: no checks", label(i)),
+                    span: label(i),
+                    checks: 0,
+                    failed: 0,
+                    uptime: uptime_label(None),
+                    latency_ms: None,
                 },
             })
             .collect();
@@ -195,26 +209,74 @@ impl DailyHistory {
     }
 }
 
+/// Where guide lines fall among the bars and the labels under them.
+pub struct Axis {
+    /// One label per bar, most of them empty.
+    pub labels: Vec<String>,
+    /// A guide line every `step` bars.
+    pub step: usize,
+}
+
+impl Axis {
+    /// Under the hourly bars: the hour every 6 bars, `now` under the last one.
+    pub fn hours(tz: &TimeZone, now: i64) -> Self {
+        let from = hourly_start(tz, now);
+        let labels = (0..HOURS)
+            .map(|i| match i {
+                _ if i == HOURS - 1 => "now".to_string(),
+                _ if i % 6 == 0 => format_time(tz, from + i * HOUR_MS),
+                _ => String::new(),
+            })
+            .collect();
+        Self { labels, step: 6 }
+    }
+
+    /// Under the daily bars: the date every 30 bars, `today` under the last one.
+    pub fn days(tz: &TimeZone, now: i64) -> Self {
+        let today = day_of(tz, now);
+        let labels = (0..DAYS)
+            .map(|i| match today.checked_sub((DAYS - 1 - i).days()) {
+                _ if i == DAYS - 1 => "today".to_string(),
+                Ok(day) if i % 30 == 0 => day.strftime("%-d %b").to_string(),
+                _ => String::new(),
+            })
+            .collect();
+        Self { labels, step: 30 }
+    }
+}
+
 fn hourly_start(tz: &TimeZone, now: i64) -> i64 {
     hour_start(tz, now) - (HOURS - 1) * HOUR_MS
 }
 
 fn tick(b: &Bucket, span: String) -> Tick {
-    let class = if b.downtime_ms > 0 {
-        "tick-red"
+    let class = if b.downtime_ms * 10 >= b.monitored_ms && b.downtime_ms > 0 {
+        "tick-down"
+    } else if b.downtime_ms > 0 {
+        "tick-dip"
     } else if b.checks_failed > 0 {
-        "tick-orange"
+        "tick-partial"
     } else {
-        "tick-green"
+        "tick-up"
+    };
+    let title = if b.checks_failed == 0 {
+        format!("{span}: {} checks, all passed", b.checks_total)
+    } else {
+        format!(
+            "{span}: {} of {} checks failed, {} up",
+            b.checks_failed,
+            b.checks_total,
+            uptime_label(b.uptime())
+        )
     };
     Tick {
         class,
-        title: format!(
-            "{span} · {} · {} failed of {} checks",
-            uptime_label(b.uptime()),
-            b.checks_failed,
-            b.checks_total
-        ),
+        title,
+        span,
+        checks: b.checks_total,
+        failed: b.checks_failed,
+        uptime: uptime_label(b.uptime()),
+        latency_ms: b.latency_avg_ms,
     }
 }
 
@@ -265,13 +327,24 @@ mod tests {
         let classes: Vec<_> = h.ticks.iter().take(4).map(|t| t.class).collect();
         assert_eq!(
             classes,
-            ["tick-green", "tick-orange", "tick-red", "tick-gray"]
+            ["tick-up", "tick-partial", "tick-down", "tick-none"]
         );
+        assert_eq!(h.ticks[0].title, "00:00–01:00: 10 checks, all passed");
         assert_eq!(
             h.ticks[1].title,
-            "01:00–02:00 · 100% · 2 failed of 10 checks"
+            "01:00–02:00: 2 of 10 checks failed, 100% up"
         );
-        assert_eq!(h.ticks[3].title, "03:00–04:00 · No data");
+        assert_eq!(
+            h.ticks[2].title,
+            "02:00–03:00: 3 of 10 checks failed, 90.00% up"
+        );
+        assert_eq!(h.ticks[3].title, "03:00–04:00: no checks");
+
+        let brief = Heartbeat::hours(&[bucket(0, 600, 59, 1)], &tz, 0);
+        assert_eq!(
+            brief.ticks[0].class, "tick-dip",
+            "under a tenth of the bucket down"
+        );
         assert_eq!(h.uptime_label(), "96.66%");
     }
 }

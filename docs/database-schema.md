@@ -63,7 +63,8 @@ erDiagram
 
 `monitor_id` (PK, FK cascade), `status` (`pending` \| `up` \| `down`, default `pending`), `consecutive_failures`,
 `failing_since` (`checked_at` of the first failure of the current series, NULL after a success), `last_check_at`,
-`last_latency_ms`, `last_error`, `tls_expires_at`, `tls_warned_for` (expiry date already alerted on).
+`last_latency_ms`, `last_error`, `tls_expires_at`, `tls_warned_for` (expiry date already alerted on), `tls_warned_at`
+(when that warning was given; only the last one is kept, for the Activity page).
 A row is created in the same transaction as its monitor. Pausing a monitor resets it to `pending` and resolves the
 open incident, in the same transaction.
 
@@ -76,12 +77,14 @@ monitor is a contiguous range scan.
 without a response), `status_code`, `error_kind` (`timeout`, `dns`, `blocked`, `connect`, `tls`, `status`, `keyword`), `error`,
 `covered_ms` (time since the previous check, 0 when that gap exceeds 2 × `interval_s`), `down` (that time was
 downtime: an incident was open when the check was recorded, or opened later from a failure before it).
+The first failure of an incident keeps `down = 0` (the time before it was up). Partial index on `checked_at WHERE ok = 0
+AND down = 0`: failures that were not downtime, across monitors, for the Activity page, without reading every check.
 
 ### `incidents` — outage periods, long retention
 
 `id`, `monitor_id`, `started_at` (first failed check of the series), `resolved_at` (NULL while open; on pause, the last check's time), `error_kind`,
 `cause`.
-Indexes: `(monitor_id, started_at DESC)`; unique partial index on `monitor_id WHERE resolved_at IS NULL` — at most one
+Indexes: `(monitor_id, started_at DESC)`, `started_at` (Activity page); unique partial index on `monitor_id WHERE resolved_at IS NULL` — at most one
 open incident per monitor.
 
 ### `daily_stats` — daily rollups, long retention
@@ -99,7 +102,8 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
   validated per kind: `{url}` for webhook and Discord, `{server, topic, token?}` for ntfy), `enabled`, `created_at`.
 - `monitor_channels`: `(monitor_id, channel_id)` PK, both FK cascade; index on `channel_id`.
 - `notification_log`: `id`, `channel_id`, `monitor_id` (both FK `SET NULL`), `event` (`down` \| `up` \|
-  `tls_expiring` \| `test`), `sent_at`, `ok`, `error`. Purged with `checks`. Indexes on `channel_id` and `monitor_id`.
+  `tls_expiring` \| `test`), `sent_at`, `ok`, `error`. Purged with `checks`. Indexes on `channel_id` and
+  `(monitor_id, sent_at)`.
 
 ### Public status pages
 

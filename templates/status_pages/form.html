@@ -1,6 +1,7 @@
 {% extends "layout.html" %}
 
 {% block title %}{% if self.is_edit() %}Edit Public Page{% else %}Add Public Page{% endif %} - Uptime Monitoring{% endblock %}
+{% block nav_public_pages %}aria-current="page"{% endblock %}
 
 {% block styles %}
 <link href="/static/css/forms.css" rel="stylesheet">

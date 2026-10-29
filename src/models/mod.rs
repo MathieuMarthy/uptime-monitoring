@@ -13,11 +13,11 @@ pub mod status_page;
 
 pub use admin::Admin;
 pub use channel::{Channel, ChannelSummary};
-pub use check::{Check, RecentCheck};
+pub use check::{Check, FailedCheck, RecentCheck};
 pub use daily_stat::DailyStat;
-pub use incident::Incident;
+pub use incident::{Incident, NamedIncident};
 pub use monitor::{Monitor, MonitorSummary};
-pub use monitor_state::{MonitorState, MonitorStatus, Recorded};
+pub use monitor_state::{CertificateWarning, MonitorState, MonitorStatus, Recorded};
 pub use notification_log::{Delivery, LogEntry, NotificationLog};
 pub use session::{NewSession, Session};
 pub use settings::{Settings, StorageUse};

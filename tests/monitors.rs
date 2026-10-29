@@ -155,22 +155,53 @@ async fn bad_ids_return_404() {
 }
 
 #[tokio::test]
-async fn dashboard_counts_states() {
+async fn dashboard_headline_names_down_monitors_and_lists_problems_first() {
     let (app, pool) = common::test_app().await;
-    for name in ["a", "b", "c"] {
+    for name in ["a", "b", "c", "d"] {
         create(&app, name).await;
     }
     post_form(&app, "/monitors/1/toggle-pause", "").await;
-    sqlx::query("UPDATE monitor_state SET status = 'down' WHERE monitor_id = 2")
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "UPDATE monitor_state SET status = CASE monitor_id WHEN 2 THEN 'down' WHEN 4 THEN 'up'
+                                                          ELSE status END",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let r = get(&app, "/").await;
     assert_eq!(r.status, 200);
-    for (label, count) in [("up", 0), ("down", 1), ("pending", 1), ("paused", 1)] {
-        let needle = format!(r#"data-count="{label}">{count}<"#);
+    assert!(r.body.contains("1 monitor is down"), "{}", r.body);
+    assert!(
+        r.body.contains(r#"<a href="/monitors/2">b</a>."#),
+        "{}",
+        r.body
+    );
+    assert!(r.body.contains("1 pending, 1 up, 1 paused."), "{}", r.body);
+    // The state is written out, not only shown by the lamp's colour.
+    for state in ["Down", "Pending", "Paused"] {
+        let needle = format!(r#"state-{}">{state}<"#, state.to_lowercase());
         assert!(r.body.contains(&needle), "missing {needle}");
     }
+    let position = |name: &str| {
+        r.body
+            .find(&format!(r#"data-search="{name} "#))
+            .unwrap_or_else(|| panic!("no row for {name}"))
+    };
+    assert!(position("b") < position("c"), "down before pending");
+    assert!(position("c") < position("d"), "pending before up");
+    assert!(position("d") < position("a"), "paused last");
+}
+
+#[tokio::test]
+async fn dashboard_switches_to_90_days() {
+    let (app, _) = common::test_app().await;
+    create(&app, "API").await;
+    let body = get(&app, "/?range=90d").await.body;
+    assert_eq!(body.matches(r#"class="tick tick-"#).count(), 90);
+    assert!(body.contains("today"));
+    let body = get(&app, "/?range=bogus").await.body;
+    assert_eq!(body.matches(r#"class="tick tick-"#).count(), 24);
+    assert!(body.contains("now"));
 }
 
 #[tokio::test]
@@ -295,9 +326,9 @@ async fn dashboard_shows_uptime_and_hourly_heartbeat() {
     let body = get(&app, "/").await.body;
     let (api, idle) = body.split_once("Idle").unwrap();
     assert!(api.contains("75.00%"), "{api}");
-    assert_eq!(api.matches("tick tick-red").count(), 1);
-    assert_eq!(api.matches("tick tick-gray").count(), 23);
-    assert_eq!(idle.matches("tick tick-gray").count(), 24);
+    assert_eq!(api.matches("tick tick-down").count(), 1);
+    assert_eq!(api.matches("tick tick-none").count(), 23);
+    assert_eq!(idle.matches("tick tick-none").count(), 24);
     assert!(!idle.contains('%'));
     assert!(api.contains(r#"data-search="API https://example.com""#));
     for script in ["/static/js/live.js", "/static/js/search.js"] {
@@ -343,16 +374,40 @@ async fn detail_shows_history_incidents_and_recent_checks() {
     .execute(&pool)
     .await
     .unwrap();
+    sqlx::query("UPDATE monitor_state SET status = 'down' WHERE monitor_id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let body = get(&app, "/monitors/1").await.body;
     assert!(body.contains("50.00%"), "24 h uptime");
     assert!(body.contains("98.93%"), "30-day uptime");
-    assert!(body.contains("120ms"), "24 h average latency");
+    assert!(body.contains("120 ms"), "24 h average latency");
     assert_eq!(body.matches(r#"class="tick tick-"#).count(), 24 + 90);
     assert!(body.contains("Ongoing"));
-    assert_eq!(body.matches("HTTP 503 Service Unavailable").count(), 2);
-    assert!(body.contains("503"));
-    for id in ["live-hero", "live-incidents", "live-checks"] {
+    assert!(body.contains("Down for "), "status line");
+    // The status line, the incident, its failed check and the latest checks.
+    assert_eq!(body.matches("HTTP 503 Service Unavailable").count(), 4);
+    assert!(
+        body.contains(r#"<rect class="latency"#),
+        "latency chart: {body}"
+    );
+    let hourly = body
+        .split(r#"id="hourly-figures""#)
+        .nth(1)
+        .expect("hourly figures");
+    let hourly = &hourly[..hourly.find("</table>").unwrap()];
+    assert_eq!(
+        hourly.matches("<tr>").count(),
+        1 + 24,
+        "a row per hour, for keyboard users"
+    );
+    for id in [
+        "live-status",
+        "live-history",
+        "live-incidents",
+        "live-checks",
+    ] {
         assert!(body.contains(&format!(r#"id="{id}" data-live"#)), "{id}");
     }
 }

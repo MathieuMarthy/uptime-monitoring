@@ -1,6 +1,7 @@
 {% extends "layout.html" %}
 
 {% block title %}{% if self.is_edit() %}Edit Channel{% else %}Add Channel{% endif %} - Uptime Monitoring{% endblock %}
+{% block nav_alerts %}aria-current="page"{% endblock %}
 
 {% block styles %}
 <link href="/static/css/forms.css" rel="stylesheet">

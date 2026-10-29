@@ -1,7 +1,16 @@
 // Every 30 s while the tab is visible, fetches the page again and swaps in the elements marked
-// `data-live` (each needs an id), keeping the focused link. A redirect means the session expired,
-// a 404 that the monitor was deleted: reload to show it.
+// `data-live` (each needs an id) that changed. Keeps the focused link or summary and the <details>
+// left open or closed (matched by id), and reads out a changed `data-announce` text (the status
+// sentence) in a polite live region. A redirect means the session expired, a 404 that the monitor
+// was deleted: reload to show it.
 const PERIOD_MS = 30_000;
+
+const announcer = document.createElement("p");
+announcer.className = "visually-hidden";
+announcer.setAttribute("aria-live", "polite");
+document.body.append(announcer);
+
+const announced = (root) => root.querySelector("[data-announce]")?.textContent.trim() ?? "";
 
 async function refresh() {
     if (document.hidden) {
@@ -20,17 +29,35 @@ async function refresh() {
     if (!response.ok) {
         return;
     }
-    const fresh = new DOMParser().parseFromString(await response.text(), "text/html");
-    const focused = document.activeElement?.getAttribute("href");
+    const page = new DOMParser().parseFromString(await response.text(), "text/html");
+    const active = document.activeElement;
+    const focusedHref = active?.getAttribute("href");
+    const focusedDetails = active?.matches("summary") ? active.parentElement.id : "";
     for (const element of document.querySelectorAll("[data-live]")) {
-        const next = fresh.getElementById(element.id);
+        const next = page.getElementById(element.id);
         if (!next) {
             continue;
         }
-        const refocus = focused && element.contains(document.activeElement);
+        for (const details of element.querySelectorAll("details[id]")) {
+            const twin = next.querySelector(`#${CSS.escape(details.id)}`);
+            if (twin) {
+                twin.open = details.open;
+            }
+        }
+        if (next.outerHTML === element.outerHTML) {
+            continue;
+        }
+        const refocus = element.contains(active);
+        const before = announced(element);
         element.replaceWith(next);
-        if (refocus) {
-            next.querySelector(`[href="${CSS.escape(focused)}"]`)?.focus();
+        const after = announced(next);
+        if (after && after !== before) {
+            announcer.textContent = after;
+        }
+        if (refocus && focusedDetails) {
+            next.querySelector(`#${CSS.escape(focusedDetails)} > summary`)?.focus();
+        } else if (refocus && focusedHref) {
+            next.querySelector(`[href="${CSS.escape(focusedHref)}"]`)?.focus();
         }
     }
     document.dispatchEvent(new Event("live:refreshed"));

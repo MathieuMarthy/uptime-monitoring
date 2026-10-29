@@ -1,0 +1,72 @@
+{# One incident, folded to a line; `incident` is an `IncidentDetail`. Ongoing ones start open. #}
+<details class="event event-{% if incident.ongoing %}down{% else %}resolved{% endif %}" id="incident-{{ incident.id }}"
+         {%- if incident.ongoing %} open{% endif %}>
+    <summary class="event-summary">
+        <span class="event-time">{{ incident.time }}</span>
+        <span class="lamp {% if incident.ongoing %}lamp-down{% else %}lamp-up{% endif %}" aria-hidden="true"></span>
+        <span class="event-text">
+            <span class="event-title">{{ incident.title }}</span>
+            {%- if !incident.subtitle.is_empty() %}
+            <span class="event-subtitle">{{ incident.subtitle }}</span>
+            {%- endif %}
+        </span>
+        <span class="chip {% if incident.ongoing %}chip-down{% else %}chip-up{% endif %}">{{ incident.tag }}</span>
+        <svg class="event-chevron" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
+            <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                  stroke-linejoin="round"/>
+        </svg>
+    </summary>
+    <div class="event-body">
+        <dl class="facts">
+            {% for fact in incident.facts %}
+            <div><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+            {% endfor %}
+        </dl>
+        {% if incident.failures.is_empty() %}
+        <p class="section-note">Its checks are older than the retention period and no longer kept.</p>
+        {% else %}
+        <div class="event-part">
+            <h3>Failed checks</h3>
+            <div class="table-scroll event-table">
+                <table class="data-table">
+                    <thead><tr><th>Time</th><th>HTTP status</th><th class="num">Response</th><th>Error</th></tr></thead>
+                    <tbody>
+                    {% for failure in incident.failures %}
+                    <tr>
+                        <td>{{ failure.time }}</td>
+                        <td>{% if let Some(code) = failure.status_code %}{{ code }}{% else %}—{% endif %}</td>
+                        <td class="num">{% if let Some(ms) = failure.latency_ms %}{{ ms }} ms{% else %}—{% endif %}</td>
+                        <td class="text-red">{{ failure.error }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if incident.more_failures > 0 %}
+            <p class="section-note">And {{ incident.more_failures }} earlier failed checks.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+        <div class="event-part">
+            <h3>Alerts sent</h3>
+            {% if incident.alerts.is_empty() %}
+            <p class="section-note">None: no channel was linked, or the alerts are older than the retention period.</p>
+            {% else %}
+            <ul class="alert-list">
+                {% for alert in incident.alerts %}
+                <li>
+                    <span class="alert-time">{{ alert.time }}</span>
+                    <span class="alert-channel">{{ alert.channel }}</span>
+                    <span>{{ alert.event }}</span>
+                    {% if alert.ok %}<span class="text-green">delivered</span>
+                    {% else %}<span class="text-red">failed{% if let Some(error) = alert.error %}: {{ error }}{% endif %}</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% if incident.link_monitor %}
+        <a class="button-secondary button-small event-link" href="/monitors/{{ incident.monitor_id }}">Open {{ incident.monitor_name }}</a>
+        {% endif %}
+    </div>
+</details>

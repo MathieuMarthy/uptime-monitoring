@@ -1,4 +1,4 @@
-// Filters the dashboard cards on their name and URL, ignoring case and accents.
+// Filters the dashboard rows on their name and URL, ignoring case and accents.
 const input = document.getElementById("search-monitors");
 const fold = (text) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 

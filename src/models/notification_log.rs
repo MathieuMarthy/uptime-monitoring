@@ -54,4 +54,30 @@ impl NotificationLog {
         .fetch_all(pool)
         .await
     }
+
+    /// The deliveries of these events for a monitor between `from` and `to` (both included),
+    /// oldest first.
+    pub async fn for_monitor_between(
+        pool: &SqlitePool,
+        monitor_id: i64,
+        events: &[&str],
+        from: i64,
+        to: i64,
+    ) -> Result<Vec<LogEntry>, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT l.sent_at, c.name AS channel_name, m.name AS monitor_name, l.event, l.ok, l.error
+             FROM notification_log l
+             LEFT JOIN notification_channels c ON c.id = l.channel_id
+             LEFT JOIN monitors m ON m.id = l.monitor_id
+             WHERE l.monitor_id = ? AND l.sent_at BETWEEN ? AND ?
+               AND l.event IN (SELECT value FROM json_each(?))
+             ORDER BY l.sent_at, l.id",
+        )
+        .bind(monitor_id)
+        .bind(from)
+        .bind(to)
+        .bind(serde_json::to_string(events).expect("strings serialize"))
+        .fetch_all(pool)
+        .await
+    }
 }

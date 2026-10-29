@@ -4,8 +4,6 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block styles %}
-<link href="/static/css/monitors.css" rel="stylesheet">
-<link href="/static/css/detail.css" rel="stylesheet">
 <link href="/static/css/status.css" rel="stylesheet">
 {% endblock %}
 {% block scripts %}
@@ -13,77 +11,76 @@
 {% endblock %}
 
 {% block body %}
-<main>
-    <div class="detail-container">
-        {% if draft %}
-        <div class="status-draft" role="status">Preview: this page is not published, visitors get a 404.</div>
+<main class="page status-page">
+    {% if draft %}
+    <div class="error-banner" role="status">Preview: this page is not published, visitors get a 404.</div>
+    {% endif %}
+
+    <header class="status-header">
+        <p class="status-title">{{ title }}</p>
+        {% if let Some(description) = description %}
+        <p class="text-muted">{{ description }}</p>
         {% endif %}
+    </header>
 
-        <div class="detail-title-group">
-            <h1 class="detail-title">{{ title }}</h1>
-            {% if let Some(description) = description %}
-            <p class="text-muted">{{ description }}</p>
-            {% endif %}
+    <section aria-label="Overall status" class="status-overall status-overall-{{ headline.state }}" id="live-overall" data-live>
+        <h1 class="headline"><span class="lamp lamp-lg lamp-{{ headline.state }}" aria-hidden="true"></span><span data-announce>{{ headline.text }}</span></h1>
+        {% if !headline.detail.is_empty() %}
+        <p class="headline-sub">{{ headline.detail }}</p>
+        {% endif %}
+    </section>
+
+    {% if !monitors.is_empty() %}
+    <section class="section" aria-labelledby="services-title">
+        <div class="section-head">
+            <h2 class="section-title" id="services-title">Services</h2>
+            <span class="section-note">Last 90 days</span>
         </div>
-
-        <div id="live-overall" data-live>
-            {% if any_down %}
-            <div class="status-overall status-overall-down">Some systems are down</div>
-            {% else %}
-            <div class="status-overall status-overall-up">All systems operational</div>
-            {% endif %}
-        </div>
-
-        <div class="section-card" id="live-monitors" data-live>
-            {% if monitors.is_empty() %}
-            <div class="empty-state">
-                <p class="empty-state-text">No service is listed on this page yet.</p>
-            </div>
-            {% endif %}
+        <div class="panel status-services" id="live-monitors" data-live>
             {% for m in monitors %}
-            <div class="status-monitor">
-                <div class="status-monitor-head">
-                    <span class="status-monitor-name">{{ m.name }}</span>
-                    <span class="status-monitor-meta">
-                        <span class="text-muted">{{ m.daily.uptime_90d }}</span>
-                        <span class="{{ m.status_class }}">{{ m.status_label }}</span>
+            <div class="status-service">
+                <div class="status-service-head">
+                    <span class="status-service-name">
+                        <span class="lamp lamp-{{ m.status_key }}" aria-hidden="true"></span>{{ m.name }}
+                    </span>
+                    <span class="status-service-meta">
+                        <span class="text-muted">{{ m.daily.uptime_90d }} uptime</span>
+                        <span class="status-word status-{{ m.status_key }}">{{ m.status_label }}</span>
                     </span>
                 </div>
-                <div class="heartbeat-bar-large" role="img" aria-label="{{ m.name }}, last 90 days, one bar per day">
-                    {% for tick in m.daily.bars.ticks %}
-                    <span class="tick {{ tick.class }}" title="{{ tick.title }}"></span>
-                    {% endfor %}
-                </div>
+                <span class="trace trace-90" role="img" aria-label="{{ m.name }}, last 90 days: {{ m.daily.uptime_90d }} uptime">
+                    {%- for tick in m.daily.bars.ticks -%}
+                    <span class="tick {{ tick.class }}" data-tip="{{ tick.title }}"></span>
+                    {%- endfor -%}
+                </span>
             </div>
             {% endfor %}
-            {% if !monitors.is_empty() %}
-            <div class="heartbeat-header">
-                <span class="heartbeat-range">90 days ago</span>
-                <span class="heartbeat-range">Uptime over 90 days · Today</span>
+            <div class="status-legend">
+                <span>90 days ago</span>
+                <span>Red bars are days with an outage</span>
+                <span>Today</span>
             </div>
-            {% endif %}
         </div>
+    </section>
+    {% endif %}
 
-        <div class="section-card" id="live-incidents" data-live>
-            <h2 class="section-card-title">Recent Incidents</h2>
+    <section class="section" aria-labelledby="incidents-title" id="live-incidents" data-live>
+        <h2 class="section-title" id="incidents-title">Past incidents</h2>
+        <div class="panel">
             {% if incidents.is_empty() %}
-            <div class="empty-state">
-                <p class="empty-state-text">No incident in the last 90 days.</p>
-            </div>
+            <p class="empty-state">No incident in the last 90 days.</p>
             {% else %}
             <div class="table-scroll">
-                <table class="incidents-table">
-                    <thead>
-                    <tr><th>Service</th><th>Started</th><th>Duration</th></tr>
-                    </thead>
+                <table class="data-table">
+                    <thead><tr><th>Service</th><th>Started</th><th class="num">Duration</th></tr></thead>
                     <tbody>
                     {% for incident in incidents %}
                     <tr>
                         <td>{{ incident.monitor }}</td>
                         <td>{{ incident.started }}</td>
                         {% match incident.duration %}
-                        {% when Some with (duration) %}<td>{{ duration }}</td>
-                        {% when None %}<td class="text-red">Ongoing</td>
+                        {% when Some with (duration) %}<td class="num">{{ duration }}</td>
+                        {% when None %}<td class="num text-red">Ongoing</td>
                         {% endmatch %}
                     </tr>
                     {% endfor %}
@@ -92,8 +89,8 @@
             </div>
             {% endif %}
         </div>
+    </section>
 
-        <p class="status-footer text-muted">Times in {{ timezone }}. This page refreshes on its own.</p>
-    </div>
+    <p class="section-note">Times in {{ timezone }}. This page refreshes on its own.</p>
 </main>
 {% endblock %}

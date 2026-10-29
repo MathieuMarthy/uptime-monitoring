@@ -12,7 +12,49 @@ pub struct Incident {
     pub cause: Option<String>,
 }
 
+/// An incident with the name of its monitor and the bounds of the next incident on that monitor.
+#[derive(Debug, Clone, FromRow)]
+pub struct NamedIncident {
+    #[sqlx(flatten)]
+    pub incident: Incident,
+    pub monitor_name: String,
+    pub next_started_at: Option<i64>,
+    pub next_resolved_at: Option<i64>,
+}
+
 impl Incident {
+    /// Up to `limit` incidents started from `from` to `before`, latest first, for one monitor or
+    /// all of them. Those started at `before` itself are kept when their id is below `tie_id`.
+    pub async fn started_between(
+        pool: &SqlitePool,
+        monitor_id: Option<i64>,
+        from: i64,
+        before: i64,
+        tie_id: i64,
+        limit: i64,
+    ) -> Result<Vec<NamedIncident>, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT i.id, i.monitor_id, i.started_at, i.resolved_at, i.error_kind, i.cause,
+                    m.name AS monitor_name, n.started_at AS next_started_at,
+                    n.resolved_at AS next_resolved_at
+             FROM incidents i JOIN monitors m ON m.id = i.monitor_id
+             LEFT JOIN incidents n ON n.id = (SELECT id FROM incidents
+                                              WHERE monitor_id = i.monitor_id
+                                                AND started_at > i.started_at
+                                              ORDER BY started_at LIMIT 1)
+             WHERE i.started_at >= ?1 AND (i.started_at < ?2 OR (i.started_at = ?2 AND i.id < ?5))
+               AND (?3 IS NULL OR i.monitor_id = ?3)
+             ORDER BY i.started_at DESC, i.id DESC LIMIT ?4",
+        )
+        .bind(from)
+        .bind(before)
+        .bind(monitor_id)
+        .bind(limit)
+        .bind(tie_id)
+        .fetch_all(pool)
+        .await
+    }
+
     /// Most recent first.
     pub async fn for_monitor(pool: &SqlitePool, monitor_id: i64) -> Result<Vec<Self>, sqlx::Error> {
         Self::recent(pool, monitor_id, -1).await

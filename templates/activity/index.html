@@ -1,0 +1,135 @@
+{% extends "layout.html" %}
+
+{% block title %}Activity - Uptime Monitoring{% endblock %}
+{% block nav_activity %}aria-current="page"{% endblock %}
+{% block styles %}
+<link href="/static/css/events.css" rel="stylesheet">
+<link href="/static/css/activity.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="page page-narrow">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Activity</h1>
+            <p class="page-lede">{{ scope() }} of the last {{ filter.days }} days. Open an event for its details.</p>
+        </div>
+    </div>
+
+    <div class="activity-filters">
+        <nav class="segmented" aria-label="Event type">
+            {% for kind in kinds %}
+            <a href="{{ kind.url }}" {% if kind.current %}aria-current="true"{% endif %}>{{ kind.label }}</a>
+            {% endfor %}
+        </nav>
+        <form class="activity-form" action="/activity" method="GET">
+            {% if let Some(kind) = filter.kind.param() %}<input type="hidden" name="type" value="{{ kind }}">{% endif %}
+            <label class="visually-hidden" for="activity-monitor">Monitor</label>
+            <select class="field" id="activity-monitor" name="monitor">
+                <option value="">All monitors</option>
+                {% for m in monitors %}
+                <option value="{{ m.id }}" {% if is_selected(m.id) %}selected{% endif %}>{{ m.name }}</option>
+                {% endfor %}
+            </select>
+            <label class="visually-hidden" for="activity-days">Period</label>
+            <select class="field" id="activity-days" name="days">
+                {% for days in periods %}
+                <option value="{{ days }}" {% if *days == filter.days %}selected{% endif %}>Last {{ days }} days</option>
+                {% endfor %}
+            </select>
+            <button class="button-secondary" type="submit">Show</button>
+        </form>
+    </div>
+
+    {% for day in days %}
+    <div class="section">
+        <h2 class="day-title">{{ day.label }}</h2>
+        <div class="panel event-list event-list-timed">
+            {% for event in day.events %}
+            {% match event %}
+            {% when Event::Outage with (incident) %}
+            {% include "partials/incident.html" %}
+            {% when Event::Failure with (failure) %}
+            <details class="event event-failure">
+                <summary class="event-summary">
+                    <span class="event-time">{{ failure.time }}</span>
+                    <span class="lamp lamp-pending" aria-hidden="true"></span>
+                    <span class="event-text">
+                        <span class="event-title">{{ failure.monitor_name }} failed a check</span>
+                        <span class="event-subtitle">{{ failure.error }}</span>
+                    </span>
+                    <span class="chip chip-caution">{{ failure.kind }}</span>
+                    <svg class="event-chevron" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
+                        <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </summary>
+                <div class="event-body">
+                    <dl class="facts">
+                        {% for fact in failure.facts %}
+                        <div><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+                        {% endfor %}
+                    </dl>
+                    <p class="section-note">It did not make the monitor down: the next check passed, or the
+                        failures stayed below the monitor's threshold.</p>
+                    <a class="button-secondary button-small event-link" href="/monitors/{{ failure.monitor_id }}">Open {{ failure.monitor_name }}</a>
+                </div>
+            </details>
+            {% when Event::Certificate with (cert) %}
+            <details class="event event-certificate">
+                <summary class="event-summary">
+                    <span class="event-time">{{ cert.time }}</span>
+                    <span class="lamp {% if cert.renewed %}lamp-up{% else %}lamp-paused lamp-caution{% endif %}" aria-hidden="true"></span>
+                    <span class="event-text">
+                        <span class="event-title">{{ cert.monitor_name }} certificate expires soon</span>
+                        <span class="event-subtitle">Valid until {{ cert.expires }}</span>
+                    </span>
+                    <span class="chip {% if cert.renewed %}chip-up{% else %}chip-caution{% endif %}">{{ cert.tag }}</span>
+                    <svg class="event-chevron" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
+                        <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </summary>
+                <div class="event-body">
+                    <dl class="facts">
+                        {% for fact in cert.facts %}
+                        <div><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+                        {% endfor %}
+                    </dl>
+                    <div class="event-part">
+                        <h3>Alerts sent</h3>
+                        {% if cert.alerts.is_empty() %}
+                        <p class="section-note">None: no channel was linked, or the alerts are older than the retention period.</p>
+                        {% else %}
+                        <ul class="alert-list">
+                            {% for alert in cert.alerts %}
+                            <li>
+                                <span class="alert-time">{{ alert.time }}</span>
+                                <span class="alert-channel">{{ alert.channel }}</span>
+                                <span>{{ alert.event }}</span>
+                                {% if alert.ok %}<span class="text-green">delivered</span>
+                                {% else %}<span class="text-red">failed{% if let Some(error) = alert.error %}: {{ error }}{% endif %}</span>{% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                    <a class="button-secondary button-small event-link" href="/monitors/{{ cert.monitor_id }}">Open {{ cert.monitor_name }}</a>
+                </div>
+            </details>
+            {% endmatch %}
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <p class="panel empty-state">Nothing to show: no {{ scope()|lower }} in the last {{ filter.days }} days.</p>
+    {% endfor %}
+
+    {% if let Some(url) = older_url %}
+    <a class="button-secondary activity-older" href="{{ url }}">Older events</a>
+    {% endif %}
+
+    <p class="section-note">Failed checks and alerts are kept {{ checks_retention_days }} days, outages as long as the
+        history. You can change both in <a href="/settings">Settings</a>.</p>
+</div>
+{% endblock %}

@@ -5,6 +5,7 @@ use axum::extract::{Form, FromRequestParts, Path};
 use axum::http::request::Parts;
 use axum::{Router, middleware};
 
+mod activity;
 mod alerts;
 mod auth;
 mod health;
@@ -16,6 +17,7 @@ mod status_pages;
 pub fn all(state: &AppState) -> Router<AppState> {
     let protected = Router::new()
         .merge(monitors::router())
+        .merge(activity::router())
         .merge(alerts::router())
         .merge(status_pages::router())
         .merge(settings::router())

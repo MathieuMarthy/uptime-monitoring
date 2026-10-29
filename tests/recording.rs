@@ -394,10 +394,22 @@ async fn certificate_warning_is_given_once_per_expiry_date() {
         Some(soon),
         "13 days left"
     );
+    let state = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(
+        state.tls_warned_at,
+        Some(7 * DAY_MS),
+        "when the warning was given"
+    );
     assert_eq!(
         record_cert(&pool, id, &ok_with_cert(8 * DAY_MS, soon)).await,
         None,
         "already warned"
+    );
+    let state = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(
+        state.tls_warned_at,
+        Some(7 * DAY_MS),
+        "unchanged without a new warning"
     );
     let renewed = 98 * DAY_MS;
     assert_eq!(

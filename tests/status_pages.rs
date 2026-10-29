@@ -125,7 +125,8 @@ async fn public_page_shows_selected_monitors_in_order() {
         "URLs are never shown"
     );
     assert!(!r.body.contains("10.0.0.5"), "errors are never shown");
-    assert!(r.body.contains("Some systems are down"));
+    assert!(r.body.contains("2 services are down"), "{}", r.body);
+    assert!(r.body.contains("Website and Public API."));
     assert!(r.body.contains("Ongoing"), "the open incident is listed");
     assert_eq!(r.headers["cache-control"], "no-cache");
     let _ = hidden;
@@ -159,7 +160,7 @@ async fn public_page_is_cached_until_the_page_changes() {
     let id = page_id(&pool).await;
     let r = get(&app.logged_out(), "/status/status").await;
     assert!(r.body.contains("API"));
-    assert!(r.body.contains("All systems operational"));
+    assert!(r.body.contains("All services are running"));
 
     sqlx::query("UPDATE monitors SET name = 'Renamed'")
         .execute(&pool)

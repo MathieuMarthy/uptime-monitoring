@@ -72,23 +72,27 @@ uptime-monitoring/
 │   │   ├── settings.rs           # GeneralForm, DataForm, PasswordForm
 │   │   └── status_page.rs        # StatusPageForm → StatusPageInput | FieldErrors
 │   ├── views/                    # Askama template structs and view models
+│   │   ├── activity.rs           # Activity page: events of all monitors, filters, pages
 │   │   ├── alerts.rs
 │   │   ├── auth.rs
 │   │   ├── errors.rs
-│   │   ├── heartbeat.rs          # Hourly and daily bars, uptime labels
+│   │   ├── heartbeat.rs          # Hourly and daily bars, their axis, uptime labels
+│   │   ├── incidents.rs          # An incident unfolded: facts, failed checks, alerts sent
 │   │   ├── monitors.rs
 │   │   ├── settings.rs           # Settings page, disk estimates
 │   │   └── status_pages.rs       # Admin list and form, public page
 │   └── routes/                   # Handlers, grouped by domain
 │       ├── mod.rs                # Router assembly (public / protected) + parse_id()
+│       ├── activity.rs           # /activity
 │       ├── alerts.rs             # /alerts/*
 │       ├── auth.rs               # /setup, /login, /logout
 │       ├── health.rs             # GET /health
 │       ├── monitors.rs           # /, /monitors/*
 │       ├── settings.rs           # /settings/*
 │       └── status_pages.rs       # /public-pages/* (admin), /status/{slug} (public)
-├── templates/                    # Askama templates: base.html → layout.html (admin) | public.html
-├── static/                       # CSS, JS, fonts, images (embedded at build time)
+├── templates/                    # Askama templates: base.html → layout.html (admin) | public.html;
+│                                 # partials/ holds fragments included by several pages
+├── static/                       # CSS, JS, fonts (embedded at build time)
 ├── tests/                        # Integration tests against the real router
 ├── Dockerfile                    # musl static binary on distroless/static, non-root
 ├── compose.yaml                  # Deployment example
@@ -229,14 +233,49 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `history_retention_days ≥ checks_retention_days`.
 - **Changing the timezone** (from the settings page) resumes the rollup from the last day key: the first day
   in the new zone overlaps the last one (moving east) or leaves hours out (moving west).
-- **Dashboard.** One query for monitors and states (no body or headers), one for the 24 hourly bars of all monitors.
-  Bars: gray without checks, green, orange with failures but no downtime, red with downtime. Uptime is truncated,
-  never rounded up to 100 %.
-- **Detail page.** 24 h and 30 d uptime, 24 h average latency, certificate expiry, 24 hourly and 90 daily bars (daily
-  stats, then raw checks for the days not rolled up yet), last 20 incidents and checks.
+- **Dashboard.** One query for monitors and states (no body or headers), one for the 24 hourly bars of all monitors
+  (`?range=90d`: the 90 daily bars, through `DailyHistory::load_many`). Monitors are listed down first, then pending,
+  up and paused, by name within each group; a sentence on top names the down ones. Every row shares one time axis.
+  Bars (`Tick::class`): a dot without checks, short green, mid-height orange with failures but no downtime, red with
+  downtime, full height once it reaches a tenth of the bar's time. Uptime is truncated, never rounded up to 100 %.
+- **Detail page.** A status sentence (from `monitor_state` and the latest incident), 24 h and 30 d uptime, 24 h average
+  latency, days left on the certificate, 24 hourly bars with the hourly average latency drawn as an inline SVG under
+  them, 90 daily bars (daily stats, then raw checks for the days not rolled up yet), the last 20 incidents unfolded
+  like on the Activity page, the last 20 checks, then the configuration.
 - **Live refresh.** `static/js/live.js` refetches the page every 30 s while the tab is visible and swaps the elements
-  marked `data-live` (each with an id); a redirect (expired session) reloads the page. No extra route or JSON.
-- **Search.** `static/js/search.js` filters the cards on `data-search` (name and URL), ignoring case and accents.
+  marked `data-live` (each with an id) whose content changed, keeping the focused link or summary and the `<details>`
+  the user opened or closed (by id). A changed status sentence (`data-announce`) is read out by a polite live region,
+  nothing else. A redirect (expired session) reloads the page. No extra route or JSON.
+- **Search.** `static/js/search.js` filters the rows on `data-search` (name and URL), ignoring case and accents.
+
+## Activity
+
+`GET /activity` lists, latest first and grouped by local day, the incidents started in the period, the failed checks
+that did not count as downtime (`ok = 0 AND NOT down`, minus the first failure of each incident) and the last
+certificate warning of each monitor (`monitor_state.tls_warned_at`). Filters are query parameters read leniently
+(anything unexpected falls back to the default): `type` (`outages`, `checks`, `certificates`), `monitor`, `days` (7,
+30 or 90) and `before`, the cursor of the next page: `time-source-id`, since events sort by time, then source, then
+id, so two events logged in the same millisecond never fall between pages. A page holds 50 events: each source is
+read with `LIMIT 51`, then merged. An incident unfolds (`<details>`, no JS) to its facts, its last 10 failed checks
+with their count (one query, `COUNT(*) OVER ()`) and the alerts logged for it: its down alert before the next incident
+of the monitor starts, its up alert within 5 min of its end and before the next incident ends. Failed checks and
+alerts follow the checks retention: older incidents only show their facts.
+
+## Look
+
+- **Theme.** One stylesheet of tokens (`static/css/style.css`): an enamel grey-green ground, plates for panels, round
+  status lamps (hollow when paused). The dark palette replaces the tokens under `prefers-color-scheme: dark`: the
+  system theme decides, there is no switch.
+- **Fonts.** Barlow (text) and Barlow Semi Condensed (titles), self-hosted woff2 under the SIL Open Font License
+  (`static/fonts/OFL.txt`), tabular figures everywhere.
+- **Traces.** The height of a bar tells the state, its colour only confirms it, so the bars read without colour.
+  Their tooltip is CSS (`data-tip`), a mouse convenience: the detail page lists the same figures in an *Hourly
+  figures* table, and dashboard rows hide the trace from screen readers (the row reads name, state, uptime and
+  response). Anything drawn at a computed size is SVG geometry (the latency chart), never a `style` attribute, which
+  the CSP forbids.
+- **Accessibility.** Colour pairs meet WCAG AA in both palettes (4.5:1 for text, 3:1 for lamps and bars); a state is
+  always written out next to its lamp, except *Up* (visually hidden).
+- **Menu.** A page marks its menu entry by filling the matching `nav_*` block of `layout.html`.
 
 ## Public pages
 
@@ -246,7 +285,8 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   the form's order, by name). Stored positions are renumbered from 0. `/public-pages/{id}/preview` shows the page,
   published or not, never cached.
 - **Public** (`GET /status/{slug}`, no session). An unpublished page is a 404, like an unknown slug. It shows the
-  overall state (*Some systems are down* when a monitor that is not paused is down), then per monitor its display
+  overall state as a sentence naming what is down (*Billing is down*, *2 services are down*, *All services are
+  running*; paused monitors are ignored), then per monitor its display
   name, status, 90 daily bars and 90-day uptime, then the last 10 incidents open at some point in the last 90 days, open
   ones first, with their start and duration. A monitor's URL, errors and incident causes are never shown: they can reveal
   internal hosts. `live.js` refreshes it like the admin pages.

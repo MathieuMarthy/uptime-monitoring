@@ -135,10 +135,10 @@ async fn daily_history_of_several_monitors() {
         .unwrap();
     let ha = &many[&a];
     let classes: Vec<_> = ha.bars.ticks[87..].iter().map(|t| t.class).collect();
-    assert_eq!(classes, ["tick-gray", "tick-red", "tick-green"]);
+    assert_eq!(classes, ["tick-none", "tick-down", "tick-up"]);
     assert_eq!(ha.uptime_90d, "90.16%");
     assert_eq!(ha.uptime_30d, ha.uptime_90d);
-    assert!(many[&b].bars.ticks.iter().all(|t| t.class == "tick-gray"));
+    assert!(many[&b].bars.ticks.iter().all(|t| t.class == "tick-none"));
     assert_eq!(many[&b].uptime_90d, "—");
 
     let one = DailyHistory::load(&pool, a, &tz, T0).await.unwrap();

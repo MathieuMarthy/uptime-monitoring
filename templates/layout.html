@@ -1,25 +1,23 @@
-{# Pages of the logged-in admin. The template struct must provide `csrf_token`. #}
+{# Pages of the logged-in admin. The template struct must provide `csrf_token`. A page marks its
+   menu entry by filling the matching `nav_*` block with `aria-current="page"`. #}
 {% extends "base.html" %}
 
 {% block body %}
-<header>
-    <div>
-        <a href="/" class="header-logo" aria-label="Uptime Monitoring Home">
-            <img alt="Uptime Monitoring logo" height="46" src="/static/images/icon.svg"/>
-        </a>
-        <nav aria-label="Main navigation">
-            <a href="/">Monitors</a>
-            <a href="/public-pages">Public pages</a>
-            <a href="/alerts">Alerts</a>
+<header class="site-header">
+    <div class="site-header-group">
+        <a href="/" class="brand"><span class="lamp lamp-up" aria-hidden="true"></span>Uptime Monitoring</a>
+        <nav class="site-nav" aria-label="Main navigation">
+            <a href="/" {% block nav_monitors %}{% endblock %}>Monitors</a>
+            <a href="/activity" {% block nav_activity %}{% endblock %}>Activity</a>
+            <a href="/public-pages" {% block nav_public_pages %}{% endblock %}>Public pages</a>
+            <a href="/alerts" {% block nav_alerts %}{% endblock %}>Alerts</a>
         </nav>
     </div>
-    <div>
-        <a href="/settings" class="header-settings" aria-label="Settings">
-            <img alt="" aria-hidden="true" height="32" src="/static/images/settings.svg"/>
-        </a>
+    <div class="site-header-group">
+        <a href="/settings" class="header-link" {% block nav_settings %}{% endblock %}>Settings</a>
         <form action="/logout" method="POST" class="inline-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="button-secondary" type="submit">Log out</button>
+            <button class="button-secondary button-small" type="submit">Log out</button>
         </form>
     </div>
 </header>
