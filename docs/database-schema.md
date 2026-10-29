@@ -40,7 +40,8 @@ erDiagram
 | Column | Type | Constraints / default | Notes |
 |---|---|---|---|
 | `id` | INTEGER | PK | |
-| `name` | TEXT | NOT NULL UNIQUE COLLATE NOCASE | |
+| `name` | TEXT | NOT NULL | |
+| `name_key` | TEXT | NOT NULL UNIQUE | Unicode lowercase of `name`, computed by the application: uniqueness and sort order (`COLLATE NOCASE` only folds ASCII) |
 | `kind` | TEXT | NOT NULL DEFAULT `'http'`, CHECK IN (`'http'`) | extension point for future check types |
 | `url` | TEXT | NOT NULL | |
 | `method` | TEXT | NOT NULL DEFAULT `'GET'`, CHECK IN (GET, HEAD, POST, PUT, PATCH, DELETE) | |
@@ -72,7 +73,9 @@ open incident, in the same transaction.
 monitor is a contiguous range scan.
 
 `monitor_id`, `checked_at`, `ok` (verdict computed by the engine — the single source of truth), `latency_ms` (NULL
-without a response), `status_code`, `error_kind` (`timeout`, `dns`, `blocked`, `connect`, `tls`, `status`, `keyword`), `error`.
+without a response), `status_code`, `error_kind` (`timeout`, `dns`, `blocked`, `connect`, `tls`, `status`, `keyword`), `error`,
+`covered_ms` (time since the previous check, 0 when that gap exceeds 2 × `interval_s`), `down` (that time was
+downtime: an incident was open when the check was recorded, or opened later from a failure before it).
 
 ### `incidents` — outage periods, long retention
 
@@ -86,8 +89,9 @@ open incident per monitor.
 `WITHOUT ROWID`, PK `(monitor_id, day)`. `day` is the local date of the instance timezone, encoded `YYYYMMDD`.
 Columns: `monitored_ms`, `downtime_ms`, `checks_total`, `checks_failed`, `latency_avg_ms`, `latency_p95_ms`.
 
-**Uptime** = `1 − downtime / monitored time`. Each check covers the time since the previous check, capped at
-2 × interval, so paused periods and application downtime are excluded from monitored time.
+**Uptime** = `1 − downtime / monitored time`, summed from `checks.covered_ms` and `checks.down`. A gap longer than
+2 × interval covers nothing, so paused periods and application downtime are excluded from monitored time. Days are
+rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
 
 ### Alerts
 

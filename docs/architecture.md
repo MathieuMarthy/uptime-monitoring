@@ -13,6 +13,8 @@ This document describes the project structure and conventions used in uptime-mon
   certificates are verified against the system store
 - **[rust-embed](https://github.com/pyrossh/rust-embed)** — Static assets embedded in the binary
 - **[Tokio](https://tokio.rs/)** — Async runtime
+- **[jiff](https://github.com/BurntSushi/jiff)** — Timezones, with the tz database embedded (the image needs no
+  `/usr/share/zoneinfo`)
 
 The release binary is self-contained: templates are compiled in, migrations and static assets are embedded. It runs
 from any working directory.
@@ -31,7 +33,8 @@ uptime-monitoring/
 │   ├── auth/                     # Argon2 hashing, random tokens, session cookie
 │   │   └── rate_limit.rs         # In-memory limit on failed logins per IP
 │   ├── middleware.rs             # require_session (session + CSRF), security headers
-│   ├── time.rs                   # now_ms()
+│   ├── time.rs                   # now_ms(), local days and hours, date formatting
+│   ├── maintenance.rs            # Hourly upkeep: daily rollups, then purges
 │   ├── assets.rs                 # /static/* served from embedded files
 │   ├── db.rs                     # SQLite pool (WAL, foreign keys) + migrations
 │   ├── state.rs                  # AppState: pool, setup token, login limiter, hashing semaphore, engine handle
@@ -44,17 +47,20 @@ uptime-monitoring/
 │   ├── models/                   # Entities and their SQL queries
 │   │   ├── admin.rs              # The single admin account
 │   │   ├── check.rs              # Raw check results
+│   │   ├── daily_stat.rs         # Daily rollups
 │   │   ├── incident.rs           # Outage periods
 │   │   ├── monitor.rs            # Monitor configuration + CRUD
 │   │   ├── monitor_state.rs      # Runtime state; record() writes a check, its state and incident
 │   │   ├── session.rs            # Login sessions (token stored as SHA-256)
-│   │   └── settings.rs           # The single settings row
+│   │   ├── settings.rs           # The single settings row
+│   │   └── stats.rs              # Bucket: availability summed over a time bucket
 │   ├── forms/
 │   │   ├── auth.rs               # SetupForm, LoginForm
 │   │   └── monitor.rs            # MonitorForm (raw strings) → MonitorInput | FieldErrors
 │   ├── views/                    # Askama template structs and view models
 │   │   ├── auth.rs
 │   │   ├── errors.rs
+│   │   ├── heartbeat.rs          # Hourly and daily bars, uptime labels
 │   │   └── monitors.rs
 │   └── routes/                   # Handlers, grouped by domain
 │       ├── mod.rs                # Router assembly (public / protected) + parse_id()
@@ -148,6 +154,26 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `error_kind = blocked`. The flag is read at startup (`Guard::set_block_private` changes it at runtime).
 - **Certificates.** Verified against the system store (`rustls-platform-verifier`): the Docker image needs
   `ca-certificates`, and an internal CA added to the host store is trusted.
+
+## Data and pages
+
+- **Uptime.** Each check stores the time it covers (`covered_ms`: the gap since the previous check, 0 beyond twice
+  the interval) and whether that time was downtime (`down`: an incident was open; opening an incident also marks the
+  checks of its failure series). Uptime over any window is then `1 − Σ down covered / Σ covered`, one `GROUP BY` on
+  the checks (`models::Bucket`): about 35 ms for 100 monitors over 24 h.
+- **Local time.** Days and hours are those of `settings.timezone`, read on each request; unknown names fall back to UTC.
+- **Maintenance** (`maintenance.rs`, at startup then hourly). Rolls every completed day (5 min after local
+  midnight) since the last one rolled up into `daily_stats`, with a nearest-rank p95 latency; then deletes checks and
+  the notification log older than `checks_retention_days`, resolved incidents and daily stats older than
+  `history_retention_days` (if set), and expired sessions. Rollup runs first, so no day is lost to the purge.
+- **Dashboard.** One query for monitors and states (no body or headers), one for the 24 hourly bars of all monitors.
+  Bars: gray without checks, green, orange with failures but no downtime, red with downtime. Uptime is truncated,
+  never rounded up to 100 %.
+- **Detail page.** 24 h and 30 d uptime, 24 h average latency, certificate expiry, 24 hourly and 90 daily bars (daily
+  stats, then raw checks for the days not rolled up yet), last 20 incidents and checks.
+- **Live refresh.** `static/js/live.js` refetches the page every 30 s while the tab is visible and swaps the elements
+  marked `data-live` (each with an id); a redirect (expired session) reloads the page. No extra route or JSON.
+- **Search.** `static/js/search.js` filters the cards on `data-search` (name and URL), ignoring case and accents.
 
 ## Tests
 
