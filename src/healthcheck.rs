@@ -35,9 +35,17 @@ async fn request(addr: SocketAddr) -> Result<(), String> {
         .write_all(b"GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n")
         .await
         .map_err(|e| e.to_string())?;
-    let mut head = [0u8; 64];
-    let read = stream.read(&mut head).await.map_err(|e| e.to_string())?;
-    let status_line = String::from_utf8_lossy(&head[..read]);
+    // The status line may arrive in several reads; it fits well within 64 bytes.
+    let mut head = Vec::with_capacity(64);
+    let mut buf = [0u8; 64];
+    while head.len() < 64 && !head.contains(&b'\n') {
+        let read = stream.read(&mut buf).await.map_err(|e| e.to_string())?;
+        if read == 0 {
+            break;
+        }
+        head.extend_from_slice(&buf[..read]);
+    }
+    let status_line = String::from_utf8_lossy(&head);
     let status_line = status_line.lines().next().unwrap_or_default();
     match status_line.split(' ').nth(1) {
         Some("200") => Ok(()),

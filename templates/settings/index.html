@@ -56,7 +56,7 @@
 
     <div class="form-card">
         <form action="/settings/data" method="POST" class="form-section" id="data-settings"
-              data-checks-per-day="{{ self.checks_per_day() }}" data-monitors="{{ storage.monitors }}">
+              data-checks-per-day="{{ storage.checks_per_day }}" data-monitors="{{ storage.monitors }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <h2 class="section-title">Data and Security</h2>
             <div class="form-row">

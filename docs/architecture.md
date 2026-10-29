@@ -127,7 +127,8 @@ uptime-monitoring/
 
 An invalid value stops startup with a message.
 
-`PUBLIC_URL` is an http(s) base without query, fragment or credentials; the trailing `/` is dropped. When set,
+`PUBLIC_URL` is an http(s) origin, without path (routes are root-absolute, so no sub-path deployment), query,
+fragment or credentials; the trailing `/` is dropped. When set,
 alerts link to `{PUBLIC_URL}/monitors/{id}` and the first-launch setup URL is printed in full.
 
 `TRUST_PROXY_HEADERS=true` takes the client IP (used by the login rate limit) from the last `X-Forwarded-For` entry,
@@ -285,8 +286,9 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **SQLite memory.** 512 KiB of page cache per connection (5 connections): with 100 monitors and a week of checks,
   about 5 MiB less RSS than SQLite's 2 MiB default, for the same dashboard time.
 - **CI** (`.github/workflows/ci.yml`). On every push to `main` and pull request: `cargo fmt --check`, clippy with
-  `-D warnings`, tests. On a `v*` tag, the image is built and pushed to `ghcr.io/<owner>/uptime-monitoring` with the
-  version, `major.minor` and `latest` tags.
+  `-D warnings`, tests, and an image build without push. On a `v*` tag, the image is built and pushed to
+  `ghcr.io/<owner>/uptime-monitoring` with the version and `major.minor` tags, plus `latest` for a version that is not
+  a pre-release.
 
 ## Tests
 

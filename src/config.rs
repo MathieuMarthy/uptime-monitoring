@@ -39,8 +39,8 @@ impl Config {
             None | Some("") => None,
             Some(raw) => Some(public_url(raw).ok_or_else(|| {
                 format!(
-                    "PUBLIC_URL must be an http(s) URL such as https://status.example.com, without query, \
-                     fragment or credentials, got {raw:?}"
+                    "PUBLIC_URL must be an http(s) URL such as https://status.example.com, without path, \
+                     query, fragment or credentials, got {raw:?}"
                 )
             })?),
         };
@@ -60,6 +60,7 @@ fn public_url(raw: &str) -> Option<String> {
         && url.host().is_some()
         && url.username().is_empty()
         && url.password().is_none()
+        && url.path() == "/"
         && url.query().is_none()
         && url.fragment().is_none();
     plain.then(|| url.as_str().trim_end_matches('/').to_string())
@@ -104,11 +105,8 @@ mod tests {
             Some("https://status.example.com")
         );
         assert_eq!(
-            with("http://10.0.0.2:8080/uptime")
-                .unwrap()
-                .public_url
-                .as_deref(),
-            Some("http://10.0.0.2:8080/uptime")
+            with("http://10.0.0.2:8080").unwrap().public_url.as_deref(),
+            Some("http://10.0.0.2:8080")
         );
         for bad in [
             "status.example.com",
@@ -116,6 +114,8 @@ mod tests {
             "https://example.com/?a=1",
             "https://example.com/#x",
             "https://user:pw@example.com",
+            // Routes and assets are root-absolute: no sub-path deployment.
+            "https://example.com/uptime",
         ] {
             assert!(with(bad).unwrap_err().contains("PUBLIC_URL"), "{bad}");
         }

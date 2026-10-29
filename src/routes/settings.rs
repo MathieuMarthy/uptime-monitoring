@@ -115,6 +115,7 @@ async fn change_password(
     }
     let admin = Admin::find(&state.db).await?.ok_or(AppError::NotFound)?;
     let current = form.current_password.clone();
+    let verified_hash = admin.password_hash.clone();
     let current_ok = with_password_hashing(&state, move || {
         verify_password(&current, &admin.password_hash)
     })
@@ -134,7 +135,10 @@ async fn change_password(
     let hash = with_password_hashing(&state, move || hash_password(&password))
         .await?
         .map_err(|e| AppError::Internal(e.to_string().into()))?;
-    Admin::change_password(&state.db, &hash, &session.token_hash).await?;
+    if !Admin::change_password(&state.db, &verified_hash, &hash, &session.token_hash).await? {
+        // Another change ended this session or replaced the password first.
+        return Ok(Redirect::to("/login").into_response());
+    }
     tracing::info!("Admin password changed; other sessions ended.");
     Ok(Redirect::to("/settings?saved=password").into_response())
 }

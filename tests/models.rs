@@ -110,3 +110,39 @@ async fn find_all_sorted_case_insensitively() {
         .collect();
     assert_eq!(names, ["Alpha", "beta"]);
 }
+
+#[tokio::test]
+async fn password_change_is_refused_when_the_hash_or_session_changed() {
+    use uptime_monitoring::auth::sha256_hex;
+    use uptime_monitoring::models::{Admin, Session};
+    let pool = common::test_app().await.1;
+    let mine = Session::create(&pool).await.unwrap();
+    let mine_hash = sha256_hex(&mine.token);
+
+    // Another change already replaced the hash this request verified.
+    assert!(
+        !Admin::change_password(&pool, "stale-hash", "new-hash", &mine_hash)
+            .await
+            .unwrap()
+    );
+    // This request's session was ended meanwhile.
+    assert!(
+        !Admin::change_password(&pool, "not-a-real-hash", "new-hash", "gone")
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        Admin::find(&pool).await.unwrap().unwrap().password_hash,
+        "not-a-real-hash"
+    );
+
+    assert!(
+        Admin::change_password(&pool, "not-a-real-hash", "new-hash", &mine_hash)
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        Admin::find(&pool).await.unwrap().unwrap().password_hash,
+        "new-hash"
+    );
+}

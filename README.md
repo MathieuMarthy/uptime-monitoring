@@ -26,6 +26,9 @@ docker run -d --name uptime-monitoring \
 docker logs uptime-monitoring   # prints the one-time setup URL
 ```
 
+With a bind mount (`-v ./data:/data`) instead of a named volume, the directory must belong to the image's user:
+`sudo chown 65532:65532 ./data`.
+
 Open the setup URL from the logs to create the admin account. Until then, the instance only shows a page
 pointing to the logs, so nobody else can claim it. A `compose.yaml` example is in the repository.
 

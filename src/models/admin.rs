@@ -46,22 +46,36 @@ impl Admin {
         tx.commit().await
     }
 
-    /// Replaces the password and ends every session except `keep_token_hash`, atomically.
+    /// Replaces `verified_hash` by `new_hash` and ends every session except `keep_token_hash`,
+    /// atomically. `false`, and nothing changed, when the hash is no longer the one the caller
+    /// verified or its session was ended meanwhile: a concurrent change won.
     pub async fn change_password(
         pool: &SqlitePool,
-        password_hash: &str,
+        verified_hash: &str,
+        new_hash: &str,
         keep_token_hash: &str,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<bool, sqlx::Error> {
         let mut tx = pool.begin().await?;
-        sqlx::query("UPDATE admin SET password_hash = ?, updated_at = ? WHERE id = 1")
-            .bind(password_hash)
-            .bind(now_ms())
-            .execute(&mut *tx)
-            .await?;
+        let updated = sqlx::query(
+            "UPDATE admin SET password_hash = ?, updated_at = ?
+             WHERE id = 1 AND password_hash = ?
+               AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?)",
+        )
+        .bind(new_hash)
+        .bind(now_ms())
+        .bind(verified_hash)
+        .bind(keep_token_hash)
+        .execute(&mut *tx)
+        .await?
+        .rows_affected();
+        if updated == 0 {
+            return Ok(false);
+        }
         sqlx::query("DELETE FROM sessions WHERE token_hash <> ?")
             .bind(keep_token_hash)
             .execute(&mut *tx)
             .await?;
-        tx.commit().await
+        tx.commit().await?;
+        Ok(true)
     }
 }
