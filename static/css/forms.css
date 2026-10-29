@@ -38,6 +38,19 @@
     gap: 10px;
 }
 
+/* Success message banner */
+.success-banner {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid var(--text-color-green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: #6EE7B7;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 /* Form card */
 .form-card {
     background: var(--background-secondary);

@@ -9,6 +9,7 @@ pub mod message;
 
 use crate::engine::guard::Guard;
 use crate::models::{Channel, Delivery, NotificationLog, Settings};
+use crate::notify::channel::ChannelConfig;
 use crate::notify::message::Message;
 use crate::time::now_ms;
 use jiff::tz::TimeZone;
@@ -124,26 +125,23 @@ impl Notifier {
         }
     }
 
-    /// Sends a test message to the channel, once, and logs the result.
-    pub async fn send_test(&self, pool: &SqlitePool, channel: &Channel) -> Result<(), sqlx::Error> {
+    /// Sends a test message once, to a channel that may not be saved yet. Not logged: the
+    /// form shows the result.
+    pub async fn send_test(&self, config: &ChannelConfig) -> Result<(), String> {
         let notification = Notification {
             monitor: None,
             event: Event::Test,
             at: now_ms(),
         };
         let message = Message::new(&notification, &TimeZone::UTC);
-        let result = self.sender.attempt(channel, &notification, &message).await;
-        log_delivery(
-            pool,
-            channel,
-            &notification,
-            result.err().map(|e| e.message),
-        )
-        .await
+        self.sender
+            .attempt(config, &notification, &message)
+            .await
+            .map_err(|e| e.message)
     }
 }
 
-/// Sends requests; shared by the dispatcher and the alerts page.
+/// Sends requests; shared by the dispatcher and the channel form.
 struct Sender {
     guard: Guard,
     retry_delays: Vec<Duration>,
@@ -192,12 +190,15 @@ impl Sender {
         notification: &Notification,
         message: &Message,
     ) -> Result<(), String> {
+        let config = channel
+            .parsed_config()
+            .map_err(|e| format!("invalid channel configuration: {e}"))?;
         let mut last = String::new();
         for delay in &self.retry_delays {
             tokio::time::sleep(*delay).await;
             let result = {
                 let _permit = permits.acquire().await.expect("semaphore never closed");
-                self.attempt(channel, notification, message).await
+                self.attempt(&config, notification, message).await
             };
             match result {
                 Ok(()) => return Ok(()),
@@ -210,14 +211,10 @@ impl Sender {
 
     async fn attempt(
         &self,
-        channel: &Channel,
+        config: &ChannelConfig,
         notification: &Notification,
         message: &Message,
     ) -> Result<(), SendError> {
-        let config = channel.parsed_config().map_err(|e| SendError {
-            message: format!("invalid channel configuration: {e}"),
-            retry: false,
-        })?;
         let url = Url::parse(config.target()).map_err(|_| SendError {
             message: "invalid URL".to_string(),
             retry: false,

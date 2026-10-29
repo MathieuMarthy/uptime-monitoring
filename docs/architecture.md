@@ -184,8 +184,9 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `block_private_targets`, private destinations are refused like check targets). Webhook: JSON
   `{event, monitor: {id, name, url} | null, title, message, at}`. Discord: one embed coloured by severity. ntfy: JSON
   publishing to the server root (`topic`, `title`, `message`, `priority` 4 for down, `tags`), bearer token if set.
-- **UI.** `/alerts` lists channels (monitor count, last delivery) and the last 50 deliveries; *Test* sends once and
-  waits. The ntfy token is never sent back to the browser: left blank, the stored one is kept, unless the server changed. Monitors pick their
+- **UI.** `/alerts` lists channels (monitor count, last delivery) and the last 50 deliveries. The channel form's
+  *Send Test* button (`…/new/test`, `…/{id}/edit/test`) sends the channel as typed, once, without saving or logging
+  it, and shows the form again with the result; a typed ntfy token is kept in the field. The ntfy token is never sent back to the browser: left blank, the stored one is kept, unless the server changed. Monitors pick their
   channels in their form (checkboxes `channel_<id>`, gathered by `MonitorForm::other`); a new monitor starts with
   every enabled channel checked.
 

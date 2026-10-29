@@ -18,9 +18,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/alerts", get(index))
         .route("/alerts/new", get(new_form).post(create))
+        .route("/alerts/new/test", post(test_new))
         .route("/alerts/{id}/edit", get(edit_form).post(update))
+        .route("/alerts/{id}/edit/test", post(test_edit))
         .route("/alerts/{id}/delete", post(delete))
-        .route("/alerts/{id}/test", post(test))
 }
 
 async fn index(
@@ -116,13 +117,45 @@ async fn delete(State(state): State<AppState>, PathId(id): PathId) -> Result<Red
     }
 }
 
-/// Sends a test message and waits for the result, which the delivery log then shows.
-async fn test(State(state): State<AppState>, PathId(id): PathId) -> Result<Redirect, AppError> {
-    let channel = Channel::find(&state.db, id)
-        .await?
-        .ok_or(AppError::NotFound)?;
-    state.notifier.send_test(&state.db, &channel).await?;
-    Ok(Redirect::to("/alerts"))
+/// The "Send Test" button of the add form: tries the channel as typed, without saving it.
+async fn test_new(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    form: Result<Form<ChannelForm>, FormRejection>,
+) -> Result<FormTemplate, AppError> {
+    let form = form_or_invalid(form)?;
+    Ok(test_page(&state, None, form, session.csrf_token, None).await)
+}
+
+/// The "Send Test" button of the edit form; a blank ntfy token tests the stored one.
+async fn test_edit(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    PathId(id): PathId,
+    form: Result<Form<ChannelForm>, FormRejection>,
+) -> Result<FormTemplate, AppError> {
+    let (_, existing) = load(&state, id).await?;
+    let form = form_or_invalid(form)?;
+    Ok(test_page(&state, Some(id), form, session.csrf_token, Some(&existing)).await)
+}
+
+/// Sends a test message when the form is valid, and shows the form again with the result.
+async fn test_page(
+    state: &AppState,
+    id: Option<i64>,
+    form: ChannelForm,
+    csrf_token: String,
+    existing: Option<&ChannelConfig>,
+) -> FormTemplate {
+    match form.validate(existing) {
+        Ok(input) => {
+            let result = state.notifier.send_test(&input.config).await;
+            let mut page = page(id, form, FieldErrors::new(), csrf_token, existing);
+            page.test_result = Some(result);
+            page
+        }
+        Err(errors) => page(id, form, errors, csrf_token, existing),
+    }
 }
 
 async fn load(state: &AppState, id: i64) -> Result<(Channel, ChannelConfig), AppError> {
@@ -153,6 +186,7 @@ fn page(
         },
         channel_id: id,
         has_token,
+        test_result: None,
     }
 }
 

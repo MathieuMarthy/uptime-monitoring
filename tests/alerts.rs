@@ -20,9 +20,13 @@ fn webhook(name: &str, url: &str) -> String {
 }
 
 fn ntfy(name: &str, token: &str) -> String {
+    ntfy_at(name, "https://ntfy.sh", token)
+}
+
+fn ntfy_at(name: &str, server: &str, token: &str) -> String {
     format!(
         "name={name}&kind=ntfy&ntfy_server={}&ntfy_topic=alerts&ntfy_token={token}&enabled=on",
-        encode("https://ntfy.sh")
+        encode(server)
     )
 }
 
@@ -121,22 +125,71 @@ async fn delete_removes_the_channel() {
     );
 }
 
-#[tokio::test]
-async fn test_button_sends_and_logs() {
-    let (app, pool) = common::test_app().await;
+async fn hook() -> String {
     let hook = Router::new().route("/hook", post(|| async { "ok" }));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/hook", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, hook).await.unwrap() });
+    url
+}
 
-    post_form(&app, "/alerts/new", &webhook("Ops", &url)).await;
+#[tokio::test]
+async fn form_tests_the_unsaved_channel() {
+    let (app, pool) = common::test_app().await;
+    let url = hook().await;
+    let r = post_form(&app, "/alerts/new/test", &webhook("Ops", &url)).await;
+    assert_eq!(r.status, 200);
+    assert!(r.body.contains("Test message sent."), "{}", r.body);
+    assert!(r.body.contains(&format!(r#"value="{url}""#)), "values kept");
+    assert!(channels(&pool).await.is_empty(), "nothing saved");
+
+    let r = post_form(
+        &app,
+        "/alerts/new/test",
+        &webhook("Ops", "http://127.0.0.1:9/hook"),
+    )
+    .await;
+    assert!(r.body.contains("Test failed:"), "{}", r.body);
+
+    let r = post_form(&app, "/alerts/new/test", &webhook("Ops", "nope")).await;
+    assert!(r.body.contains(r#"class="field-error""#));
+}
+
+#[tokio::test]
+async fn edit_form_test_uses_the_stored_token_and_keeps_a_typed_one() {
+    let (app, pool) = common::test_app().await;
+    let server = hook().await;
+    post_form(&app, "/alerts/new", &ntfy_at("Phone", &server, "tk_secret")).await;
     let id = channels(&pool).await[0].id;
-    assert_redirect(
-        &post_form(&app, &format!("/alerts/{id}/test"), "").await,
-        "/alerts",
+    let r = post_form(
+        &app,
+        &format!("/alerts/{id}/edit/test"),
+        &ntfy_at("Phone", &server, ""),
+    )
+    .await;
+    assert_eq!(r.status, 200);
+    assert!(r.body.contains("Test message sent."), "{}", r.body);
+    assert!(
+        !r.body.contains("tk_secret"),
+        "the stored token stays hidden"
     );
-    let r = get(&app, "/alerts").await;
-    assert!(r.body.contains("Sent"), "{}", r.body);
+
+    let r = post_form(
+        &app,
+        &format!("/alerts/{id}/edit/test"),
+        &ntfy_at("Phone", &server, "tk_typed"),
+    )
+    .await;
+    assert!(
+        r.body.contains(r#"value="tk_typed""#),
+        "the typed token survives"
+    );
+    assert_eq!(
+        post_form(&app, "/alerts/77/edit/test", &ntfy("P", ""))
+            .await
+            .status,
+        404
+    );
 }
 
 #[tokio::test]
@@ -145,7 +198,6 @@ async fn unknown_channels_are_404() {
     for uri in ["/alerts/7/edit", "/alerts/x/edit", "/alerts/0/edit"] {
         assert_eq!(get(&app, uri).await.status, 404, "{uri}");
     }
-    assert_eq!(post_form(&app, "/alerts/7/test", "").await.status, 404);
     let body = webhook("Ops", "https://hooks.example.com/x");
     assert_eq!(post_form(&app, "/alerts/7/edit", &body).await.status, 404);
 }

@@ -21,6 +21,18 @@
         <p class="form-subtitle">Where alerts are sent: any webhook, a Discord channel or an ntfy topic.</p>
     </div>
 
+    {% match test_result %}
+    {% when Some(Ok(())) %}
+    <div class="success-banner" role="status">
+        <span>Test message sent.{% if !self.is_edit() %} The channel is not saved yet.{% endif %}</span>
+    </div>
+    {% when Some(Err(error)) %}
+    <div class="error-banner" role="alert">
+        <span>Test failed: {{ error }}</span>
+    </div>
+    {% when None %}
+    {% endmatch %}
+
     {% if !errors.is_empty() %}
     <div class="error-banner" role="alert">
         <span>Please fix the {{ errors.len() }} highlighted field(s).</span>
@@ -83,7 +95,7 @@
                 <div class="form-group">
                     <label class="form-label" for="ntfy_token">Access Token</label>
                     <input class="form-input" id="ntfy_token" name="ntfy_token" type="password" autocomplete="off"
-                           placeholder="{% if has_token %}Stored, leave empty to keep it{% else %}Optional{% endif %}"/>
+                           value="{{ form.ntfy_token }}" placeholder="{% if has_token %}Stored, leave empty to keep it{% else %}Optional{% endif %}"/>
                     <span class="form-hint">For a protected topic.</span>
                     {% call field_error("ntfy_token") %}{% endcall %}
                 </div>
@@ -114,6 +126,7 @@
                     <button class="button-primary" type="submit">
                         {% if self.is_edit() %}Save Changes{% else %}Add Channel{% endif %}
                     </button>
+                    <button class="button-secondary" type="submit" formaction="{{ action_url }}/test">Send Test</button>
                     <a class="button-secondary" href="/alerts">Cancel</a>
                 </div>
             </div>

@@ -10,7 +10,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use uptime_monitoring::engine::guard::Guard;
 use uptime_monitoring::forms::monitor::MonitorForm;
-use uptime_monitoring::models::{Channel, Monitor, NotificationLog};
+use uptime_monitoring::models::{Monitor, NotificationLog};
+use uptime_monitoring::notify::channel::{ChannelConfig, WebhookConfig};
 use uptime_monitoring::notify::{Event, MonitorRef, Notification, Notifier};
 
 struct Received {
@@ -241,34 +242,19 @@ async fn only_enabled_linked_channels_are_used() {
 }
 
 #[tokio::test]
-async fn private_targets_are_refused_when_blocked() {
+async fn tests_send_once_without_logging_and_respect_the_guard() {
     let pool = common::test_app().await.1;
     let (url, mut rx) = receiver(vec![]).await;
-    let id = channel(&pool, "webhook", serde_json::json!({ "url": url }), true).await;
-    let channel = Channel::find(&pool, id).await.unwrap().unwrap();
+    let config = ChannelConfig::Webhook(WebhookConfig { url });
 
     let blocking = Notifier::start(pool.clone(), Guard::new(true));
-    blocking.send_test(&pool, &channel).await.unwrap();
-    let log = NotificationLog::recent(&pool, 50).await.unwrap();
-    assert!(!log[0].ok);
-    assert!(
-        log[0].error.as_deref().unwrap().contains("127.0.0.1"),
-        "{:?}",
-        log[0].error
-    );
+    let error = blocking.send_test(&config).await.unwrap_err();
+    assert!(error.contains("127.0.0.1"), "{error}");
     assert!(rx.try_recv().is_err());
 
-    Notifier::default()
-        .send_test(&pool, &channel)
-        .await
-        .unwrap();
+    Notifier::default().send_test(&config).await.unwrap();
     assert_eq!(next(&mut rx).await.body["event"], "test");
-    let log = NotificationLog::recent(&pool, 50).await.unwrap();
-    assert!(log[0].ok);
-    assert_eq!(
-        (log[0].event.as_str(), log[0].monitor_name.as_deref()),
-        ("test", None)
-    );
+    assert!(NotificationLog::recent(&pool, 50).await.unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -99,6 +99,8 @@ pub struct FormTemplate {
     pub channel_id: Option<i64>,
     /// Editing an ntfy channel that has a token.
     pub has_token: bool,
+    /// After "Send Test": sent, or why not.
+    pub test_result: Option<Result<(), String>>,
 }
 
 impl FormTemplate {

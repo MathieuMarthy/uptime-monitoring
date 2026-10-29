@@ -44,10 +44,6 @@
                     {% when None %}<td class="text-muted">—</td>
                     {% endmatch %}
                     <td class="table-actions">
-                        <form action="/alerts/{{ channel.id }}/test" method="POST" class="inline-form">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                            <button class="button-secondary" type="submit">Test</button>
-                        </form>
                         <a class="button-secondary" href="/alerts/{{ channel.id }}/edit">Edit</a>
                     </td>
                 </tr>
