@@ -16,7 +16,7 @@ pub const HOURS: i64 = 24;
 
 /// Daily bars: today and the 89 days before it.
 pub const DAYS: i64 = 90;
-/// The daily uptime figure covers the last 30 bars.
+/// The 30-day uptime covers the last 30 bars.
 const UPTIME_DAYS: i64 = 30;
 
 /// One bar: its colour class and tooltip.
@@ -45,7 +45,16 @@ impl Heartbeat {
     ) -> Result<HashMap<i64, Self>, AppError> {
         let from = hourly_start(tz, now);
         let mut by_monitor: HashMap<i64, Vec<Bucket>> = HashMap::new();
-        for bucket in Bucket::query(pool, monitor_id, from, HOUR_MS, now + 1).await? {
+        let ids = monitor_id.map(|id| [id]);
+        for bucket in Bucket::query(
+            pool,
+            ids.as_ref().map(|i| i.as_slice()),
+            from,
+            HOUR_MS,
+            now + 1,
+        )
+        .await?
+        {
             by_monitor
                 .entry(bucket.monitor_id)
                 .or_default()
@@ -106,40 +115,52 @@ impl Heartbeat {
 pub struct DailyHistory {
     pub bars: Heartbeat,
     pub uptime_30d: String,
+    pub uptime_90d: String,
 }
 
 impl DailyHistory {
-    /// Rolled-up days, then the days not rolled up yet, from raw checks.
     pub async fn load(
         pool: &SqlitePool,
         monitor_id: i64,
         tz: &TimeZone,
         now: i64,
     ) -> Result<Self, AppError> {
+        let mut many = Self::load_many(pool, &[monitor_id], tz, now).await?;
+        Ok(many.remove(&monitor_id).expect("one history per monitor"))
+    }
+
+    /// One history per monitor: rolled-up days, then the days not rolled up yet, from raw
+    /// checks.
+    pub async fn load_many(
+        pool: &SqlitePool,
+        monitor_ids: &[i64],
+        tz: &TimeZone,
+        now: i64,
+    ) -> Result<HashMap<i64, Self>, AppError> {
         let today = day_of(tz, now);
         let first = today
             .checked_sub(Span::new().days(DAYS - 1))
             .unwrap_or(today);
         let index = |day: Date| first.until(day).map_or(0, |s| i64::from(s.get_days()));
 
-        let mut buckets: Vec<Bucket> = DailyStat::for_monitor(pool, monitor_id, day_key(first))
-            .await?
-            .into_iter()
-            .filter_map(|d| {
-                let day = day_from_key(d.day)?;
-                Some(Bucket {
-                    monitor_id,
-                    index: index(day),
-                    monitored_ms: d.monitored_ms,
-                    downtime_ms: d.downtime_ms,
-                    checks_total: d.checks_total,
-                    checks_failed: d.checks_failed,
-                    latency_avg_ms: d.latency_avg_ms,
-                    // Only weighs the average latency, which the daily bars do not show.
-                    latency_count: d.checks_total,
-                })
-            })
-            .collect();
+        let mut by_monitor: HashMap<i64, Vec<Bucket>> =
+            monitor_ids.iter().map(|&id| (id, Vec::new())).collect();
+        for d in DailyStat::for_monitors(pool, monitor_ids, day_key(first)).await? {
+            let Some(day) = day_from_key(d.day) else {
+                continue;
+            };
+            by_monitor.entry(d.monitor_id).or_default().push(Bucket {
+                monitor_id: d.monitor_id,
+                index: index(day),
+                monitored_ms: d.monitored_ms,
+                downtime_ms: d.downtime_ms,
+                checks_total: d.checks_total,
+                checks_failed: d.checks_failed,
+                latency_avg_ms: d.latency_avg_ms,
+                // Only weighs the average latency, which the daily bars do not show.
+                latency_count: d.checks_total,
+            });
+        }
 
         let mut day = match DailyStat::last_day(pool).await?.and_then(day_from_key) {
             Some(done) => done.tomorrow().unwrap_or(today).max(first),
@@ -148,27 +169,37 @@ impl DailyHistory {
         while day <= today {
             let Ok(next) = day.tomorrow() else { break };
             let (from, to) = (day_start(tz, day), day_start(tz, next));
-            for mut b in Bucket::query(pool, Some(monitor_id), from, to - from, to).await? {
+            for mut b in Bucket::query(pool, Some(monitor_ids), from, to - from, to).await? {
                 b.index = index(day);
-                buckets.push(b);
+                by_monitor.entry(b.monitor_id).or_default().push(b);
             }
             day = next;
         }
 
-        let recent: Vec<&Bucket> = buckets
-            .iter()
-            .filter(|b| b.index >= DAYS - UPTIME_DAYS)
-            .collect();
-        let uptime_30d = uptime_label(uptime(
-            recent.iter().map(|b| b.monitored_ms).sum(),
-            recent.iter().map(|b| b.downtime_ms).sum(),
-        ));
-        let bars = Heartbeat::build(&buckets, DAYS, |i| {
+        Ok(by_monitor
+            .into_iter()
+            .map(|(id, buckets)| (id, Self::build(&buckets, first)))
+            .collect())
+    }
+
+    fn build(buckets: &[Bucket], first: Date) -> Self {
+        let uptime_since = |from: i64| {
+            let kept = buckets.iter().filter(|b| b.index >= from);
+            uptime_label(uptime(
+                kept.clone().map(|b| b.monitored_ms).sum(),
+                kept.map(|b| b.downtime_ms).sum(),
+            ))
+        };
+        let bars = Heartbeat::build(buckets, DAYS, |i| {
             first
                 .checked_add(i.days())
                 .map_or_else(|_| String::new(), |d| d.to_string())
         });
-        Ok(Self { bars, uptime_30d })
+        Self {
+            uptime_30d: uptime_since(DAYS - UPTIME_DAYS),
+            uptime_90d: bars.uptime_label(),
+            bars,
+        }
     }
 }
 

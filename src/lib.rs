@@ -13,6 +13,7 @@ pub mod maintenance;
 pub mod middleware;
 pub mod models;
 pub mod notify;
+pub mod page_cache;
 pub mod routes;
 pub mod state;
 pub mod time;

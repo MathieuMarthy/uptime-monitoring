@@ -9,6 +9,7 @@ pub mod notification_log;
 pub mod session;
 pub mod settings;
 pub mod stats;
+pub mod status_page;
 
 pub use admin::Admin;
 pub use channel::{Channel, ChannelSummary};
@@ -21,6 +22,7 @@ pub use notification_log::{Delivery, LogEntry, NotificationLog};
 pub use session::{NewSession, Session};
 pub use settings::Settings;
 pub use stats::Bucket;
+pub use status_page::{ShownMonitor, StatusPage, StatusPageSummary};
 
 pub fn is_unique_violation(e: &sqlx::Error) -> bool {
     matches!(e, sqlx::Error::Database(db) if db.is_unique_violation())

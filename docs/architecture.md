@@ -35,9 +35,11 @@ uptime-monitoring/
 │   ├── middleware.rs             # require_session (session + CSRF), security headers
 │   ├── time.rs                   # now_ms(), local days and hours, date formatting
 │   ├── maintenance.rs            # Hourly upkeep: daily rollups, then purges
+│   ├── page_cache.rs             # Rendered public pages, kept 60 s
 │   ├── assets.rs                 # /static/* served from embedded files
 │   ├── db.rs                     # SQLite pool (WAL, foreign keys) + migrations
-│   ├── state.rs                  # AppState: pool, setup token, login limiter, hashing semaphore, engine handle
+│   ├── state.rs                  # AppState: pool, setup token, login limiter, hashing semaphore, engine handle,
+│   │                             # public page cache
 │   ├── engine/                   # Check engine
 │   │   ├── mod.rs                # start(), supervisor (one task per active monitor), EngineHandle::reload
 │   │   ├── scheduler.rs          # The loop of one monitor: check, record, sleep
@@ -59,23 +61,27 @@ uptime-monitoring/
 │   │   ├── notification_log.rs   # Deliveries, final result after retries
 │   │   ├── session.rs            # Login sessions (token stored as SHA-256)
 │   │   ├── settings.rs           # The single settings row
-│   │   └── stats.rs              # Bucket: availability summed over a time bucket
+│   │   ├── stats.rs              # Bucket: availability summed over a time bucket
+│   │   └── status_page.rs        # Public pages + their monitors
 │   ├── forms/
 │   │   ├── auth.rs               # SetupForm, LoginForm
 │   │   ├── channel.rs            # ChannelForm → ChannelInput | FieldErrors
-│   │   └── monitor.rs            # MonitorForm (raw strings) → MonitorInput | FieldErrors
+│   │   ├── monitor.rs            # MonitorForm (raw strings) → MonitorInput | FieldErrors
+│   │   └── status_page.rs        # StatusPageForm → StatusPageInput | FieldErrors
 │   ├── views/                    # Askama template structs and view models
 │   │   ├── alerts.rs
 │   │   ├── auth.rs
 │   │   ├── errors.rs
 │   │   ├── heartbeat.rs          # Hourly and daily bars, uptime labels
-│   │   └── monitors.rs
+│   │   ├── monitors.rs
+│   │   └── status_pages.rs       # Admin list and form, public page
 │   └── routes/                   # Handlers, grouped by domain
 │       ├── mod.rs                # Router assembly (public / protected) + parse_id()
 │       ├── alerts.rs             # /alerts/*
 │       ├── auth.rs               # /setup, /login, /logout
 │       ├── health.rs             # GET /health
-│       └── monitors.rs           # /, /monitors/*
+│       ├── monitors.rs           # /, /monitors/*
+│       └── status_pages.rs       # /public-pages/* (admin), /status/{slug} (public)
 ├── templates/                    # Askama templates: base.html → layout.html (admin) | public.html
 ├── static/                       # CSS, JS, fonts, images (embedded at build time)
 └── tests/                        # Integration tests against the real router
@@ -92,7 +98,7 @@ uptime-monitoring/
 - **Ids.** Integer ids. Path ids are parsed with `routes::parse_id` (the `PathId` extractor); anything that is not a positive integer is a 404.
 - **Time.** Timestamps are Unix epoch milliseconds (`i64`), from `time::now_ms()`.
 - **Protected by default.** `routes::all` merges a protected router, behind `middleware::require_session`, and a
-  public one (`/health`, `/setup`, `/login`, static assets). A new route goes in the protected router unless it must be
+  public one (`/health`, `/setup`, `/login`, `/status/{slug}`, static assets). A new route goes in the protected router unless it must be
   reachable without logging in.
 - **CSRF.** `require_session` checks the `csrf_token` field of every non-GET request against the session's token, so
   handlers cannot forget it. Every admin form carries `<input type="hidden" name="csrf_token" value="{{ csrf_token }}">`;
@@ -215,6 +221,26 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Live refresh.** `static/js/live.js` refetches the page every 30 s while the tab is visible and swaps the elements
   marked `data-live` (each with an id); a redirect (expired session) reloads the page. No extra route or JSON.
 - **Search.** `static/js/search.js` filters the cards on `data-search` (name and URL), ignoring case and accents.
+
+## Public pages
+
+- **Admin** (`/public-pages`). A page has a title, a slug (`[a-z0-9]+(-[a-z0-9]+)*`, at most 64, unique), an
+  optional description and a *published* flag. Its form lists every monitor: checkbox `monitor_<id>`, display name
+  `display_name_<id>` (blank = the monitor's name) and order `position_<id>` (0–9999; blank orders last, ties keep
+  the form's order, by name). Stored positions are renumbered from 0. `/public-pages/{id}/preview` shows the page,
+  published or not, never cached.
+- **Public** (`GET /status/{slug}`, no session). An unpublished page is a 404, like an unknown slug. It shows the
+  overall state (*Some systems are down* when a monitor that is not paused is down), then per monitor its display
+  name, status, 90 daily bars and 90-day uptime, then the last 10 incidents of the last 90 days (plus any still open)
+  with their start and duration. A monitor's URL, errors and incident causes are never shown: they can reveal
+  internal hosts. `live.js` refreshes it like the admin pages.
+- **Cache** (`page_cache.rs`). The rendered HTML is kept 60 s per page id, behind one async mutex per page, so
+  concurrent requests wait for a single render: at most one render per page per minute, whatever the traffic. The
+  slug lookup still runs on every request (one indexed read), so unpublishing or deleting takes effect at once and
+  unknown slugs add no entry. Editing or deleting a page drops its entry; other changes (monitor renamed, paused)
+  show within 60 s. Responses carry `Cache-Control: public, max-age=60`.
+- **Daily bars** of several monitors come from `DailyHistory::load_many`: one query on `daily_stats`, then one
+  `Bucket::query` per day not rolled up yet, for all of them at once.
 
 ## Tests
 

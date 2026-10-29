@@ -9,12 +9,14 @@ mod alerts;
 mod auth;
 mod health;
 mod monitors;
+mod status_pages;
 
 /// Every route requires a session unless it is listed in the public router.
 pub fn all(state: &AppState) -> Router<AppState> {
     let protected = Router::new()
         .merge(monitors::router())
         .merge(alerts::router())
+        .merge(status_pages::router())
         .merge(auth::protected_router())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -22,7 +24,8 @@ pub fn all(state: &AppState) -> Router<AppState> {
         ));
     let public = Router::new()
         .merge(health::router())
-        .merge(auth::public_router());
+        .merge(auth::public_router())
+        .merge(status_pages::public_router());
     protected.merge(public)
 }
 

@@ -1,0 +1,99 @@
+{# A public status page: no session, nothing that reveals a URL or an error. #}
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block styles %}
+<link href="/static/css/monitors.css" rel="stylesheet">
+<link href="/static/css/detail.css" rel="stylesheet">
+<link href="/static/css/status.css" rel="stylesheet">
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/live.js" defer></script>
+{% endblock %}
+
+{% block body %}
+<main>
+    <div class="detail-container">
+        {% if draft %}
+        <div class="status-draft" role="status">Preview: this page is not published, visitors get a 404.</div>
+        {% endif %}
+
+        <div class="detail-title-group">
+            <h1 class="detail-title">{{ title }}</h1>
+            {% if let Some(description) = description %}
+            <p class="text-muted">{{ description }}</p>
+            {% endif %}
+        </div>
+
+        <div id="live-overall" data-live>
+            {% if any_down %}
+            <div class="status-overall status-overall-down">Some systems are down</div>
+            {% else %}
+            <div class="status-overall status-overall-up">All systems operational</div>
+            {% endif %}
+        </div>
+
+        <div class="section-card" id="live-monitors" data-live>
+            {% if monitors.is_empty() %}
+            <div class="empty-state">
+                <p class="empty-state-text">No service is listed on this page yet.</p>
+            </div>
+            {% endif %}
+            {% for m in monitors %}
+            <div class="status-monitor">
+                <div class="status-monitor-head">
+                    <span class="status-monitor-name">{{ m.name }}</span>
+                    <span class="status-monitor-meta">
+                        <span class="text-muted">{{ m.daily.uptime_90d }}</span>
+                        <span class="{{ m.status_class }}">{{ m.status_label }}</span>
+                    </span>
+                </div>
+                <div class="heartbeat-bar-large" role="img" aria-label="{{ m.name }}, last 90 days, one bar per day">
+                    {% for tick in m.daily.bars.ticks %}
+                    <span class="tick {{ tick.class }}" title="{{ tick.title }}"></span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            {% if !monitors.is_empty() %}
+            <div class="heartbeat-header">
+                <span class="heartbeat-range">90 days ago</span>
+                <span class="heartbeat-range">Uptime over 90 days · Today</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="section-card" id="live-incidents" data-live>
+            <h2 class="section-card-title">Recent Incidents</h2>
+            {% if incidents.is_empty() %}
+            <div class="empty-state">
+                <p class="empty-state-text">No incident in the last 90 days.</p>
+            </div>
+            {% else %}
+            <div class="table-scroll">
+                <table class="incidents-table">
+                    <thead>
+                    <tr><th>Service</th><th>Started</th><th>Duration</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for incident in incidents %}
+                    <tr>
+                        <td>{{ incident.monitor }}</td>
+                        <td>{{ incident.started }}</td>
+                        {% match incident.duration %}
+                        {% when Some with (duration) %}<td>{{ duration }}</td>
+                        {% when None %}<td class="text-red">Ongoing</td>
+                        {% endmatch %}
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+
+        <p class="status-footer text-muted">Times in {{ timezone }}. This page refreshes on its own.</p>
+    </div>
+</main>
+{% endblock %}

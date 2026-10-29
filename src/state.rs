@@ -3,6 +3,7 @@ use crate::auth::rate_limit::LoginLimiter;
 use crate::engine::EngineHandle;
 use crate::models::Admin;
 use crate::notify::Notifier;
+use crate::page_cache::PageCache;
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
@@ -20,6 +21,8 @@ pub struct AppState {
     pub engine: EngineHandle,
     /// Sends channel tests; alerts themselves come from the engine.
     pub notifier: Notifier,
+    /// Rendered public pages; every change to a page invalidates it.
+    pub public_pages: PageCache,
 }
 
 impl AppState {
@@ -32,6 +35,7 @@ impl AppState {
             trust_proxy_headers: false,
             engine: EngineHandle::default(),
             notifier: Notifier::default(),
+            public_pages: PageCache::default(),
         }
     }
 

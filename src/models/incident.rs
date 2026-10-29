@@ -34,6 +34,27 @@ impl Incident {
         .await
     }
 
+    /// The `limit` most recent of these monitors, first: those started since `since`, and any
+    /// still open.
+    pub async fn recent_for_monitors(
+        pool: &SqlitePool,
+        monitor_ids: &[i64],
+        since: i64,
+        limit: i64,
+    ) -> Result<Vec<Self>, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT id, monitor_id, started_at, resolved_at, error_kind, cause FROM incidents
+             WHERE monitor_id IN (SELECT value FROM json_each(?))
+               AND (started_at >= ? OR resolved_at IS NULL)
+             ORDER BY started_at DESC LIMIT ?",
+        )
+        .bind(serde_json::to_string(monitor_ids).expect("integers serialize"))
+        .bind(since)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    }
+
     /// Opens an incident starting at the failed check recorded at `since`, with its error, and
     /// marks the checks after it as downtime. If that check was already purged, `latest` (the
     /// failure that reached the threshold) gives the error instead.

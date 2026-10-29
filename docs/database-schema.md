@@ -104,7 +104,8 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
 ### Public status pages
 
 - `status_pages`: `id`, `slug` (UNIQUE), `title`, `description`, `published`, `created_at`, `updated_at`.
-- `status_page_monitors`: `(page_id, monitor_id)` PK, `display_name` (NULL = monitor name), `position`.
+- `status_page_monitors`: `(page_id, monitor_id)` PK, both FK cascade, `display_name` (NULL = monitor name),
+  `position` (display order, from 0). Written as a whole with its page, in one transaction.
 
 ### Authentication
 

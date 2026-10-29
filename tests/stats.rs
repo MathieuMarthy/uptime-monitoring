@@ -3,6 +3,8 @@ mod common;
 use sqlx::SqlitePool;
 use uptime_monitoring::forms::monitor::MonitorForm;
 use uptime_monitoring::models::{Bucket, Monitor};
+use uptime_monitoring::time::{day_key, day_of};
+use uptime_monitoring::views::heartbeat::DailyHistory;
 
 const S: i64 = 1000;
 const T0: i64 = 1_800_000_000_000;
@@ -49,7 +51,7 @@ async fn check(
 }
 
 async fn hour(pool: &SqlitePool, monitor_id: i64) -> Bucket {
-    let mut buckets = Bucket::query(pool, Some(monitor_id), T0, HOUR, T0 + HOUR)
+    let mut buckets = Bucket::query(pool, Some(&[monitor_id]), T0, HOUR, T0 + HOUR)
         .await
         .unwrap();
     assert_eq!(buckets.len(), 1);
@@ -80,7 +82,7 @@ async fn buckets_split_the_window_and_skip_empty_ones() {
     check(&pool, id, T0 + 59 * S, true, false, None).await;
     check(&pool, id, T0 + 150 * S, true, false, None).await;
     check(&pool, id, T0 + 180 * S, true, false, None).await; // at `to`, excluded
-    let buckets = Bucket::query(&pool, Some(id), T0, 60 * S, T0 + 180 * S)
+    let buckets = Bucket::query(&pool, Some(&[id]), T0, 60 * S, T0 + 180 * S)
         .await
         .unwrap();
     let got: Vec<_> = buckets.iter().map(|b| (b.index, b.checks_total)).collect();
@@ -98,6 +100,57 @@ async fn all_monitors_or_one() {
         .unwrap();
     assert_eq!(all.iter().map(|b| b.monitor_id).collect::<Vec<_>>(), [a, b]);
     assert_eq!(hour(&pool, b).await.monitor_id, b);
+
+    let c = monitor(&pool, "Third").await;
+    check(&pool, c, T0, true, false, None).await;
+    let some = Bucket::query(&pool, Some(&[a, c]), T0, HOUR, T0 + HOUR)
+        .await
+        .unwrap();
+    assert_eq!(
+        some.iter().map(|b| b.monitor_id).collect::<Vec<_>>(),
+        [a, c]
+    );
+}
+
+#[tokio::test]
+async fn daily_history_of_several_monitors() {
+    let (pool, a) = setup().await;
+    let b = monitor(&pool, "Other").await;
+    let tz = jiff::tz::TimeZone::UTC;
+    let yesterday = day_key(day_of(&tz, T0 - 24 * HOUR));
+    sqlx::query(
+        "INSERT INTO daily_stats (monitor_id, day, monitored_ms, downtime_ms, checks_total,
+                                  checks_failed)
+         VALUES (?, ?, 3600000, 360000, 60, 6)",
+    )
+    .bind(a)
+    .bind(yesterday)
+    .execute(&pool)
+    .await
+    .unwrap();
+    check(&pool, a, T0 - 60 * S, true, false, None).await;
+
+    let many = DailyHistory::load_many(&pool, &[a, b], &tz, T0)
+        .await
+        .unwrap();
+    let ha = &many[&a];
+    let classes: Vec<_> = ha.bars.ticks[87..].iter().map(|t| t.class).collect();
+    assert_eq!(classes, ["tick-gray", "tick-red", "tick-green"]);
+    assert_eq!(ha.uptime_90d, "90.16%");
+    assert_eq!(ha.uptime_30d, ha.uptime_90d);
+    assert!(many[&b].bars.ticks.iter().all(|t| t.class == "tick-gray"));
+    assert_eq!(many[&b].uptime_90d, "—");
+
+    let one = DailyHistory::load(&pool, a, &tz, T0).await.unwrap();
+    assert_eq!(one.uptime_90d, ha.uptime_90d);
+    let titles = |h: &DailyHistory| {
+        h.bars
+            .ticks
+            .iter()
+            .map(|t| t.title.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(titles(&one), titles(ha));
 }
 
 #[tokio::test]

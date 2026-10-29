@@ -1,0 +1,99 @@
+/* Public pages: the monitor table of the admin form */
+.page-monitors {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.page-monitors th {
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-color-muted);
+    padding: 0 8px 8px 8px;
+}
+
+.page-monitors td {
+    padding: 6px 8px;
+    border-top: 1px solid var(--color-stroke);
+    vertical-align: middle;
+}
+
+.page-monitors-order {
+    width: 90px;
+}
+
+/* Public pages: the page visitors see */
+.status-draft {
+    border: 1px dashed var(--text-color-orange);
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: var(--text-color-orange);
+    font-size: 14px;
+}
+
+.status-overall {
+    border-radius: 12px;
+    padding: 18px 24px;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.status-overall-up {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid var(--text-color-green);
+    color: var(--text-color-green);
+}
+
+.status-overall-down {
+    background: rgba(255, 56, 60, 0.12);
+    border: 1px solid var(--text-color-red);
+    color: var(--text-color-red);
+}
+
+.status-monitor {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.status-monitor + .status-monitor {
+    padding-top: 16px;
+    border-top: 1px solid var(--color-stroke);
+}
+
+.status-monitor-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.status-monitor-name {
+    font-weight: 600;
+    color: var(--text-color);
+    overflow-wrap: anywhere;
+}
+
+.status-monitor-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.status-footer {
+    font-size: 13px;
+    text-align: center;
+}
+
+@media (max-width: 640px) {
+    .status-monitor .heartbeat-bar-large {
+        gap: 1px;
+    }
+
+    .status-monitor .heartbeat-bar-large .tick {
+        min-width: 1px;
+        border-radius: 1px;
+    }
+}

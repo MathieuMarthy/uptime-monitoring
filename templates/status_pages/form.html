@@ -1,0 +1,133 @@
+{% extends "layout.html" %}
+
+{% block title %}{% if self.is_edit() %}Edit Public Page{% else %}Add Public Page{% endif %} - Uptime Monitoring{% endblock %}
+
+{% block styles %}
+<link href="/static/css/forms.css" rel="stylesheet">
+<link href="/static/css/status.css" rel="stylesheet">
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/confirm.js" defer></script>
+{% endblock %}
+
+{% macro field_error(field) %}
+{% if let Some(message) = self.error(field) %}<p class="field-error">{{ message }}</p>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-header">
+        <h1 class="form-title">{% if self.is_edit() %}Edit Public Page{% else %}Add a Public Page{% endif %}</h1>
+        <p class="form-subtitle">A status page anyone can open at /status/&lt;slug&gt;, showing the monitors you pick.</p>
+    </div>
+
+    {% if !errors.is_empty() %}
+    <div class="error-banner" role="alert">
+        <span>Please fix the {{ errors.len() }} highlighted field(s).</span>
+    </div>
+    {% endif %}
+
+    <div class="form-card">
+        <form action="{{ action_url }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-section">
+                <div class="form-row form-row-wide-first">
+                    <div class="form-group">
+                        <label class="form-label" for="title">Title *</label>
+                        <input class="form-input" id="title" name="title" type="text" maxlength="100"
+                               placeholder="e.g. Acme Status" required value="{{ form.title }}"/>
+                        {% call field_error("title") %}{% endcall %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="slug">Slug *</label>
+                        <input class="form-input" id="slug" name="slug" type="text" maxlength="64"
+                               pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="acme" required value="{{ form.slug }}"/>
+                        <span class="form-hint">Lowercase letters, digits and hyphens.</span>
+                        {% call field_error("slug") %}{% endcall %}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="description">Description</label>
+                    <textarea class="form-textarea" id="description" name="description" maxlength="500" rows="2"
+                              placeholder="Optional, shown under the title">{{ form.description }}</textarea>
+                    {% call field_error("description") %}{% endcall %}
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2 class="section-title">Monitors</h2>
+
+                {% if monitors.is_empty() %}
+                <p class="form-hint">No monitor yet. <a href="/monitors/new">Add one</a> first.</p>
+                {% else %}
+                <p class="form-hint">Check the monitors to show. Lower orders come first; a blank display name shows the monitor's name.</p>
+                {% call field_error("monitors") %}{% endcall %}
+                <div class="table-scroll">
+                    <table class="page-monitors">
+                        <thead>
+                        <tr><th>Show</th><th>Monitor</th><th>Display Name</th><th>Order</th></tr>
+                        </thead>
+                        <tbody>
+                        {% for m in monitors %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" id="monitor_{{ m.id }}" name="monitor_{{ m.id }}"
+                                       {%- if form.includes(*m.id) %} checked{% endif %}/>
+                            </td>
+                            <td><label for="monitor_{{ m.id }}">{{ m.name }}</label></td>
+                            <td>
+                                <input class="form-input" name="display_name_{{ m.id }}" type="text" maxlength="100"
+                                       aria-label="Display name of {{ m.name }}" value="{{ form.display_name(*m.id) }}"/>
+                            </td>
+                            <td>
+                                <input class="form-input page-monitors-order" name="position_{{ m.id }}" type="number" min="0" max="9999" value="{{ form.position(*m.id) }}"
+                                       aria-label="Order of {{ m.name }}"/>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="form-section">
+                <label class="checkbox-group" for="published">
+                    <input type="checkbox" id="published" name="published" {% if form.published.is_some() %}checked{% endif %}/>
+                    <div class="checkbox-label-group">
+                        <span class="form-label">Published</span>
+                        <span class="form-hint">When unchecked, the page is not found; you can still preview it.</span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <div class="form-actions-left">
+                    <button class="button-primary" type="submit">
+                        {% if self.is_edit() %}Save Changes{% else %}Add Page{% endif %}
+                    </button>
+                    <a class="button-secondary" href="/public-pages">Cancel</a>
+                </div>
+            </div>
+        </form>
+
+        {% if let Some(id) = page_id %}
+        <div class="danger-zone">
+            <form action="/public-pages/{{ id }}/delete" method="POST"
+                  data-confirm="Delete this public page? Its address will no longer work.">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="form-actions form-actions-plain">
+                    <div>
+                        <span class="danger-zone-title">Danger Zone</span>
+                        <p class="form-hint">Delete this page. The monitors are kept.</p>
+                    </div>
+                    <button class="button-danger" type="submit">Delete Page</button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

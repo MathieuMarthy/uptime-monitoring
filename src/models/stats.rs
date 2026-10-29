@@ -21,11 +21,11 @@ pub struct Bucket {
 }
 
 impl Bucket {
-    /// Buckets of `width` ms from `from` up to `to` (excluded), for one monitor or all of them,
-    /// sorted by monitor then index.
+    /// Buckets of `width` ms from `from` up to `to` (excluded), for these monitors or all of
+    /// them, sorted by monitor then index.
     pub async fn query(
         pool: &SqlitePool,
-        monitor_id: Option<i64>,
+        monitor_ids: Option<&[i64]>,
         from: i64,
         width: i64,
         to: i64,
@@ -41,13 +41,13 @@ impl Bucket {
                     COUNT(ch.latency_ms) AS latency_count
              FROM monitors m CROSS JOIN checks ch
                  ON ch.monitor_id = m.id AND ch.checked_at >= ?1 AND ch.checked_at < ?3
-             WHERE ?4 IS NULL OR m.id = ?4
+             WHERE ?4 IS NULL OR m.id IN (SELECT value FROM json_each(?4))
              GROUP BY m.id, idx ORDER BY m.id, idx",
         )
         .bind(from)
         .bind(width)
         .bind(to)
-        .bind(monitor_id)
+        .bind(monitor_ids.map(|ids| serde_json::to_string(ids).expect("integers serialize")))
         .fetch_all(pool)
         .await
     }

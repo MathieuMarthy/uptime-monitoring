@@ -33,7 +33,7 @@ impl MonitorView {
     }
 }
 
-fn status_label(paused: bool, status: MonitorStatus) -> &'static str {
+pub fn status_label(paused: bool, status: MonitorStatus) -> &'static str {
     if paused {
         return "Paused";
     }
@@ -44,7 +44,7 @@ fn status_label(paused: bool, status: MonitorStatus) -> &'static str {
     }
 }
 
-fn status_class(paused: bool, status: MonitorStatus) -> &'static str {
+pub fn status_class(paused: bool, status: MonitorStatus) -> &'static str {
     if paused {
         return "text-blue";
     }

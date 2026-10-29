@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+
+{% block title %}Public Pages - Uptime Monitoring{% endblock %}
+
+{% block styles %}
+<link href="/static/css/detail.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="detail-container">
+    <div class="detail-header">
+        <div class="detail-title-group">
+            <h1 class="detail-title">Public Pages</h1>
+            <p class="text-muted">Status pages anyone can open, without logging in. Each shows the monitors you pick, under the names you choose; URLs and errors are never shown.</p>
+        </div>
+        <div class="detail-actions">
+            <a class="button-primary" href="/public-pages/new">Add Page</a>
+        </div>
+    </div>
+
+    <div class="section-card">
+        {% if pages.is_empty() %}
+        <div class="empty-state">
+            <p class="empty-state-text">No public page yet. Add one to share the status of your services.</p>
+        </div>
+        {% else %}
+        <div class="table-scroll">
+            <table class="incidents-table">
+                <thead>
+                <tr><th>Title</th><th>Address</th><th>Monitors</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                {% for page in pages %}
+                <tr>
+                    <td>{{ page.title }}</td>
+                    <td><a href="/status/{{ page.slug }}" target="_blank" rel="noopener">/status/{{ page.slug }}</a></td>
+                    <td>{{ page.monitors }}</td>
+                    {% if page.published %}<td class="text-green">Published</td>{% else %}<td class="text-muted">Draft</td>{% endif %}
+                    <td class="table-actions">
+                        <a class="button-secondary" href="/public-pages/{{ page.id }}/preview" target="_blank" rel="noopener">Preview</a>
+                        <a class="button-secondary" href="/public-pages/{{ page.id }}/edit">Edit</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

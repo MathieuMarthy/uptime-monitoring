@@ -24,18 +24,20 @@ impl DailyStat {
         Ok(day)
     }
 
-    /// The days of one monitor from `first_day` on, oldest first.
-    pub async fn for_monitor(
+    /// The days of these monitors from `first_day` on, by monitor then oldest first.
+    pub async fn for_monitors(
         pool: &SqlitePool,
-        monitor_id: i64,
+        monitor_ids: &[i64],
         first_day: i64,
     ) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as(
             "SELECT monitor_id, day, monitored_ms, downtime_ms, checks_total, checks_failed,
                     latency_avg_ms, latency_p95_ms
-             FROM daily_stats WHERE monitor_id = ? AND day >= ? ORDER BY day",
+             FROM daily_stats
+             WHERE monitor_id IN (SELECT value FROM json_each(?)) AND day >= ?
+             ORDER BY monitor_id, day",
         )
-        .bind(monitor_id)
+        .bind(serde_json::to_string(monitor_ids).expect("integers serialize"))
         .bind(first_day)
         .fetch_all(pool)
         .await

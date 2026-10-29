@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod channel;
 pub mod monitor;
+pub mod status_page;
 
 /// Whether the text shows at least one character: whitespace, control characters and
 /// zero-width formatting characters (U+200B, U+FEFF…) do not count.
