@@ -109,5 +109,4 @@ async fn find_all_sorted_case_insensitively() {
         .map(|m| m.name)
         .collect();
     assert_eq!(names, ["Alpha", "beta"]);
-    assert_eq!(MonitorState::find_all(&pool).await.unwrap().len(), 2);
 }

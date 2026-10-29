@@ -394,3 +394,7 @@
 .empty-state-text {
     margin-top: 8px;
 }
+
+.table-scroll {
+    overflow-x: auto;
+}

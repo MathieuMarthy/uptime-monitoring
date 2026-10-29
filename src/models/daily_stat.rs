@@ -24,6 +24,23 @@ impl DailyStat {
         Ok(day)
     }
 
+    /// The days of one monitor from `first_day` on, oldest first.
+    pub async fn for_monitor(
+        pool: &SqlitePool,
+        monitor_id: i64,
+        first_day: i64,
+    ) -> Result<Vec<Self>, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT monitor_id, day, monitored_ms, downtime_ms, checks_total, checks_failed,
+                    latency_avg_ms, latency_p95_ms
+             FROM daily_stats WHERE monitor_id = ? AND day >= ? ORDER BY day",
+        )
+        .bind(monitor_id)
+        .bind(first_day)
+        .fetch_all(pool)
+        .await
+    }
+
     /// Rolls up the checks of `[from, to)` as `day`, for every monitor that has some. A day
     /// already rolled up is left as it is.
     pub async fn roll_up(

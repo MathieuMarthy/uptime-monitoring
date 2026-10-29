@@ -28,14 +28,6 @@ pub struct MonitorState {
 }
 
 impl MonitorState {
-    pub async fn find_all(pool: &SqlitePool) -> Result<Vec<Self>, sqlx::Error> {
-        sqlx::query_as(sqlx::AssertSqlSafe(format!(
-            "SELECT {COLUMNS} FROM monitor_state"
-        )))
-        .fetch_all(pool)
-        .await
-    }
-
     pub async fn find(pool: &SqlitePool, monitor_id: i64) -> Result<Option<Self>, sqlx::Error> {
         sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM monitor_state WHERE monitor_id = ?"

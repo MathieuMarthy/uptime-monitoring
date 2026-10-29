@@ -9,10 +9,10 @@ pub mod settings;
 pub mod stats;
 
 pub use admin::Admin;
-pub use check::Check;
+pub use check::{Check, RecentCheck};
 pub use daily_stat::DailyStat;
 pub use incident::Incident;
-pub use monitor::Monitor;
+pub use monitor::{Monitor, MonitorSummary};
 pub use monitor_state::{MonitorState, MonitorStatus};
 pub use session::{NewSession, Session};
 pub use settings::Settings;

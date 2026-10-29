@@ -6,6 +6,9 @@
 <link href="/static/css/monitors.css" rel="stylesheet">
 <link href="/static/css/detail.css" rel="stylesheet">
 {% endblock %}
+{% block scripts %}
+<script src="/static/js/live.js" defer></script>
+{% endblock %}
 
 {% block content %}
 {% let m = view.monitor %}
@@ -40,60 +43,78 @@
         </div>
     </div>
 
-    <div class="hero-strip">
+    <div class="hero-strip" id="live-hero" data-live>
         <div class="hero-strip-top">
             <div class="hero-status">
                 <div class="hero-status-indicator">
                     <span class="hero-status-text {{ view.status_class() }}">{{ view.status_label() }}</span>
                 </div>
                 <span class="hero-status-sub">
-                    Checked every {{ m.interval_s }}s • Timeout {{ m.timeout_s }}s
+                    {{ m.method }} every {{ m.interval_s }}s • Timeout {{ m.timeout_s }}s
                 </span>
             </div>
 
             <div class="hero-metrics">
                 <div class="hero-metric-item">
-                    <span class="hero-metric-value text-muted">—</span>
+                    <span class="hero-metric-value">{{ hourly.uptime_label() }}</span>
                     <span class="hero-metric-label">24h Uptime</span>
                 </div>
 
                 <div class="hero-metric-divider"></div>
 
                 <div class="hero-metric-item">
-                    {% match view.state.last_latency_ms %}
+                    <span class="hero-metric-value">{{ daily.uptime_30d }}</span>
+                    <span class="hero-metric-label">30d Uptime</span>
+                </div>
+
+                <div class="hero-metric-divider"></div>
+
+                <div class="hero-metric-item">
+                    {% match hourly.latency_avg_ms %}
                     {% when Some with (latency) %}
                     <span class="hero-metric-value">{{ latency }}ms</span>
                     {% when None %}
                     <span class="hero-metric-value text-muted">—</span>
                     {% endmatch %}
-                    <span class="hero-metric-label">Response</span>
+                    <span class="hero-metric-label">24h Avg Response</span>
                 </div>
 
                 <div class="hero-metric-divider"></div>
 
                 <div class="hero-metric-item">
-                    <span class="hero-metric-value">{{ m.method }}</span>
-                    <span class="hero-metric-label">Method</span>
-                </div>
-
-                <div class="hero-metric-divider"></div>
-
-                <div class="hero-metric-item">
-                    <span class="hero-metric-value">{{ m.accepted_statuses }}</span>
-                    <span class="hero-metric-label">Accepted</span>
+                    {% match tls_expiry %}
+                    {% when Some with (expiry) %}
+                    <span class="hero-metric-value">{{ expiry }}</span>
+                    {% when None %}
+                    <span class="hero-metric-value text-muted">—</span>
+                    {% endmatch %}
+                    <span class="hero-metric-label">Certificate Expiry</span>
                 </div>
             </div>
         </div>
 
         <div class="hero-strip-bottom">
             <div class="heartbeat-header">
-                <h3>24-Hour Heartbeat History</h3>
-                <span class="heartbeat-range">Past 24 hours (1 bar = 1 hour)</span>
+                <h3>Last 24 Hours</h3>
+                <span class="heartbeat-range">1 bar = 1 hour</span>
             </div>
 
-            <div class="heartbeat-bar-large" role="img" aria-label="Status history last 24h">
-                {% for _ in 0..24 %}
-                <span class="tick tick-gray" title="No data yet"></span>
+            <div class="heartbeat-bar-large" role="img" aria-label="Last 24 hours, one bar per hour">
+                {% for tick in hourly.ticks %}
+                <span class="tick {{ tick.class }}" title="{{ tick.title }}"></span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="hero-strip-bottom">
+            <div class="heartbeat-header">
+                <h3>Last 90 Days</h3>
+                <span class="heartbeat-range">1 bar = 1 day</span>
+            </div>
+
+            <div class="heartbeat-bar-large" role="img" aria-label="Last 90 days, one bar per day">
+                {% for tick in daily.bars.ticks %}
+                <span class="tick {{ tick.class }}" title="{{ tick.title }}"></span>
                 {% endfor %}
             </div>
         </div>
@@ -171,13 +192,65 @@
         {% endif %}
     </div>
 
-    <div class="section-card">
+    <div class="section-card" id="live-incidents" data-live>
         <h2 class="section-card-title">Recent Incidents</h2>
 
+        {% if incidents.is_empty() %}
         <div class="empty-state">
             <span class="text-green empty-state-icon">✓</span>
-            <p class="empty-state-text">No incidents recorded for this monitor yet.</p>
+            <p class="empty-state-text">No incidents recorded for this monitor.</p>
         </div>
+        {% else %}
+        <div class="table-scroll">
+            <table class="incidents-table">
+                <thead>
+                <tr><th>Started</th><th>Resolved</th><th>Duration</th><th>Cause</th></tr>
+                </thead>
+                <tbody>
+                {% for incident in incidents %}
+                <tr>
+                    <td>{{ incident.started }}</td>
+                    {% match incident.resolved %}
+                    {% when Some with (resolved) %}<td>{{ resolved }}</td>
+                    {% when None %}<td class="text-red">Ongoing</td>
+                    {% endmatch %}
+                    <td>{{ incident.duration }}</td>
+                    <td>{{ incident.cause }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="section-card" id="live-checks" data-live>
+        <h2 class="section-card-title">Recent Checks</h2>
+
+        {% if checks.is_empty() %}
+        <div class="empty-state">
+            <p class="empty-state-text">No checks recorded yet.</p>
+        </div>
+        {% else %}
+        <div class="table-scroll">
+            <table class="incidents-table">
+                <thead>
+                <tr><th>Time</th><th>Result</th><th>Status</th><th>Response</th><th>Error</th></tr>
+                </thead>
+                <tbody>
+                {% for check in checks %}
+                <tr>
+                    <td>{{ check.time }}</td>
+                    {% if check.ok %}<td class="text-green">OK</td>{% else %}<td class="text-red">Failed</td>{% endif %}
+                    <td>{% if let Some(code) = check.status_code %}{{ code }}{% else %}—{% endif %}</td>
+                    <td>{% if let Some(latency) = check.latency_ms %}{{ latency }}ms{% else %}—{% endif %}</td>
+                    <td>{% if let Some(error) = check.error %}{{ error }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

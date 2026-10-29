@@ -1,10 +1,13 @@
 use crate::error::AppError;
 use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm};
-use crate::models::{Monitor, MonitorState, MonitorStatus};
+use crate::models::{
+    Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
+};
+use crate::time::{day_of, format_datetime, now_ms};
+use crate::views::heartbeat::{DailyHistory, Heartbeat};
 use askama::Template;
 use askama_web::WebTemplate;
 use sqlx::SqlitePool;
-use std::collections::HashMap;
 
 /// A monitor's configuration together with its runtime state.
 pub struct MonitorView {
@@ -13,25 +16,6 @@ pub struct MonitorView {
 }
 
 impl MonitorView {
-    pub async fn load_all(pool: &SqlitePool) -> Result<Vec<Self>, AppError> {
-        let mut states: HashMap<i64, MonitorState> = MonitorState::find_all(pool)
-            .await?
-            .into_iter()
-            .map(|s| (s.monitor_id, s))
-            .collect();
-
-        Monitor::find_all(pool)
-            .await?
-            .into_iter()
-            .map(|monitor| {
-                let state = states
-                    .remove(&monitor.id)
-                    .ok_or_else(|| missing_state(monitor.id))?;
-                Ok(Self { monitor, state })
-            })
-            .collect()
-    }
-
     pub async fn load(pool: &SqlitePool, id: i64) -> Result<Self, AppError> {
         let monitor = Monitor::find(pool, id).await?.ok_or(AppError::NotFound)?;
         let state = MonitorState::find(pool, id)
@@ -41,25 +25,49 @@ impl MonitorView {
     }
 
     pub fn status_label(&self) -> &'static str {
-        if self.monitor.paused {
-            return "Paused";
-        }
-        match self.state.status {
-            MonitorStatus::Pending => "Pending",
-            MonitorStatus::Up => "Up",
-            MonitorStatus::Down => "Down",
-        }
+        status_label(self.monitor.paused, self.state.status)
     }
 
     pub fn status_class(&self) -> &'static str {
-        if self.monitor.paused {
-            return "text-blue";
-        }
-        match self.state.status {
-            MonitorStatus::Pending => "text-muted",
-            MonitorStatus::Up => "text-green",
-            MonitorStatus::Down => "text-red",
-        }
+        status_class(self.monitor.paused, self.state.status)
+    }
+}
+
+fn status_label(paused: bool, status: MonitorStatus) -> &'static str {
+    if paused {
+        return "Paused";
+    }
+    match status {
+        MonitorStatus::Pending => "Pending",
+        MonitorStatus::Up => "Up",
+        MonitorStatus::Down => "Down",
+    }
+}
+
+fn status_class(paused: bool, status: MonitorStatus) -> &'static str {
+    if paused {
+        return "text-blue";
+    }
+    match status {
+        MonitorStatus::Pending => "text-muted",
+        MonitorStatus::Up => "text-green",
+        MonitorStatus::Down => "text-red",
+    }
+}
+
+/// A dashboard card: the monitor and its last 24 hours.
+pub struct MonitorCard {
+    pub monitor: MonitorSummary,
+    pub heartbeat: Heartbeat,
+}
+
+impl MonitorCard {
+    pub fn status_label(&self) -> &'static str {
+        status_label(self.monitor.paused, self.monitor.status)
+    }
+
+    pub fn status_class(&self) -> &'static str {
+        status_class(self.monitor.paused, self.monitor.status)
     }
 }
 
@@ -70,7 +78,7 @@ fn missing_state(monitor_id: i64) -> AppError {
 #[derive(Template, WebTemplate)]
 #[template(path = "monitors/index.html")]
 pub struct IndexTemplate {
-    pub monitors: Vec<MonitorView>,
+    pub cards: Vec<MonitorCard>,
     pub up: usize,
     pub down: usize,
     pub pending: usize,
@@ -79,34 +87,138 @@ pub struct IndexTemplate {
 }
 
 impl IndexTemplate {
-    pub fn new(monitors: Vec<MonitorView>, csrf_token: String) -> Self {
+    pub async fn load(pool: &SqlitePool, csrf_token: String) -> Result<Self, AppError> {
+        let tz = Settings::load(pool).await?.tz();
+        let now = now_ms();
+        let mut heartbeats = Heartbeat::hourly(pool, None, &tz, now).await?;
+        let cards: Vec<MonitorCard> = Monitor::summaries(pool)
+            .await?
+            .into_iter()
+            .map(|monitor| MonitorCard {
+                heartbeat: heartbeats
+                    .remove(&monitor.id)
+                    .unwrap_or_else(|| Heartbeat::empty(&tz, now)),
+                monitor,
+            })
+            .collect();
+
         let active_with = |status| {
-            monitors
+            cards
                 .iter()
-                .filter(|v| !v.monitor.paused && v.state.status == status)
+                .filter(|c| !c.monitor.paused && c.monitor.status == status)
                 .count()
         };
         let up = active_with(MonitorStatus::Up);
         let down = active_with(MonitorStatus::Down);
         let pending = active_with(MonitorStatus::Pending);
-        let paused = monitors.iter().filter(|v| v.monitor.paused).count();
+        let paused = cards.iter().filter(|c| c.monitor.paused).count();
 
-        Self {
-            monitors,
+        Ok(Self {
+            cards,
             up,
             down,
             pending,
             paused,
             csrf_token,
-        }
+        })
     }
 }
+
+/// Incidents and checks listed on a monitor's page.
+const RECENT: i64 = 20;
+const DAY_MS: i64 = 24 * 3600 * 1000;
 
 #[derive(Template, WebTemplate)]
 #[template(path = "monitors/detail.html")]
 pub struct DetailTemplate {
     pub view: MonitorView,
+    pub hourly: Heartbeat,
+    pub daily: DailyHistory,
+    pub tls_expiry: Option<String>,
+    pub incidents: Vec<IncidentRow>,
+    pub checks: Vec<CheckRow>,
     pub csrf_token: String,
+}
+
+pub struct IncidentRow {
+    pub started: String,
+    /// `None` while the incident is open.
+    pub resolved: Option<String>,
+    pub duration: String,
+    pub cause: String,
+}
+
+pub struct CheckRow {
+    pub time: String,
+    pub ok: bool,
+    pub status_code: Option<i64>,
+    pub latency_ms: Option<i64>,
+    pub error: Option<String>,
+}
+
+impl DetailTemplate {
+    pub async fn load(pool: &SqlitePool, id: i64, csrf_token: String) -> Result<Self, AppError> {
+        let view = MonitorView::load(pool, id).await?;
+        let tz = Settings::load(pool).await?.tz();
+        let now = now_ms();
+        let hourly = Heartbeat::hourly(pool, Some(id), &tz, now)
+            .await?
+            .remove(&id)
+            .unwrap_or_else(|| Heartbeat::empty(&tz, now));
+        let daily = DailyHistory::load(pool, id, &tz, now).await?;
+
+        let tls_expiry = view.state.tls_expires_at.map(|at| {
+            let date = day_of(&tz, at);
+            match (at - now).div_euclid(DAY_MS) {
+                left if left < 0 => format!("{date} (expired)"),
+                1 => format!("{date} (1 day left)"),
+                left => format!("{date} ({left} days left)"),
+            }
+        });
+        let incidents = Incident::recent(pool, id, RECENT)
+            .await?
+            .into_iter()
+            .map(|i| IncidentRow {
+                started: format_datetime(&tz, i.started_at),
+                resolved: i.resolved_at.map(|at| format_datetime(&tz, at)),
+                duration: format_duration(i.resolved_at.unwrap_or(now) - i.started_at),
+                cause: i.cause.unwrap_or(i.error_kind),
+            })
+            .collect();
+        let checks = Check::recent(pool, id, RECENT)
+            .await?
+            .into_iter()
+            .map(|c| CheckRow {
+                time: format_datetime(&tz, c.checked_at),
+                ok: c.ok,
+                status_code: c.status_code,
+                latency_ms: c.latency_ms,
+                error: c.error,
+            })
+            .collect();
+
+        Ok(Self {
+            view,
+            hourly,
+            daily,
+            tls_expiry,
+            incidents,
+            checks,
+            csrf_token,
+        })
+    }
+}
+
+/// `45 s`, `3 min`, `1 h 05 min`, `2 d 3 h`.
+fn format_duration(ms: i64) -> String {
+    let s = ms.max(0) / 1000;
+    let (d, h, m) = (s / 86_400, s / 3600 % 24, s / 60 % 60);
+    match () {
+        _ if d > 0 => format!("{d} d {h} h"),
+        _ if h > 0 => format!("{h} h {m:02} min"),
+        _ if m > 0 => format!("{m} min"),
+        _ => format!("{s} s"),
+    }
 }
 
 #[derive(Template, WebTemplate)]
@@ -131,5 +243,21 @@ impl FormTemplate {
 
     pub fn methods(&self) -> &'static [&'static str] {
         &METHODS
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn durations_keep_two_units_at_most() {
+        assert_eq!(format_duration(45_000), "45 s");
+        assert_eq!(format_duration(185_000), "3 min");
+        assert_eq!(format_duration(3_900_000), "1 h 05 min");
+        assert_eq!(
+            format_duration(2 * 86_400_000 + 3 * 3_600_000 + 60_000),
+            "2 d 3 h"
+        );
     }
 }

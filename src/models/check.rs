@@ -1,5 +1,15 @@
 use crate::engine::verdict::CheckOutcome;
-use sqlx::{SqliteConnection, SqlitePool};
+use sqlx::{FromRow, SqliteConnection, SqlitePool};
+
+/// A raw check result, as listed on a monitor's page.
+#[derive(Debug, Clone, FromRow)]
+pub struct RecentCheck {
+    pub checked_at: i64,
+    pub ok: bool,
+    pub latency_ms: Option<i64>,
+    pub status_code: Option<i64>,
+    pub error: Option<String>,
+}
 
 /// Raw check results, short retention. Each check also records the time it covers, for
 /// uptime: see `Bucket`.
@@ -34,6 +44,22 @@ impl Check {
         .execute(conn)
         .await?;
         Ok(())
+    }
+
+    /// The `limit` most recent checks of a monitor, first.
+    pub async fn recent(
+        pool: &SqlitePool,
+        monitor_id: i64,
+        limit: i64,
+    ) -> Result<Vec<RecentCheck>, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT checked_at, ok, latency_ms, status_code, error FROM checks
+             WHERE monitor_id = ? ORDER BY checked_at DESC LIMIT ?",
+        )
+        .bind(monitor_id)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
     }
 
     /// The time of the oldest check kept, across monitors.

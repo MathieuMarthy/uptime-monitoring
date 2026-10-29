@@ -3,7 +3,7 @@ use crate::forms::monitor::{FieldErrors, MonitorForm};
 use crate::models::{Monitor, Session, is_unique_violation};
 use crate::routes::{MonitorId, form_or_invalid};
 use crate::state::AppState;
-use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate, MonitorView};
+use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate};
 use axum::extract::State;
 use axum::extract::rejection::FormRejection;
 use axum::response::{IntoResponse, Redirect, Response};
@@ -26,10 +26,7 @@ async fn index(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
 ) -> Result<IndexTemplate, AppError> {
-    Ok(IndexTemplate::new(
-        MonitorView::load_all(&state.db).await?,
-        session.csrf_token,
-    ))
+    IndexTemplate::load(&state.db, session.csrf_token).await
 }
 
 async fn detail(
@@ -37,10 +34,7 @@ async fn detail(
     Extension(session): Extension<Session>,
     MonitorId(id): MonitorId,
 ) -> Result<DetailTemplate, AppError> {
-    Ok(DetailTemplate {
-        view: MonitorView::load(&state.db, id).await?,
-        csrf_token: session.csrf_token,
-    })
+    DetailTemplate::load(&state.db, id, session.csrf_token).await
 }
 
 async fn new_form(Extension(session): Extension<Session>) -> FormTemplate {

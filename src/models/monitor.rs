@@ -1,5 +1,5 @@
 use crate::forms::monitor::MonitorInput;
-use crate::models::MonitorState;
+use crate::models::{MonitorState, MonitorStatus};
 use crate::time::now_ms;
 use sqlx::{FromRow, SqlitePool};
 
@@ -31,7 +31,29 @@ pub struct Monitor {
     pub updated_at: i64,
 }
 
+/// What the dashboard shows of a monitor: no request body or headers.
+#[derive(Debug, Clone, FromRow)]
+pub struct MonitorSummary {
+    pub id: i64,
+    pub name: String,
+    pub url: String,
+    pub paused: bool,
+    pub status: MonitorStatus,
+    pub last_latency_ms: Option<i64>,
+}
+
 impl Monitor {
+    /// Every monitor with its state, sorted by name.
+    pub async fn summaries(pool: &SqlitePool) -> Result<Vec<MonitorSummary>, sqlx::Error> {
+        sqlx::query_as(
+            "SELECT m.id, m.name, m.url, m.paused, s.status, s.last_latency_ms
+             FROM monitors m JOIN monitor_state s ON s.monitor_id = m.id
+             ORDER BY m.name_key",
+        )
+        .fetch_all(pool)
+        .await
+    }
+
     pub async fn find_all(pool: &SqlitePool) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM monitors ORDER BY name_key"

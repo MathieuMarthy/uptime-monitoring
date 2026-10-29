@@ -65,6 +65,11 @@ pub fn format_datetime(tz: &TimeZone, ms: i64) -> String {
     zoned(tz, ms).strftime("%Y-%m-%d %H:%M").to_string()
 }
 
+/// `14:05` in the given timezone.
+pub fn format_time(tz: &TimeZone, ms: i64) -> String {
+    zoned(tz, ms).strftime("%H:%M").to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

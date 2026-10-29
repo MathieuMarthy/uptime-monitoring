@@ -272,3 +272,87 @@ async fn wrong_method_renders_405_page() {
     assert_eq!(r.status, 405);
     assert!(r.body.contains("Method not allowed"));
 }
+
+#[tokio::test]
+async fn dashboard_shows_uptime_and_hourly_heartbeat() {
+    let (app, pool) = common::test_app().await;
+    create(&app, "API").await;
+    create(&app, "Idle").await;
+    let now = uptime_monitoring::time::now_ms();
+    for (i, down) in [false, false, true, false].into_iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO checks (monitor_id, checked_at, ok, latency_ms, covered_ms, down)
+             VALUES (1, ?, ?, 120, 60000, ?)",
+        )
+        .bind(now - 4 + i as i64)
+        .bind(!down)
+        .bind(down)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let body = get(&app, "/").await.body;
+    let (api, idle) = body.split_once("Idle").unwrap();
+    assert!(api.contains("75.00%"), "{api}");
+    assert_eq!(api.matches("tick tick-red").count(), 1);
+    assert_eq!(api.matches("tick tick-gray").count(), 23);
+    assert_eq!(idle.matches("tick tick-gray").count(), 24);
+    assert!(!idle.contains('%'));
+    assert!(api.contains(r#"data-search="API https://example.com""#));
+    for script in ["/static/js/live.js", "/static/js/search.js"] {
+        assert!(body.contains(script));
+        assert_eq!(get(&app, script).await.status, 200, "{script}");
+    }
+}
+
+#[tokio::test]
+async fn detail_shows_history_incidents_and_recent_checks() {
+    use uptime_monitoring::time::{day_key, day_of, now_ms};
+    let (app, pool) = common::test_app().await;
+    create(&app, "API").await;
+    let now = now_ms();
+    let two_days_ago = day_of(&jiff::tz::TimeZone::UTC, now)
+        .checked_sub(jiff::Span::new().days(2))
+        .unwrap();
+    // A rolled-up day at 99 % uptime, then two checks today, the second one down.
+    sqlx::query(
+        "INSERT INTO daily_stats (monitor_id, day, monitored_ms, downtime_ms, checks_total,
+                                  checks_failed, latency_avg_ms, latency_p95_ms)
+         VALUES (1, ?, 86400000, 864000, 1440, 10, 100, 200)",
+    )
+    .bind(day_key(two_days_ago))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO checks (monitor_id, checked_at, ok, latency_ms, status_code, error_kind, error,
+                             covered_ms, down)
+         VALUES (1, ?1 - 2, 1, 150, 200, NULL, NULL, 60000, 0),
+                (1, ?1 - 1, 0, 90, 503, 'status', 'HTTP 503 Service Unavailable', 60000, 1)",
+    )
+    .bind(now)
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query(
+        "INSERT INTO incidents (monitor_id, started_at, error_kind, cause)
+         VALUES (1, ?, 'status', 'HTTP 503 Service Unavailable')",
+    )
+    .bind(now - 1)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let body = get(&app, "/monitors/1").await.body;
+    assert!(body.contains("50.00%"), "24 h uptime");
+    assert!(body.contains("98.93%"), "30-day uptime");
+    assert!(body.contains("120ms"), "24 h average latency");
+    assert_eq!(body.matches(r#"class="tick tick-"#).count(), 24 + 90);
+    assert!(body.contains("Ongoing"));
+    assert_eq!(body.matches("HTTP 503 Service Unavailable").count(), 2);
+    assert!(body.contains("503"));
+    for id in ["live-hero", "live-incidents", "live-checks"] {
+        assert!(body.contains(&format!(r#"id="{id}" data-live"#)), "{id}");
+    }
+}

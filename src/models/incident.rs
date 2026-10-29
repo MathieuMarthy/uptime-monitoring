@@ -15,11 +15,21 @@ pub struct Incident {
 impl Incident {
     /// Most recent first.
     pub async fn for_monitor(pool: &SqlitePool, monitor_id: i64) -> Result<Vec<Self>, sqlx::Error> {
+        Self::recent(pool, monitor_id, -1).await
+    }
+
+    /// The `limit` most recent, first; a negative limit returns them all.
+    pub async fn recent(
+        pool: &SqlitePool,
+        monitor_id: i64,
+        limit: i64,
+    ) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as(
             "SELECT id, monitor_id, started_at, resolved_at, error_kind, cause FROM incidents
-             WHERE monitor_id = ? ORDER BY started_at DESC",
+             WHERE monitor_id = ? ORDER BY started_at DESC LIMIT ?",
         )
         .bind(monitor_id)
+        .bind(limit)
         .fetch_all(pool)
         .await
     }

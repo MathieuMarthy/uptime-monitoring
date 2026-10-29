@@ -4,9 +4,13 @@
 {% block styles %}
 <link href="/static/css/monitors.css" rel="stylesheet">
 {% endblock %}
+{% block scripts %}
+<script src="/static/js/live.js" defer></script>
+<script src="/static/js/search.js" defer></script>
+{% endblock %}
 
 {% block content %}
-<section aria-label="Status overview" class="stats">
+<section aria-label="Status overview" class="stats" id="live-stats" data-live>
     <div class="stat-item">
         <span class="stat-label">Up</span>
         <span class="stat-value text-green" data-count="up">{{ up }}</span>
@@ -40,16 +44,17 @@
         />
     </div>
 
-    <ul class="monitor-grid">
-        {% for view in monitors %}
-        <li>
-            <a class="monitor-card" href="/monitors/{{ view.monitor.id }}">
+    <ul class="monitor-grid" id="live-grid" data-live>
+        {% for card in cards %}
+        {% let m = card.monitor %}
+        <li data-search="{{ m.name }} {{ m.url }}">
+            <a class="monitor-card" href="/monitors/{{ m.id }}">
                 <div class="card-header">
                     <div class="card-title-group">
-                        <h2 class="card-title">{{ view.monitor.name }}</h2>
-                        <span class="card-status {{ view.status_class() }}">{{ view.status_label() }}</span>
+                        <h2 class="card-title">{{ m.name }}</h2>
+                        <span class="card-status {{ card.status_class() }}">{{ card.status_label() }}</span>
                     </div>
-                    {% match view.state.last_latency_ms %}
+                    {% match m.last_latency_ms %}
                         {% when Some with (latency) %}
                             <span class="card-ping">{{ latency }}ms</span>
                         {% when None %}
@@ -57,12 +62,12 @@
                     {% endmatch %}
                 </div>
                 <div class="card-uptime-row">
-                    <span class="card-uptime">—</span>
+                    <span class="card-uptime">{{ card.heartbeat.uptime_label() }}</span>
                     <span class="card-duration">24h</span>
                 </div>
-                <div class="heartbeat-bar" role="img" aria-label="History of checks">
-                    {% for _ in 0..24 %}
-                    <span class="tick tick-gray" title="No data yet"></span>
+                <div class="heartbeat-bar" role="img" aria-label="Last 24 hours, one bar per hour">
+                    {% for tick in card.heartbeat.ticks %}
+                    <span class="tick {{ tick.class }}" title="{{ tick.title }}"></span>
                     {% endfor %}
                 </div>
             </a>
