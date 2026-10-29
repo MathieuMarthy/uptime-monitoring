@@ -161,11 +161,17 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   the interval) and whether that time was downtime (`down`: an incident was open; opening an incident also marks the
   checks of its failure series). Uptime over any window is then `1 − Σ down covered / Σ covered`, one `GROUP BY` on
   the checks (`models::Bucket`): about 35 ms for 100 monitors over 24 h.
+  A check's whole coverage counts in the bucket of its `checked_at`, so long intervals make hourly figures lumpy.
 - **Local time.** Days and hours are those of `settings.timezone`, read on each request; unknown names fall back to UTC.
-- **Maintenance** (`maintenance.rs`, at startup then hourly). Rolls every completed day (5 min after local
-  midnight) since the last one rolled up into `daily_stats`, with a nearest-rank p95 latency; then deletes checks and
-  the notification log older than `checks_retention_days`, resolved incidents and daily stats older than
-  `history_retention_days` (if set), and expired sessions. Rollup runs first, so no day is lost to the purge.
+- **Maintenance** (`maintenance.rs`, at startup then hourly). Rolls every completed day since the last one rolled up
+  into `daily_stats`, with a nearest-rank p95 latency. A day is complete 5 min after local midnight plus the longest
+  failure series of any monitor (`failure_threshold × (retry_interval_s + timeout_s)`), since an incident opening later
+  marks earlier checks as downtime. Then it deletes checks and the notification log older than
+  `checks_retention_days` (never the checks of a day not rolled up yet), resolved incidents and daily stats older than
+  `history_retention_days` (if set), and expired sessions. The schema requires `checks_retention_days ≥ 2` and
+  `history_retention_days ≥ checks_retention_days`.
+- **Changing the timezone** (not possible yet from the UI) resumes the rollup from the last day key: the first day
+  in the new zone overlaps the last one (moving east) or leaves hours out (moving west).
 - **Dashboard.** One query for monitors and states (no body or headers), one for the 24 hourly bars of all monitors.
   Bars: gray without checks, green, orange with failures but no downtime, red with downtime. Uptime is truncated,
   never rounded up to 100 %.

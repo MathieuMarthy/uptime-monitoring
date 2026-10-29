@@ -9,5 +9,6 @@ function filter() {
     }
 }
 
+filter(); // the browser may restore the query on back navigation
 input.addEventListener("input", filter);
 document.addEventListener("live:refreshed", filter);

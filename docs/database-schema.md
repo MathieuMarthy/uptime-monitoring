@@ -117,6 +117,6 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
 | Column | Default |
 |---|---|
 | `timezone` | `'UTC'` (IANA name; pre-filled from the browser during setup) |
-| `checks_retention_days` | 7 |
-| `history_retention_days` | NULL = kept forever (incidents, daily stats) |
+| `checks_retention_days` | 7 (≥ 2) |
+| `history_retention_days` | NULL = kept forever (incidents, daily stats); otherwise ≥ `checks_retention_days` |
 | `block_private_targets` | 0 |

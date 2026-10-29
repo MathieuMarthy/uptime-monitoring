@@ -54,6 +54,17 @@ impl Monitor {
         .await
     }
 
+    /// The longest a failure series can run before reaching its threshold, over all monitors.
+    pub async fn longest_failure_series_ms(pool: &SqlitePool) -> Result<i64, sqlx::Error> {
+        let (ms,) = sqlx::query_as(
+            "SELECT COALESCE(MAX(failure_threshold * (retry_interval_s + timeout_s)), 0) * 1000
+             FROM monitors",
+        )
+        .fetch_one(pool)
+        .await?;
+        Ok(ms)
+    }
+
     pub async fn find_all(pool: &SqlitePool) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT {COLUMNS} FROM monitors ORDER BY name_key"

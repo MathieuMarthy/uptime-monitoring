@@ -177,3 +177,83 @@ async fn expired_sessions_are_purged() {
     maintenance::run(&pool, D0).await.unwrap();
     assert_eq!(count(&pool, "sessions").await, 0);
 }
+
+async fn configure(pool: &SqlitePool, threshold: i64, interval_s: i64) {
+    sqlx::query(
+        "UPDATE monitors SET failure_threshold = ?, interval_s = ?2, retry_interval_s = ?2",
+    )
+    .bind(threshold)
+    .bind(interval_s)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn rollup_waits_for_the_longest_possible_failure_series() {
+    // 3 failures 300 s apart (10 s timeout): an incident can open 930 s after its first failure,
+    // and mark checks of the previous day as downtime.
+    let (pool, id) = setup().await;
+    configure(&pool, 3, 300).await;
+    check(&pool, id, D0 + DAY - 120 * S, true, None).await;
+    maintenance::run(&pool, D0 + DAY + 10 * 60 * S)
+        .await
+        .unwrap();
+    assert!(daily_stats(&pool).await.is_empty());
+    maintenance::run(&pool, D0 + DAY + 25 * 60 * S)
+        .await
+        .unwrap();
+    assert_eq!(daily_stats(&pool).await.len(), 1);
+}
+
+#[tokio::test]
+async fn checks_of_days_not_rolled_up_yet_are_not_purged() {
+    let (pool, id) = setup().await;
+    configure(&pool, 10, 86_400).await; // a failure series can last 10 days
+    check(&pool, id, D0, false, None).await;
+    maintenance::run(&pool, D0 + 9 * DAY).await.unwrap();
+    assert_eq!(count(&pool, "checks").await, 1);
+    assert!(daily_stats(&pool).await.is_empty());
+    maintenance::run(&pool, D0 + 12 * DAY).await.unwrap();
+    assert_eq!(
+        (count(&pool, "checks").await, daily_stats(&pool).await.len()),
+        (0, 1)
+    );
+}
+
+#[tokio::test]
+async fn p95_is_the_nearest_rank() {
+    for (n, expected) in [(1, 10), (19, 190), (20, 190), (21, 200)] {
+        let (pool, id) = setup().await;
+        for i in 0..n {
+            check(&pool, id, D0 + i * 60 * S, false, Some((i + 1) * 10)).await;
+        }
+        maintenance::run(&pool, D0 + DAY + HOUR).await.unwrap();
+        assert_eq!(
+            daily_stats(&pool).await[0].6,
+            Some(expected),
+            "{n} latencies"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_dst_day_rolls_up_its_25_hours() {
+    let (pool, id) = setup().await;
+    sqlx::query("UPDATE settings SET timezone = 'Europe/Paris'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // 2026-10-25 in Paris runs from 10-24T22:00Z to 10-25T23:00Z.
+    let start = D0 - DAY - 2 * HOUR;
+    check(&pool, id, start, false, None).await;
+    check(&pool, id, start + 25 * HOUR - S, false, None).await;
+    check(&pool, id, start + 25 * HOUR, false, None).await;
+    maintenance::run(&pool, D0 + DAY).await.unwrap();
+    let rows: Vec<(i64, i64)> = daily_stats(&pool)
+        .await
+        .iter()
+        .map(|r| (r.0, r.3))
+        .collect();
+    assert_eq!(rows, [(20261025, 2), (20261026, 1)]);
+}

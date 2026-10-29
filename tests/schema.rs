@@ -118,3 +118,23 @@ async fn check_engine_columns_have_defaults() {
     .unwrap();
     assert_eq!(row, (20, 0, 3, None));
 }
+
+#[tokio::test]
+async fn retentions_keep_enough_for_the_rollups() {
+    let (_, pool) = common::test_app().await;
+    for (checks, history, ok) in [
+        (1, None, false),
+        (2, None, true),
+        (7, Some(6), false),
+        (7, Some(7), true),
+    ] {
+        let result = sqlx::query(
+            "UPDATE settings SET checks_retention_days = ?, history_retention_days = ?",
+        )
+        .bind(checks)
+        .bind(history)
+        .execute(&pool)
+        .await;
+        assert_eq!(result.is_ok(), ok, "{checks} / {history:?}");
+    }
+}

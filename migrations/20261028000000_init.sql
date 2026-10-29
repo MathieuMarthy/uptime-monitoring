@@ -140,8 +140,11 @@ CREATE TABLE sessions (
 CREATE TABLE settings (
     id                     INTEGER PRIMARY KEY CHECK (id = 1),
     timezone               TEXT NOT NULL DEFAULT 'UTC',
-    checks_retention_days  INTEGER NOT NULL DEFAULT 7,
-    history_retention_days INTEGER,
+    -- At least a full day besides today, so that every day is rolled up before its checks go.
+    checks_retention_days  INTEGER NOT NULL DEFAULT 7 CHECK (checks_retention_days >= 2),
+    history_retention_days INTEGER
+                           CHECK (history_retention_days IS NULL
+                                  OR history_retention_days >= checks_retention_days),
     block_private_targets  INTEGER NOT NULL DEFAULT 0
 );
 
