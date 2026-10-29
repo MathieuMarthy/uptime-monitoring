@@ -44,8 +44,8 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    let notifier = Notifier::start(pool.clone(), guard.clone());
-    let engine = match engine::start(pool.clone(), guard, notifier.clone()).await {
+    let notifier = Notifier::start(pool.clone(), guard.clone(), config.public_url.clone());
+    let engine = match engine::start(pool.clone(), guard.clone(), notifier.clone()).await {
         Ok(engine) => engine,
         Err(e) => {
             eprintln!("Cannot start the check engine: {e}");
@@ -57,10 +57,14 @@ async fn main() {
 
     let state = AppState::new(pool)
         .with_trust_proxy_headers(config.trust_proxy_headers)
+        .with_public_url(config.public_url.clone())
         .with_engine(engine)
+        .with_guard(guard)
         .with_notifier(notifier);
     match state.start_setup_if_needed().await {
-        Ok(Some(token)) => uptime_monitoring::auth::print_setup_url(&token),
+        Ok(Some(token)) => {
+            uptime_monitoring::auth::print_setup_url(&token, config.public_url.as_deref())
+        }
         Ok(None) => {}
         Err(e) => {
             eprintln!("Cannot read the admin account: {e}");

@@ -148,7 +148,7 @@ async fn login(
     let Some(admin) = Admin::find(&state.db).await? else {
         // The admin row was removed while running: back to first-launch setup.
         if let Some(token) = state.start_setup_if_needed().await? {
-            print_setup_url(&token);
+            print_setup_url(&token, state.public_url.as_deref());
         }
         return Ok(Redirect::to("/setup").into_response());
     };
@@ -199,7 +199,7 @@ async fn start_session(state: &AppState) -> Result<Response, AppError> {
 
 /// Runs an Argon2 computation on the blocking pool, one at a time. A request that cannot get
 /// its turn within `HASHING_WAIT` is refused, so a flood cannot queue up without bound.
-async fn with_password_hashing<T: Send + 'static>(
+pub(super) async fn with_password_hashing<T: Send + 'static>(
     state: &AppState,
     work: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, AppError> {

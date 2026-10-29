@@ -1,0 +1,134 @@
+{% extends "layout.html" %}
+
+{% block title %}Settings - Uptime Monitoring{% endblock %}
+
+{% block styles %}
+<link href="/static/css/forms.css" rel="stylesheet">
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/settings.js" defer></script>
+{% endblock %}
+
+{% macro field_error(field) %}
+{% if let Some(message) = self.error(field) %}<p class="field-error">{{ message }}</p>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-header">
+        <h1 class="form-title">Settings</h1>
+        <p class="form-subtitle">Instance-wide options. Each section is saved on its own.</p>
+    </div>
+
+    {% if let Some(message) = saved %}
+    <div class="success-banner" role="status">
+        <span>{{ message }}</span>
+    </div>
+    {% endif %}
+
+    {% if !errors.is_empty() %}
+    <div class="error-banner" role="alert">
+        <span>Please fix the {{ errors.len() }} highlighted field(s).</span>
+    </div>
+    {% endif %}
+
+    <div class="form-card">
+        <form action="/settings/general" method="POST" class="form-section">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <h2 class="section-title">General</h2>
+            <div class="form-group">
+                <label class="form-label" for="timezone">Timezone</label>
+                <select class="form-select" id="timezone" name="timezone">
+                    {% for zone in timezones %}
+                    <option value="{{ zone }}" {% if *zone == timezone %}selected{% endif %}>{{ zone }}</option>
+                    {% endfor %}
+                </select>
+                <span class="form-hint">Used for every time shown and for the daily history. After a change, the
+                    first day in the new zone overlaps the previous one (moving east) or misses a few hours
+                    (moving west).</span>
+                {% call field_error("timezone") %}{% endcall %}
+            </div>
+            <div class="form-actions-left">
+                <button class="button-primary" type="submit">Save</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="form-card">
+        <form action="/settings/data" method="POST" class="form-section" id="data-settings"
+              data-checks-per-day="{{ self.checks_per_day() }}" data-monitors="{{ storage.monitors }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <h2 class="section-title">Data and Security</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label" for="checks_retention_days">Raw checks (days)</label>
+                    <input class="form-input" id="checks_retention_days" name="checks_retention_days" type="number" min="2" max="365" required value="{{ data.checks_retention_days }}"/>
+                    <span class="form-hint">Every single check, shown on the detail pages. Disk: about
+                        <strong id="checks-estimate">{{ self.checks_estimate() }}</strong>
+                        ({{ self.checks_per_day() }} checks a day).</span>
+                    {% call field_error("checks_retention_days") %}{% endcall %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="history_retention_days">History (days)</label>
+                    <input class="form-input" id="history_retention_days" name="history_retention_days" type="number" min="2" max="36500" placeholder="Forever" value="{{ data.history_retention_days }}"/>
+                    <span class="form-hint">Daily uptime and incidents, for the 90-day bars and public pages. Blank keeps
+                        them forever. Disk: about <strong id="history-estimate">{{ self.history_estimate() }}</strong>.</span>
+                    {% call field_error("history_retention_days") %}{% endcall %}
+                </div>
+            </div>
+            <p class="form-hint">Estimates for the {{ storage.monitors }} active monitor(s); the database file now takes
+                {{ self.database_size() }}. Memory does not grow with retention: SQLite reads the pages it needs and
+                caches a bounded amount. Old data is deleted within the hour; the file keeps its size and reuses the
+                space.</p>
+
+            <label class="checkbox-group" for="block_private_targets">
+                <input type="checkbox" id="block_private_targets" name="block_private_targets"
+                       {% if data.block_private_targets.is_some() %}checked{% endif %}/>
+                <div class="checkbox-label-group">
+                    <span class="form-label">Block private addresses</span>
+                    <span class="form-hint">Refuse checks and alerts towards localhost, private networks and cloud
+                        metadata addresses. Turn it on when people you do not trust can reach this instance's
+                        targets; leave it off to monitor internal services. Applies at once.</span>
+                </div>
+            </label>
+
+            <div class="form-actions-left">
+                <button class="button-primary" type="submit">Save</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="form-card">
+        <form action="/settings/password" method="POST" class="form-section">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <h2 class="section-title">Password</h2>
+            <div class="form-group">
+                <label class="form-label" for="current_password">Current password</label>
+                <input class="form-input" id="current_password" name="current_password" type="password"
+                       autocomplete="current-password" required/>
+                {% call field_error("current_password") %}{% endcall %}
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label" for="password">New password</label>
+                    <input class="form-input" id="password" name="password" type="password"
+                           autocomplete="new-password" required minlength="12"/>
+                    <span class="form-hint">At least 12 characters.</span>
+                    {% call field_error("password") %}{% endcall %}
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="password_confirm">Confirm new password</label>
+                    <input class="form-input" id="password_confirm" name="password_confirm" type="password"
+                           autocomplete="new-password" required minlength="12"/>
+                    {% call field_error("password_confirm") %}{% endcall %}
+                </div>
+            </div>
+            <span class="form-hint">Every other session is logged out.</span>
+            <div class="form-actions-left">
+                <button class="button-primary" type="submit">Change Password</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

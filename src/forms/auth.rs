@@ -51,19 +51,7 @@ impl SetupForm {
             );
         }
 
-        if self.password.chars().count() < PASSWORD_MIN_CHARS {
-            errors.insert(
-                "password",
-                format!("Password must be at least {PASSWORD_MIN_CHARS} characters."),
-            );
-        } else if self.password.len() > PASSWORD_MAX_BYTES {
-            errors.insert(
-                "password",
-                format!("Password must be at most {PASSWORD_MAX_BYTES} bytes."),
-            );
-        } else if self.password != self.password_confirm {
-            errors.insert("password_confirm", "Passwords do not match.".to_string());
-        }
+        check_new_password(&self.password, &self.password_confirm, &mut errors);
 
         if !errors.is_empty() {
             return Err(errors);
@@ -73,6 +61,23 @@ impl SetupForm {
             password: self.password.clone(),
             timezone: timezone_or_default(&self.timezone),
         })
+    }
+}
+
+/// Rules of a new password (setup, change), reported on `password` and `password_confirm`.
+pub fn check_new_password(password: &str, confirm: &str, errors: &mut FieldErrors) {
+    if password.chars().count() < PASSWORD_MIN_CHARS {
+        errors.insert(
+            "password",
+            format!("Password must be at least {PASSWORD_MIN_CHARS} characters."),
+        );
+    } else if password.len() > PASSWORD_MAX_BYTES {
+        errors.insert(
+            "password",
+            format!("Password must be at most {PASSWORD_MAX_BYTES} bytes."),
+        );
+    } else if password != confirm {
+        errors.insert("password_confirm", "Passwords do not match.".to_string());
     }
 }
 

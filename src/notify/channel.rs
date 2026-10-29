@@ -76,13 +76,14 @@ impl ChannelConfig {
         notification: &Notification,
         message: &Message,
     ) -> RequestBuilder {
-        let body = match self {
+        let mut body = match self {
             Self::Webhook(_) => json!({
                 "event": notification.event.as_str(),
                 "monitor": notification.monitor.as_ref().map(|m| json!({
                     "id": m.id,
                     "name": m.name,
                     "url": m.url,
+                    "link": message.link,
                 })),
                 "title": message.title,
                 "message": message.text,
@@ -104,6 +105,13 @@ impl ChannelConfig {
                 "tags": [ntfy_tag(message.severity)],
             }),
         };
+        if let Some(link) = &message.link {
+            match self {
+                Self::Webhook(_) => {}
+                Self::Discord(_) => body["embeds"][0]["url"] = json!(link),
+                Self::Ntfy(_) => body["click"] = json!(link),
+            }
+        }
         let mut request = client
             .post(self.target())
             .header(reqwest::header::CONTENT_TYPE, "application/json")

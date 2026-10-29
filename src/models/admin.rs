@@ -45,4 +45,23 @@ impl Admin {
             .await?;
         tx.commit().await
     }
+
+    /// Replaces the password and ends every session except `keep_token_hash`, atomically.
+    pub async fn change_password(
+        pool: &SqlitePool,
+        password_hash: &str,
+        keep_token_hash: &str,
+    ) -> Result<(), sqlx::Error> {
+        let mut tx = pool.begin().await?;
+        sqlx::query("UPDATE admin SET password_hash = ?, updated_at = ? WHERE id = 1")
+            .bind(password_hash)
+            .bind(now_ms())
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM sessions WHERE token_hash <> ?")
+            .bind(keep_token_hash)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await
+    }
 }

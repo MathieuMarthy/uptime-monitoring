@@ -20,7 +20,7 @@ pub use monitor::{Monitor, MonitorSummary};
 pub use monitor_state::{MonitorState, MonitorStatus, Recorded};
 pub use notification_log::{Delivery, LogEntry, NotificationLog};
 pub use session::{NewSession, Session};
-pub use settings::Settings;
+pub use settings::{Settings, StorageUse};
 pub use stats::Bucket;
 pub use status_page::{ShownMonitor, StatusPage, StatusPageSummary};
 

@@ -53,7 +53,7 @@ impl Guard {
         self.block_private.store(block, Ordering::Relaxed);
     }
 
-    fn blocking(&self) -> bool {
+    pub fn blocks_private(&self) -> bool {
         self.block_private.load(Ordering::Relaxed)
     }
 
@@ -64,7 +64,7 @@ impl Guard {
             Some(url::Host::Ipv6(ip)) => IpAddr::V6(ip),
             _ => return Ok(()),
         };
-        if self.blocking() && is_private(ip) {
+        if self.blocks_private() && is_private(ip) {
             return Err(GuardError::Blocked(ip.to_string()));
         }
         Ok(())
@@ -79,7 +79,7 @@ impl Guard {
         if addrs.is_empty() {
             return Err(GuardError::Dns(format!("no address for {host}")));
         }
-        if self.blocking() {
+        if self.blocks_private() {
             addrs.retain(|a| !is_private(a.ip()));
             if addrs.is_empty() {
                 return Err(GuardError::Blocked(host.to_string()));

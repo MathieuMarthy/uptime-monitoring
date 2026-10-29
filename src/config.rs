@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use url::Url;
 
 const DEFAULT_DATABASE_URL: &str = "sqlite://uptime.db";
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:8080";
@@ -8,6 +9,8 @@ pub struct Config {
     pub database_url: String,
     pub bind_addr: SocketAddr,
     pub trust_proxy_headers: bool,
+    /// Where users reach the instance, without a trailing `/`: links in alerts and the setup URL.
+    pub public_url: Option<String>,
 }
 
 impl Config {
@@ -32,12 +35,34 @@ impl Config {
             }
         };
 
+        let public_url = match get("PUBLIC_URL").as_deref().map(str::trim) {
+            None | Some("") => None,
+            Some(raw) => Some(public_url(raw).ok_or_else(|| {
+                format!(
+                    "PUBLIC_URL must be an http(s) URL such as https://status.example.com, without query, \
+                     fragment or credentials, got {raw:?}"
+                )
+            })?),
+        };
+
         Ok(Self {
             database_url,
             bind_addr,
             trust_proxy_headers,
+            public_url,
         })
     }
+}
+
+fn public_url(raw: &str) -> Option<String> {
+    let url = Url::parse(raw).ok()?;
+    let plain = matches!(url.scheme(), "http" | "https")
+        && url.host().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none();
+    plain.then(|| url.as_str().trim_end_matches('/').to_string())
 }
 
 #[cfg(test)]
@@ -62,6 +87,38 @@ mod tests {
         assert!(with("true").unwrap().trust_proxy_headers);
         assert!(!with("0").unwrap().trust_proxy_headers);
         assert!(with("yes").unwrap_err().contains("TRUST_PROXY_HEADERS"));
+    }
+
+    #[test]
+    fn public_url_is_an_optional_http_base() {
+        let with = |value: &'static str| {
+            Config::from_lookup(move |key| (key == "PUBLIC_URL").then(|| value.to_string()))
+        };
+        assert_eq!(Config::from_lookup(|_| None).unwrap().public_url, None);
+        assert_eq!(with("").unwrap().public_url, None);
+        assert_eq!(
+            with("https://status.example.com/")
+                .unwrap()
+                .public_url
+                .as_deref(),
+            Some("https://status.example.com")
+        );
+        assert_eq!(
+            with("http://10.0.0.2:8080/uptime")
+                .unwrap()
+                .public_url
+                .as_deref(),
+            Some("http://10.0.0.2:8080/uptime")
+        );
+        for bad in [
+            "status.example.com",
+            "ftp://example.com",
+            "https://example.com/?a=1",
+            "https://example.com/#x",
+            "https://user:pw@example.com",
+        ] {
+            assert!(with(bad).unwrap_err().contains("PUBLIC_URL"), "{bad}");
+        }
     }
 
     #[test]

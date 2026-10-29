@@ -14,8 +14,17 @@ pub const SESSION_COOKIE: &str = "__Host-session";
 pub const SESSION_TTL_MS: i64 = 30 * 24 * 60 * 60 * 1000;
 
 /// Prints the first-launch URL to stderr, whatever `RUST_LOG` filters out.
-pub fn print_setup_url(token: &str) {
-    eprintln!("No admin account yet. Create it by opening /setup?token={token} on this instance.");
+pub fn print_setup_url(token: &str, public_url: Option<&str>) {
+    eprintln!("{}", setup_message(token, public_url));
+}
+
+fn setup_message(token: &str, public_url: Option<&str>) -> String {
+    match public_url {
+        Some(base) => format!("No admin account yet. Create it at {base}/setup?token={token}"),
+        None => format!(
+            "No admin account yet. Create it by opening /setup?token={token} on this instance."
+        ),
+    }
 }
 
 /// Hashes a password with Argon2id and the crate's default (OWASP) parameters. CPU and memory
@@ -79,6 +88,15 @@ pub fn expired_session_cookie() -> String {
 mod tests {
     use super::*;
     use axum::http::HeaderValue;
+
+    #[test]
+    fn setup_message_uses_the_public_url() {
+        assert_eq!(
+            setup_message("t0k", Some("https://status.example.com")),
+            "No admin account yet. Create it at https://status.example.com/setup?token=t0k"
+        );
+        assert!(setup_message("t0k", None).contains("opening /setup?token=t0k on this instance"));
+    }
 
     #[test]
     fn password_round_trip() {

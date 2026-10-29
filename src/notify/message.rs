@@ -17,10 +17,12 @@ pub struct Message {
     pub title: String,
     pub text: String,
     pub severity: Severity,
+    /// The monitor's detail page, when `PUBLIC_URL` is set.
+    pub link: Option<String>,
 }
 
 impl Message {
-    pub fn new(notification: &Notification, tz: &TimeZone) -> Self {
+    pub fn new(notification: &Notification, tz: &TimeZone, public_url: Option<&str>) -> Self {
         let name = notification
             .monitor
             .as_ref()
@@ -67,10 +69,14 @@ impl Message {
             Some(monitor) => format!("{text}\n{}", monitor.url),
             None => text,
         };
+        let link = public_url
+            .zip(notification.monitor.as_ref())
+            .map(|(base, monitor)| format!("{base}/monitors/{}", monitor.id));
         Self {
             title,
             text,
             severity,
+            link,
         }
     }
 }
@@ -94,7 +100,26 @@ mod tests {
     }
 
     fn message(event: Event) -> Message {
-        Message::new(&notification(event), &TimeZone::UTC)
+        Message::new(&notification(event), &TimeZone::UTC, None)
+    }
+
+    #[test]
+    fn link_points_to_the_detail_page_when_public_url_is_set() {
+        let up = notification(Event::Up { down_since: 0 });
+        assert_eq!(message(Event::Up { down_since: 0 }).link, None);
+        assert_eq!(
+            Message::new(&up, &TimeZone::UTC, Some("https://status.example.com")).link,
+            Some("https://status.example.com/monitors/1".to_string())
+        );
+        let test = Notification {
+            monitor: None,
+            event: Event::Test,
+            at: 0,
+        };
+        assert_eq!(
+            Message::new(&test, &TimeZone::UTC, Some("https://status.example.com")).link,
+            None
+        );
     }
 
     #[test]
@@ -163,6 +188,7 @@ mod tests {
                 at: 0,
             },
             &TimeZone::UTC,
+            None,
         );
         assert_eq!(m.title, "Test notification");
         assert_eq!(m.text, "This channel works.");

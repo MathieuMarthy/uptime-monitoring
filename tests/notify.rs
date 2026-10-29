@@ -87,9 +87,14 @@ async fn link(pool: &SqlitePool, monitor_id: i64, channel_id: i64) {
 }
 
 fn notifier(pool: &SqlitePool) -> Notifier {
+    notifier_with_public_url(pool, None)
+}
+
+fn notifier_with_public_url(pool: &SqlitePool, public_url: Option<&str>) -> Notifier {
     Notifier::start_with(
         pool.clone(),
         Guard::new(false),
+        public_url.map(str::to_string),
         vec![
             Duration::ZERO,
             Duration::from_millis(10),
@@ -163,6 +168,7 @@ async fn ntfy_and_discord_get_their_own_format() {
     assert_eq!(request.body["topic"], "alerts");
     assert_eq!(request.body["title"], "API is down");
     assert_eq!(request.body["priority"], 4);
+    assert!(request.body.get("click").is_none());
 
     sqlx::query("DELETE FROM monitor_channels")
         .execute(&pool)
@@ -174,6 +180,44 @@ async fn ntfy_and_discord_get_their_own_format() {
     let request = next(&mut rx).await;
     assert_eq!(request.body["embeds"][0]["title"], "API is down");
     assert_eq!(request.body["embeds"][0]["color"], 0xE5484D);
+    assert!(request.body["embeds"][0].get("url").is_none());
+}
+
+#[tokio::test]
+async fn public_url_links_every_channel_to_the_detail_page() {
+    let pool = common::test_app().await.1;
+    let (url, mut rx) = receiver(vec![]).await;
+    let m = monitor(&pool).await;
+    for (kind, config) in [
+        ("webhook", serde_json::json!({ "url": url })),
+        ("discord", serde_json::json!({ "url": url })),
+        (
+            "ntfy",
+            serde_json::json!({ "server": url, "topic": "alerts" }),
+        ),
+    ] {
+        link(&pool, m.id, channel(&pool, kind, config, true).await).await;
+    }
+
+    notifier_with_public_url(&pool, Some("https://status.example.com")).notify(down(&m));
+    let expected = format!("https://status.example.com/monitors/{}", m.id);
+    let mut links = Vec::new();
+    for _ in 0..3 {
+        let body = next(&mut rx).await.body;
+        if body.get("embeds").is_some() {
+            links.push(("discord", body["embeds"][0]["url"].clone()));
+        } else if body.get("topic").is_some() {
+            links.push(("ntfy", body["click"].clone()));
+        } else {
+            links.push(("webhook", body["monitor"]["link"].clone()));
+        }
+    }
+    links.sort_by_key(|(kind, _)| *kind);
+    let kinds: Vec<_> = links.iter().map(|(kind, _)| *kind).collect();
+    assert_eq!(kinds, ["discord", "ntfy", "webhook"]);
+    for (kind, link) in links {
+        assert_eq!(link, expected.as_str(), "{kind}");
+    }
 }
 
 #[tokio::test]
@@ -247,7 +291,7 @@ async fn tests_send_once_without_logging_and_respect_the_guard() {
     let (url, mut rx) = receiver(vec![]).await;
     let config = ChannelConfig::Webhook(WebhookConfig { url });
 
-    let blocking = Notifier::start(pool.clone(), Guard::new(true));
+    let blocking = Notifier::start(pool.clone(), Guard::new(true), None);
     let error = blocking.send_test(&config).await.unwrap_err();
     assert!(error.contains("127.0.0.1"), "{error}");
     assert!(rx.try_recv().is_err());
@@ -372,6 +416,7 @@ async fn channel_deleted_during_retries_still_logs() {
     let notifier = Notifier::start_with(
         pool.clone(),
         Guard::new(false),
+        None,
         vec![Duration::ZERO, Duration::from_millis(300)],
     );
     notifier.notify(down(&m));

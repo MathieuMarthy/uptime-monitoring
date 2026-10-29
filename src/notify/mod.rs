@@ -86,14 +86,20 @@ pub struct Notifier {
 
 impl Notifier {
     /// Starts the dispatcher.
-    pub fn start(pool: SqlitePool, guard: Guard) -> Self {
-        Self::start_with(pool, guard, RETRY_DELAYS.to_vec())
+    pub fn start(pool: SqlitePool, guard: Guard, public_url: Option<String>) -> Self {
+        Self::start_with(pool, guard, public_url, RETRY_DELAYS.to_vec())
     }
 
     /// Like `start`, with other waits between attempts.
-    pub fn start_with(pool: SqlitePool, guard: Guard, retry_delays: Vec<Duration>) -> Self {
+    pub fn start_with(
+        pool: SqlitePool,
+        guard: Guard,
+        public_url: Option<String>,
+        retry_delays: Vec<Duration>,
+    ) -> Self {
         let sender = Arc::new(Sender {
             guard,
+            public_url,
             retry_delays,
             client: OnceLock::new(),
         });
@@ -133,7 +139,7 @@ impl Notifier {
             event: Event::Test,
             at: now_ms(),
         };
-        let message = Message::new(&notification, &TimeZone::UTC);
+        let message = Message::new(&notification, &TimeZone::UTC, None);
         self.sender
             .attempt(config, &notification, &message)
             .await
@@ -144,6 +150,7 @@ impl Notifier {
 /// Sends requests; shared by the dispatcher and the channel form.
 struct Sender {
     guard: Guard,
+    public_url: Option<String>,
     retry_delays: Vec<Duration>,
     /// Built on first use.
     client: OnceLock<Client>,
@@ -153,6 +160,7 @@ impl Default for Sender {
     fn default() -> Self {
         Self {
             guard: Guard::default(),
+            public_url: None,
             retry_delays: RETRY_DELAYS.to_vec(),
             client: OnceLock::new(),
         }
@@ -299,7 +307,11 @@ async fn monitor_worker(
             Ok(settings) => settings.tz(),
             Err(_) => TimeZone::UTC,
         };
-        let message = Arc::new(Message::new(&notification, &tz));
+        let message = Arc::new(Message::new(
+            &notification,
+            &tz,
+            sender.public_url.as_deref(),
+        ));
         let notification = Arc::new(notification);
         let mut deliveries = JoinSet::new();
         for channel in channels {

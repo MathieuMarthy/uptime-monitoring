@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod channel;
 pub mod monitor;
+pub mod settings;
 pub mod status_page;
 
 /// Whether the text shows at least one character: whitespace, control characters and

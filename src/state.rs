@@ -1,6 +1,7 @@
 use crate::auth::random_token;
 use crate::auth::rate_limit::LoginLimiter;
 use crate::engine::EngineHandle;
+use crate::engine::guard::Guard;
 use crate::models::Admin;
 use crate::notify::Notifier;
 use crate::page_cache::PageCache;
@@ -17,8 +18,12 @@ pub struct AppState {
     /// One password hash at a time: each Argon2 run takes 19 MiB.
     pub password_hashing: Arc<Semaphore>,
     pub trust_proxy_headers: bool,
+    /// `PUBLIC_URL`: completes the setup URL printed if the admin row disappears.
+    pub public_url: Option<String>,
     /// Told about every monitor change; disconnected unless the engine was started.
     pub engine: EngineHandle,
+    /// Private-target blocking shared with the engine and the notifier; settings change it live.
+    pub guard: Guard,
     /// Sends channel tests; alerts themselves come from the engine.
     pub notifier: Notifier,
     /// Rendered public pages; every change to a page invalidates it.
@@ -33,7 +38,9 @@ impl AppState {
             login_limiter: Arc::default(),
             password_hashing: Arc::new(Semaphore::new(1)),
             trust_proxy_headers: false,
+            public_url: None,
             engine: EngineHandle::default(),
+            guard: Guard::default(),
             notifier: Notifier::default(),
             public_pages: PageCache::default(),
         }
@@ -44,8 +51,18 @@ impl AppState {
         self
     }
 
+    pub fn with_public_url(mut self, public_url: Option<String>) -> Self {
+        self.public_url = public_url;
+        self
+    }
+
     pub fn with_engine(mut self, engine: EngineHandle) -> Self {
         self.engine = engine;
+        self
+    }
+
+    pub fn with_guard(mut self, guard: Guard) -> Self {
+        self.guard = guard;
         self
     }
 
