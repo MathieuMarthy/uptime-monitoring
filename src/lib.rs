@@ -9,6 +9,7 @@ pub mod db;
 pub mod engine;
 pub mod error;
 pub mod forms;
+pub mod healthcheck;
 pub mod maintenance;
 pub mod middleware;
 pub mod models;

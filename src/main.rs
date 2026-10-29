@@ -1,3 +1,4 @@
+use std::io::IsTerminal;
 use std::net::SocketAddr;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -6,16 +7,26 @@ use uptime_monitoring::engine::guard::Guard;
 use uptime_monitoring::models::Settings;
 use uptime_monitoring::notify::Notifier;
 use uptime_monitoring::state::AppState;
-use uptime_monitoring::{app, db, engine, maintenance};
+use uptime_monitoring::{app, db, engine, healthcheck, maintenance};
 
 #[tokio::main]
 async fn main() {
+    match std::env::args().nth(1).as_deref() {
+        None => {}
+        Some("healthcheck") => healthcheck().await,
+        Some(other) => {
+            eprintln!("Unknown command {other:?}. Run without arguments, or with `healthcheck`.");
+            std::process::exit(2);
+        }
+    }
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "uptime_monitoring=info,tower_http=info".into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        // No colour codes in `docker logs` or a log file.
+        .with(tracing_subscriber::fmt::layer().with_ansi(std::io::stdout().is_terminal()))
         .init();
 
     let config = match Config::from_env() {
@@ -86,6 +97,21 @@ async fn main() {
     .with_graceful_shutdown(shutdown_signal())
     .await
     .expect("Server error");
+}
+
+/// Exits 0 when the instance at `BIND_ADDR` answers `/health`, 1 otherwise.
+async fn healthcheck() -> ! {
+    let result = match Config::from_env() {
+        Ok(config) => healthcheck::probe(healthcheck::target(config.bind_addr)).await,
+        Err(message) => Err(format!("Invalid configuration: {message}")),
+    };
+    match result {
+        Ok(()) => std::process::exit(0),
+        Err(message) => {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+    }
 }
 
 async fn shutdown_signal() {

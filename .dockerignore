@@ -1,0 +1,8 @@
+target
+.git
+.idea
+.superpowers
+docs
+*.db
+*.db-shm
+*.db-wal

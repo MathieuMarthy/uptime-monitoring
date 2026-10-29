@@ -26,9 +26,11 @@ uptime-monitoring/
 ├── docs/                         # Project documentation
 ├── migrations/                   # SQL migrations, embedded and applied at startup
 ├── src/
-│   ├── main.rs                   # Entry point: tracing, config, DB pool, serve with graceful shutdown
+│   ├── main.rs                   # Entry point: tracing, config, DB pool, serve with graceful shutdown;
+│   │                             # `healthcheck` subcommand
 │   ├── lib.rs                    # `app(state) -> Router`: routes + static assets + 404 fallback + tracing layer
-│   ├── config.rs                 # Config::from_env(): DATABASE_URL, BIND_ADDR, TRUST_PROXY_HEADERS
+│   ├── config.rs                 # Config::from_env(): DATABASE_URL, BIND_ADDR, TRUST_PROXY_HEADERS, PUBLIC_URL
+│   ├── healthcheck.rs            # Probe of /health used by the Docker HEALTHCHECK
 │   ├── error.rs                  # AppError → HTML error pages (404, 405, 403, 429, 500…)
 │   ├── auth/                     # Argon2 hashing, random tokens, session cookie
 │   │   └── rate_limit.rs         # In-memory limit on failed logins per IP
@@ -39,7 +41,7 @@ uptime-monitoring/
 │   ├── assets.rs                 # /static/* served from embedded files
 │   ├── db.rs                     # SQLite pool (WAL, foreign keys) + migrations
 │   ├── state.rs                  # AppState: pool, setup token, login limiter, hashing semaphore, engine handle,
-│   │                             # public page cache
+│   │                             # guard, notifier, public page cache, PUBLIC_URL
 │   ├── engine/                   # Check engine
 │   │   ├── mod.rs                # start(), supervisor (one task per active monitor), EngineHandle::reload
 │   │   ├── scheduler.rs          # The loop of one monitor: check, record, sleep
@@ -60,13 +62,14 @@ uptime-monitoring/
 │   │   ├── monitor_state.rs      # Runtime state; record() writes a check, its state, incident, cert warning
 │   │   ├── notification_log.rs   # Deliveries, final result after retries
 │   │   ├── session.rs            # Login sessions (token stored as SHA-256)
-│   │   ├── settings.rs           # The single settings row
+│   │   ├── settings.rs           # The single settings row; StorageUse for the disk estimate
 │   │   ├── stats.rs              # Bucket: availability summed over a time bucket
 │   │   └── status_page.rs        # Public pages + their monitors
 │   ├── forms/
 │   │   ├── auth.rs               # SetupForm, LoginForm
 │   │   ├── channel.rs            # ChannelForm → ChannelInput | FieldErrors
 │   │   ├── monitor.rs            # MonitorForm (raw strings) → MonitorInput | FieldErrors
+│   │   ├── settings.rs           # GeneralForm, DataForm, PasswordForm
 │   │   └── status_page.rs        # StatusPageForm → StatusPageInput | FieldErrors
 │   ├── views/                    # Askama template structs and view models
 │   │   ├── alerts.rs
@@ -74,6 +77,7 @@ uptime-monitoring/
 │   │   ├── errors.rs
 │   │   ├── heartbeat.rs          # Hourly and daily bars, uptime labels
 │   │   ├── monitors.rs
+│   │   ├── settings.rs           # Settings page, disk estimates
 │   │   └── status_pages.rs       # Admin list and form, public page
 │   └── routes/                   # Handlers, grouped by domain
 │       ├── mod.rs                # Router assembly (public / protected) + parse_id()
@@ -81,10 +85,14 @@ uptime-monitoring/
 │       ├── auth.rs               # /setup, /login, /logout
 │       ├── health.rs             # GET /health
 │       ├── monitors.rs           # /, /monitors/*
+│       ├── settings.rs           # /settings/*
 │       └── status_pages.rs       # /public-pages/* (admin), /status/{slug} (public)
 ├── templates/                    # Askama templates: base.html → layout.html (admin) | public.html
 ├── static/                       # CSS, JS, fonts, images (embedded at build time)
-└── tests/                        # Integration tests against the real router
+├── tests/                        # Integration tests against the real router
+├── Dockerfile                    # musl static binary on distroless/static, non-root
+├── compose.yaml                  # Deployment example
+└── .github/workflows/ci.yml      # fmt, clippy, tests; image pushed to GHCR on a v* tag
 ```
 
 ## Conventions
@@ -114,9 +122,13 @@ uptime-monitoring/
 | `DATABASE_URL` | `sqlite://uptime.db`                    |
 | `BIND_ADDR`    | `0.0.0.0:8080`                          |
 | `TRUST_PROXY_HEADERS` | `false`                          |
+| `PUBLIC_URL`   | unset                                   |
 | `RUST_LOG`     | `uptime_monitoring=info,tower_http=info` |
 
 An invalid value stops startup with a message.
+
+`PUBLIC_URL` is an http(s) base without query, fragment or credentials; the trailing `/` is dropped. When set,
+alerts link to `{PUBLIC_URL}/monitors/{id}` and the first-launch setup URL is printed in full.
 
 `TRUST_PROXY_HEADERS=true` takes the client IP (used by the login rate limit) from the last `X-Forwarded-For` entry,
 as set by the reverse proxy. Enable it only behind a proxy: otherwise anyone can forge the header. Left off behind a
@@ -168,7 +180,7 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Private targets.** With `settings.block_private_targets`, loopback, private, link-local (cloud metadata), CGNAT,
   benchmarking, multicast and reserved addresses are refused, including when embedded in IPv6 (mapped, NAT64, 6to4): by the DNS resolver (the connection uses exactly the checked
   addresses, so DNS rebinding cannot slip through), for literal IP hosts, and on every redirect. The check fails with
-  `error_kind = blocked`. The flag is read at startup (`Guard::set_block_private` changes it at runtime).
+  `error_kind = blocked`. The flag is read at startup; the settings page changes it at once through the `Guard` shared in `AppState`.
 - **Certificates.** Verified against the system store (`rustls-platform-verifier`): the Docker image needs
   `ca-certificates`, and an internal CA added to the host store is trusted.
 
@@ -188,8 +200,10 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   and alerts `down`, unless the monitor ignores TLS errors.
 - **Requests.** One client: 10 s timeout, no redirect, no proxy, no idle connection, and the engine's `Guard` (with
   `block_private_targets`, private destinations are refused like check targets). Webhook: JSON
-  `{event, monitor: {id, name, url} | null, title, message, at}`. Discord: one embed coloured by severity. ntfy: JSON
-  publishing to the server root (`topic`, `title`, `message`, `priority` 4 for down, `tags`), bearer token if set.
+  `{event, monitor: {id, name, url, link} | null, title, message, at}`. Discord: one embed coloured by severity. ntfy:
+  JSON publishing to the server root (`topic`, `title`, `message`, `priority` 4 for down, `tags`), bearer token if
+  set. With `PUBLIC_URL`, the detail page's address is `monitor.link`, the embed's `url` and ntfy's `click`
+  (`link` is `null` without it).
 - **UI.** `/alerts` lists channels (monitor count, last delivery) and the last 50 deliveries. The channel form's
   *Send Test* button (`…/new/test`, `…/{id}/edit/test`) sends the channel as typed, once, without saving or logging
   it, and shows the form again with the result; a typed ntfy token is kept in the field. The ntfy token is never sent back to the browser: left blank, the stored one is kept, unless the server changed. Monitors pick their
@@ -211,7 +225,7 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `checks_retention_days` (never the checks of a day not rolled up yet), resolved incidents and daily stats older than
   `history_retention_days` (if set), and expired sessions. The schema requires `checks_retention_days ≥ 2` and
   `history_retention_days ≥ checks_retention_days`.
-- **Changing the timezone** (not possible yet from the UI) resumes the rollup from the last day key: the first day
+- **Changing the timezone** (from the settings page) resumes the rollup from the last day key: the first day
   in the new zone overlaps the last one (moving east) or leaves hours out (moving west).
 - **Dashboard.** One query for monitors and states (no body or headers), one for the 24 hourly bars of all monitors.
   Bars: gray without checks, green, orange with failures but no downtime, red with downtime. Uptime is truncated,
@@ -243,6 +257,36 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   browsers and proxies revalidate instead of keeping a page that was unpublished.
 - **Daily bars** of several monitors come from `DailyHistory::load_many`: one query on `daily_stats`, then one
   `Bucket::query` per day not rolled up yet, for all of them at once.
+
+## Settings
+
+`/settings` holds three forms, each posted and validated on its own (`/settings/general`, `/settings/data`,
+`/settings/password`); success redirects to `/settings?saved=…`.
+
+- **General.** The timezone, chosen among the names of the embedded tz database.
+- **Data and security.** Raw checks retention (2–365 days) and history retention (blank = forever, otherwise at least
+  the checks retention), applied by the next hourly maintenance; private-target blocking, applied at once.
+  Under the fields, a disk estimate: `Σ 86 400 / interval_s` checks a day over the monitors that are not paused × days
+  × 32 bytes, and monitors × days × 36 bytes of daily stats (incidents are left out: about 100 bytes each). The sizes
+  were measured with `dbstat`; `static/js/settings.js` recomputes them while typing. The page also shows the database
+  file's size. Retention does not change memory use.
+- **Password.** Current password, new one twice (setup rules). The new password is checked first; then the attempt
+  counts toward the client's login limit and the current password is verified on the hashing semaphore. On success,
+  every other session is deleted in the same transaction as the new hash.
+
+## Deployment
+
+- **Image.** `Dockerfile` builds a static musl binary (dependencies in their own layer) and copies it onto
+  `gcr.io/distroless/static-debian12:nonroot`, which has the CA certificates and runs as uid 65532. `DATABASE_URL`
+  points to the `/data` volume. About 21 MB, under 3 MiB of RAM at rest. amd64 only.
+- **Health.** No shell in the image: `HEALTHCHECK` runs `uptime-monitoring healthcheck`, which sends `GET /health` to
+  `BIND_ADDR` (loopback when it is unspecified) and exits 0 on a 200 within 5 s.
+- **Logs.** No colour codes unless stdout is a terminal.
+- **SQLite memory.** 512 KiB of page cache per connection (5 connections): with 100 monitors and a week of checks,
+  about 5 MiB less RSS than SQLite's 2 MiB default, for the same dashboard time.
+- **CI** (`.github/workflows/ci.yml`). On every push to `main` and pull request: `cargo fmt --check`, clippy with
+  `-D warnings`, tests. On a `v*` tag, the image is built and pushed to `ghcr.io/<owner>/uptime-monitoring` with the
+  version, `major.minor` and `latest` tags.
 
 ## Tests
 
