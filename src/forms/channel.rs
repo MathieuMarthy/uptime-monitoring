@@ -168,8 +168,9 @@ impl ChannelForm {
         } else if self.ntfy_clear_token.is_some() {
             None
         } else {
+            // Never sent to another server than the one it was given for.
             match existing {
-                Some(ChannelConfig::Ntfy(c)) => c.token.clone(),
+                Some(ChannelConfig::Ntfy(c)) if c.server == server => c.token.clone(),
                 _ => None,
             }
         };
@@ -267,6 +268,17 @@ mod tests {
         assert_eq!(f.validate(Some(&stored)).unwrap().config, ntfy_config(None));
 
         f.ntfy_clear_token = None;
+        f.ntfy_server = "https://ntfy.example.com".to_string();
+        assert_eq!(
+            f.validate(Some(&stored)).unwrap().config,
+            ChannelConfig::Ntfy(NtfyConfig {
+                server: "https://ntfy.example.com".to_string(),
+                topic: "alerts".to_string(),
+                token: None,
+            }),
+            "a token is never sent to another server"
+        );
+
         f.ntfy_token = "two words".to_string();
         assert!(f.validate(None).unwrap_err().contains_key("ntfy_token"));
     }

@@ -6,6 +6,13 @@ use jiff::tz::TimeZone;
 use jiff::{RoundMode, Timestamp, Unit, Zoned, ZonedRound};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub const DAY_MS: i64 = 86_400_000;
+
+/// Whole days from `now` until `at`; negative once `at` is past.
+pub fn days_left(at: i64, now: i64) -> i64 {
+    (at - now).div_euclid(DAY_MS)
+}
+
 pub fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

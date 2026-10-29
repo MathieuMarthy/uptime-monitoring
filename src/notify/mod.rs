@@ -14,10 +14,12 @@ use crate::time::now_ms;
 use jiff::tz::TimeZone;
 use reqwest::{Client, StatusCode, Url};
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc};
+use tokio::task::JoinSet;
 
 /// Waits before each attempt: the first one is immediate.
 pub const RETRY_DELAYS: [Duration; 3] = [
@@ -105,11 +107,20 @@ impl Notifier {
     /// Never waits: when the queue is full, the notification is dropped.
     pub fn notify(&self, notification: Notification) {
         let Some(queue) = &self.queue else { return };
-        if let Err(mpsc::error::TrySendError::Full(n)) = queue.try_send(notification) {
-            tracing::error!(
-                event = n.event.as_str(),
-                "notification queue full, alert dropped"
-            );
+        match queue.try_send(notification) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(n)) => {
+                tracing::error!(
+                    event = n.event.as_str(),
+                    "notification queue full, alert dropped"
+                )
+            }
+            Err(mpsc::error::TrySendError::Closed(n)) => {
+                tracing::error!(
+                    event = n.event.as_str(),
+                    "notification dispatcher stopped, alert dropped"
+                )
+            }
         }
     }
 
@@ -220,7 +231,8 @@ impl Sender {
             .send()
             .await
             .map_err(|e| SendError {
-                message: truncate(&error_chain(&e)),
+                // Webhook URLs carry their secret.
+                message: truncate(&error_chain(&e.without_url())),
                 retry: true,
             })?;
         let status = response.status();
@@ -238,34 +250,65 @@ impl Sender {
     }
 }
 
+/// Routes each notification to its monitor's worker, started on its first alert.
 async fn dispatch(
     pool: SqlitePool,
     sender: Arc<Sender>,
     mut receiver: mpsc::Receiver<Notification>,
 ) {
     let permits = Arc::new(Semaphore::new(MAX_CONCURRENT_SENDS));
+    let mut workers: HashMap<i64, mpsc::UnboundedSender<Notification>> = HashMap::new();
     while let Some(notification) = receiver.recv().await {
         let Some(monitor_id) = notification.monitor.as_ref().map(|m| m.id) else {
             continue;
         };
-        let channels = match Channel::enabled_for_monitor(&pool, monitor_id).await {
-            Ok(channels) if channels.is_empty() => continue,
+        let worker = workers.entry(monitor_id).or_insert_with(|| {
+            let (tx, rx) = mpsc::unbounded_channel();
+            tokio::spawn(monitor_worker(
+                pool.clone(),
+                sender.clone(),
+                permits.clone(),
+                rx,
+            ));
+            tx
+        });
+        // The worker never stops while its sender lives.
+        let _ = worker.send(notification);
+    }
+}
+
+/// Delivers one monitor's notifications one after the other, so that a retried `down` never
+/// arrives after the `up` that followed it. The channels of one notification are served in
+/// parallel.
+async fn monitor_worker(
+    pool: SqlitePool,
+    sender: Arc<Sender>,
+    permits: Arc<Semaphore>,
+    mut receiver: mpsc::UnboundedReceiver<Notification>,
+) {
+    while let Some(notification) = receiver.recv().await {
+        let monitor_id = notification.monitor.as_ref().map(|m| m.id);
+        let channels = match Channel::enabled_for_monitor(&pool, monitor_id.unwrap_or(0)).await {
             Ok(channels) => channels,
             Err(e) => {
                 tracing::error!(monitor_id, error = %e, "cannot read notification channels");
                 continue;
             }
         };
+        if channels.is_empty() {
+            continue;
+        }
         let tz = match Settings::load(&pool).await {
             Ok(settings) => settings.tz(),
             Err(_) => TimeZone::UTC,
         };
         let message = Arc::new(Message::new(&notification, &tz));
         let notification = Arc::new(notification);
+        let mut deliveries = JoinSet::new();
         for channel in channels {
             let (pool, sender, permits) = (pool.clone(), sender.clone(), permits.clone());
             let (notification, message) = (notification.clone(), message.clone());
-            tokio::spawn(async move {
+            deliveries.spawn(async move {
                 let result = sender
                     .deliver(&permits, &channel, &notification, &message)
                     .await;
@@ -277,6 +320,7 @@ async fn dispatch(
                 }
             });
         }
+        deliveries.join_all().await;
     }
 }
 

@@ -25,8 +25,10 @@ pub struct NotificationLog;
 impl NotificationLog {
     pub async fn insert(pool: &SqlitePool, delivery: &Delivery<'_>) -> Result<(), sqlx::Error> {
         sqlx::query(
+            // The channel or monitor may have been deleted during the retries.
             "INSERT INTO notification_log (channel_id, monitor_id, event, sent_at, ok, error)
-             VALUES (?, ?, ?, ?, ?, ?)",
+             VALUES ((SELECT id FROM notification_channels WHERE id = ?),
+                     (SELECT id FROM monitors WHERE id = ?), ?, ?, ?, ?)",
         )
         .bind(delivery.channel_id)
         .bind(delivery.monitor_id)

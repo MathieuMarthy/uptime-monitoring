@@ -1,10 +1,8 @@
 //! What a notification says, whatever the channel. Pure: the clock and timezone are passed in.
 
 use crate::notify::{Event, Notification};
-use crate::time::{day_of, format_datetime, format_duration};
+use crate::time::{day_of, days_left, format_datetime, format_duration};
 use jiff::tz::TimeZone;
-
-const DAY_MS: i64 = 86_400_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
@@ -43,7 +41,7 @@ impl Message {
             ),
             Event::TlsExpiring { expires_at } => {
                 let date = day_of(tz, *expires_at);
-                match (expires_at - notification.at).div_euclid(DAY_MS) {
+                match days_left(*expires_at, notification.at) {
                     left if left < 0 => (
                         format!("{name}: certificate expired"),
                         format!("The certificate expired on {date}."),
@@ -81,6 +79,7 @@ impl Message {
 mod tests {
     use super::*;
     use crate::notify::MonitorRef;
+    use crate::time::DAY_MS;
 
     fn notification(event: Event) -> Notification {
         Notification {

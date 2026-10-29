@@ -2,13 +2,12 @@
 //! retention.
 
 use crate::models::{Check, DailyStat, Incident, Monitor, Session, Settings};
-use crate::time::{self, day_from_key, day_key, day_of, day_start, now_ms};
+use crate::time::{self, DAY_MS, day_from_key, day_key, day_of, day_start, now_ms};
 use jiff::tz::TimeZone;
 use sqlx::SqlitePool;
 use std::time::Duration;
 
 const PERIOD: Duration = Duration::from_secs(3600);
-const DAY_MS: i64 = 24 * 3600 * 1000;
 /// A day is rolled up at least this long after it ends, once the checks running at midnight are
 /// recorded.
 const ROLLUP_DELAY_MS: i64 = 5 * 60 * 1000;

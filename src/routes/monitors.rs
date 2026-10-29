@@ -41,20 +41,22 @@ async fn new_form(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
 ) -> Result<FormTemplate, AppError> {
-    let channels = Channel::all(&state.db).await?;
-    let mut form = MonitorForm::new_defaults();
-    let enabled: Vec<i64> = channels
+    let mut page = page(
+        &state,
+        None,
+        MonitorForm::new_defaults(),
+        FieldErrors::new(),
+        session.csrf_token,
+    )
+    .await?;
+    let enabled: Vec<i64> = page
+        .channels
         .iter()
         .filter(|c| c.enabled)
         .map(|c| c.id)
         .collect();
-    form.set_channels(&enabled);
-    Ok(create_page(
-        form,
-        FieldErrors::new(),
-        session.csrf_token,
-        channels,
-    ))
+    page.form.set_channels(&enabled);
+    Ok(page)
 }
 
 async fn create(
@@ -66,8 +68,9 @@ async fn create(
     let input = match form.validate() {
         Ok(input) => input,
         Err(errors) => {
-            let channels = Channel::all(&state.db).await?;
-            return Ok(create_page(form, errors, session.csrf_token, channels).into_response());
+            return Ok(page(&state, None, form, errors, session.csrf_token)
+                .await?
+                .into_response());
         }
     };
 
@@ -77,8 +80,9 @@ async fn create(
             Ok(Redirect::to(&format!("/monitors/{id}")).into_response())
         }
         Err(e) if is_unique_violation(&e) => {
-            let channels = Channel::all(&state.db).await?;
-            Ok(create_page(form, name_taken(), session.csrf_token, channels).into_response())
+            Ok(page(&state, None, form, name_taken(), session.csrf_token)
+                .await?
+                .into_response())
         }
         Err(e) => Err(e.into()),
     }
@@ -94,14 +98,14 @@ async fn edit_form(
         .ok_or(AppError::NotFound)?;
     let mut form = MonitorForm::from_monitor(&monitor);
     form.set_channels(&Channel::ids_for_monitor(&state.db, id).await?);
-    let channels = Channel::all(&state.db).await?;
-    Ok(edit_page(
-        id,
+    page(
+        &state,
+        Some(id),
         form,
         FieldErrors::new(),
         session.csrf_token,
-        channels,
-    ))
+    )
+    .await
 }
 
 async fn update(
@@ -118,8 +122,9 @@ async fn update(
     let input = match form.validate() {
         Ok(input) => input,
         Err(errors) => {
-            let channels = Channel::all(&state.db).await?;
-            return Ok(edit_page(id, form, errors, session.csrf_token, channels).into_response());
+            return Ok(page(&state, Some(id), form, errors, session.csrf_token)
+                .await?
+                .into_response());
         }
     };
 
@@ -130,8 +135,11 @@ async fn update(
         }
         Ok(false) => Err(AppError::NotFound),
         Err(e) if is_unique_violation(&e) => {
-            let channels = Channel::all(&state.db).await?;
-            Ok(edit_page(id, form, name_taken(), session.csrf_token, channels).into_response())
+            Ok(
+                page(&state, Some(id), form, name_taken(), session.csrf_token)
+                    .await?
+                    .into_response(),
+            )
         }
         Err(e) => Err(e.into()),
     }
@@ -158,39 +166,28 @@ async fn toggle_pause(
     }
 }
 
-fn create_page(
+/// The create (`id` = `None`) or edit form, with every channel for the alert checkboxes: a
+/// form saved without them would unlink all channels.
+async fn page(
+    state: &AppState,
+    id: Option<i64>,
     form: MonitorForm,
     errors: FieldErrors,
     csrf_token: String,
-    channels: Vec<Channel>,
-) -> FormTemplate {
-    FormTemplate {
+) -> Result<FormTemplate, AppError> {
+    let (action_url, cancel_url) = match id {
+        Some(id) => (format!("/monitors/{id}/edit"), format!("/monitors/{id}")),
+        None => ("/monitors/new".to_string(), "/".to_string()),
+    };
+    Ok(FormTemplate {
         form,
         errors,
         csrf_token,
-        action_url: "/monitors/new".to_string(),
-        cancel_url: "/".to_string(),
-        monitor_id: None,
-        channels,
-    }
-}
-
-fn edit_page(
-    id: i64,
-    form: MonitorForm,
-    errors: FieldErrors,
-    csrf_token: String,
-    channels: Vec<Channel>,
-) -> FormTemplate {
-    FormTemplate {
-        form,
-        errors,
-        csrf_token,
-        action_url: format!("/monitors/{id}/edit"),
-        cancel_url: format!("/monitors/{id}"),
-        monitor_id: Some(id),
-        channels,
-    }
+        action_url,
+        cancel_url,
+        monitor_id: id,
+        channels: Channel::all(&state.db).await?,
+    })
 }
 
 fn name_taken() -> FieldErrors {

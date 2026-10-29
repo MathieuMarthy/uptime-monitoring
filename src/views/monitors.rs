@@ -3,7 +3,7 @@ use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm};
 use crate::models::{
     Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
 };
-use crate::time::{day_of, format_datetime, format_duration, now_ms};
+use crate::time::{day_of, days_left, format_datetime, format_duration, now_ms};
 use crate::views::heartbeat::{DailyHistory, Heartbeat};
 use askama::Template;
 use askama_web::WebTemplate;
@@ -126,7 +126,6 @@ impl IndexTemplate {
 
 /// Incidents and checks listed on a monitor's page.
 const RECENT: i64 = 20;
-const DAY_MS: i64 = 24 * 3600 * 1000;
 
 #[derive(Template, WebTemplate)]
 #[template(path = "monitors/detail.html")]
@@ -169,7 +168,7 @@ impl DetailTemplate {
 
         let tls_expiry = view.state.tls_expires_at.map(|at| {
             let date = day_of(&tz, at);
-            match (at - now).div_euclid(DAY_MS) {
+            match days_left(at, now) {
                 left if left < 0 => format!("{date} (expired)"),
                 1 => format!("{date} (1 day left)"),
                 left => format!("{date} ({left} days left)"),

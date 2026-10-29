@@ -1,5 +1,6 @@
 use crate::engine::verdict::{self, CheckOutcome, Health, Transition};
 use crate::models::{Check, Incident};
+use crate::time::DAY_MS;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
 const COLUMNS: &str = "monitor_id, status, consecutive_failures, failing_since, last_check_at, last_latency_ms, \
@@ -12,8 +13,6 @@ pub enum MonitorStatus {
     Up,
     Down,
 }
-
-const DAY_MS: i64 = 86_400_000;
 
 /// What recording a check changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

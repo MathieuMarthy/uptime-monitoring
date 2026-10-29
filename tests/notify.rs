@@ -320,3 +320,80 @@ async fn engine_alerts_on_down_then_up() {
     engine.reload(m.id);
     assert_eq!(next(&mut rx).await.body["event"], "up");
 }
+
+fn up(monitor: &MonitorRef) -> Notification {
+    Notification {
+        monitor: Some(monitor.clone()),
+        event: Event::Up { down_since: 1_000 },
+        at: 3_000,
+    }
+}
+
+#[tokio::test]
+async fn alerts_of_a_monitor_arrive_in_order_despite_retries() {
+    let pool = common::test_app().await.1;
+    let (url, mut rx) = receiver(vec![500]).await;
+    let m = monitor(&pool).await;
+    link(
+        &pool,
+        m.id,
+        channel(&pool, "webhook", serde_json::json!({ "url": url }), true).await,
+    )
+    .await;
+    let notifier = notifier(&pool);
+    notifier.notify(down(&m));
+    notifier.notify(up(&m));
+    let events: Vec<_> = [
+        next(&mut rx).await,
+        next(&mut rx).await,
+        next(&mut rx).await,
+    ]
+    .iter()
+    .map(|r| r.body["event"].as_str().unwrap().to_string())
+    .collect();
+    assert_eq!(
+        events,
+        ["down", "down", "up"],
+        "the retried down comes before up"
+    );
+}
+
+#[tokio::test]
+async fn delivery_errors_do_not_reveal_the_url() {
+    let pool = common::test_app().await.1;
+    // Nothing listens on port 9 of localhost.
+    let url = "http://127.0.0.1:9/api/webhooks/1/SECRET";
+    let m = monitor(&pool).await;
+    link(
+        &pool,
+        m.id,
+        channel(&pool, "webhook", serde_json::json!({ "url": url }), true).await,
+    )
+    .await;
+    notifier(&pool).notify(down(&m));
+    let log = wait_for_log(&pool, 1).await;
+    let error = log[0].error.as_deref().unwrap();
+    assert!(!error.contains("SECRET"), "{error}");
+}
+
+#[tokio::test]
+async fn channel_deleted_during_retries_still_logs() {
+    let pool = common::test_app().await.1;
+    let (url, mut rx) = receiver(vec![500, 500, 500]).await;
+    let m = monitor(&pool).await;
+    let c = channel(&pool, "webhook", serde_json::json!({ "url": url }), true).await;
+    link(&pool, m.id, c).await;
+    let notifier = Notifier::start_with(
+        pool.clone(),
+        Guard::new(false),
+        vec![Duration::ZERO, Duration::from_millis(300)],
+    );
+    notifier.notify(down(&m));
+    next(&mut rx).await;
+    sqlx::query("DELETE FROM notification_channels")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let log = wait_for_log(&pool, 1).await;
+    assert_eq!((log[0].ok, log[0].channel_name.as_deref()), (false, None));
+}

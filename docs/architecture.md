@@ -170,16 +170,22 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 
 - **Events.** After recording a check, the scheduler hands the notifier `down` (cause, start of the outage), `up`
   (downtime) and `tls_expiring` events. Only transitions alert: nothing on startup, pause or deletion.
-- **Dispatch** (`notify/mod.rs`). A bounded queue (1 000; beyond, alerts are dropped and logged) feeds one task. It
-  reads the enabled channels linked to the monitor and sends to each, at most 5 requests at a time. Each delivery is
-  tried at once, then after 10 s and 60 s; a 4xx other than 408/429 is not retried. The final result goes to
-  `notification_log`. Alerts still queued when the process stops are lost.
+- **Dispatch** (`notify/mod.rs`). A bounded queue (1 000; beyond, alerts are dropped and logged) feeds one task,
+  which hands each alert to its monitor's worker (started on the monitor's first alert). A worker sends its alerts one
+  after the other, so a retried `down` never lands after the `up` that followed it; the channels of one alert are
+  served in parallel, at most 5 requests at a time overall. Each delivery is tried at once, then after 10 s and 60 s;
+  a 4xx other than 408/429 is not retried. The final result goes to `notification_log` (channel or monitor NULL if
+  deleted meanwhile); errors never include the URL, which holds the webhook's secret. Alerts still queued when the
+  process stops are lost.
+- **Certificate warning delivery.** `tls_warned_for` is set when the warning is queued, not when it is delivered: a
+  warning lost (no channel linked, every attempt failed) is not repeated. An expired certificate still fails the check
+  and alerts `down`, unless the monitor ignores TLS errors.
 - **Requests.** One client: 10 s timeout, no redirect, no proxy, no idle connection, and the engine's `Guard` (with
   `block_private_targets`, private destinations are refused like check targets). Webhook: JSON
   `{event, monitor: {id, name, url} | null, title, message, at}`. Discord: one embed coloured by severity. ntfy: JSON
   publishing to the server root (`topic`, `title`, `message`, `priority` 4 for down, `tags`), bearer token if set.
 - **UI.** `/alerts` lists channels (monitor count, last delivery) and the last 50 deliveries; *Test* sends once and
-  waits. The ntfy token is never sent back to the browser: left blank, the stored one is kept. Monitors pick their
+  waits. The ntfy token is never sent back to the browser: left blank, the stored one is kept, unless the server changed. Monitors pick their
   channels in their form (checkboxes `channel_<id>`, gathered by `MonitorForm::other`); a new monitor starts with
   every enabled channel checked.
 
