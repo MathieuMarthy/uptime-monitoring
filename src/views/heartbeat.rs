@@ -45,16 +45,8 @@ impl Heartbeat {
     ) -> Result<HashMap<i64, Self>, AppError> {
         let from = hourly_start(tz, now);
         let mut by_monitor: HashMap<i64, Vec<Bucket>> = HashMap::new();
-        let ids = monitor_id.map(|id| [id]);
-        for bucket in Bucket::query(
-            pool,
-            ids.as_ref().map(|i| i.as_slice()),
-            from,
-            HOUR_MS,
-            now + 1,
-        )
-        .await?
-        {
+        let ids = monitor_id.as_ref().map(std::slice::from_ref);
+        for bucket in Bucket::query(pool, ids, from, HOUR_MS, now + 1).await? {
             by_monitor
                 .entry(bucket.monitor_id)
                 .or_default()

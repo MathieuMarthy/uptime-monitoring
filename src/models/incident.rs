@@ -34,8 +34,8 @@ impl Incident {
         .await
     }
 
-    /// The `limit` most recent of these monitors, first: those started since `since`, and any
-    /// still open.
+    /// Up to `limit` incidents of these monitors that were open at some point since `since`: those
+    /// still open first, then the most recent.
     pub async fn recent_for_monitors(
         pool: &SqlitePool,
         monitor_ids: &[i64],
@@ -45,8 +45,8 @@ impl Incident {
         sqlx::query_as(
             "SELECT id, monitor_id, started_at, resolved_at, error_kind, cause FROM incidents
              WHERE monitor_id IN (SELECT value FROM json_each(?))
-               AND (started_at >= ? OR resolved_at IS NULL)
-             ORDER BY started_at DESC LIMIT ?",
+               AND (resolved_at IS NULL OR resolved_at >= ?)
+             ORDER BY resolved_at IS NULL DESC, started_at DESC LIMIT ?",
         )
         .bind(serde_json::to_string(monitor_ids).expect("integers serialize"))
         .bind(since)

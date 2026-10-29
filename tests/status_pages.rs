@@ -127,7 +127,7 @@ async fn public_page_shows_selected_monitors_in_order() {
     assert!(!r.body.contains("10.0.0.5"), "errors are never shown");
     assert!(r.body.contains("Some systems are down"));
     assert!(r.body.contains("Ongoing"), "the open incident is listed");
-    assert_eq!(r.headers["cache-control"], "public, max-age=60");
+    assert_eq!(r.headers["cache-control"], "no-cache");
     let _ = hidden;
 }
 
@@ -210,4 +210,53 @@ async fn delete_removes_the_page() {
     assert_eq!(get(&app.logged_out(), "/status/status").await.status, 404);
     let r = post_form(&app, &format!("/public-pages/{id}/delete"), "").await;
     assert_eq!(r.status, 404);
+}
+
+async fn incident(pool: &SqlitePool, monitor_id: i64, started_at: i64, resolved_at: Option<i64>) {
+    sqlx::query(
+        "INSERT INTO incidents (monitor_id, started_at, resolved_at, error_kind)
+         VALUES (?, ?, ?, 'connect')",
+    )
+    .bind(monitor_id)
+    .bind(started_at)
+    .bind(resolved_at)
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn incidents_keep_open_ones_and_those_resolved_in_the_window() {
+    let (app, pool) = common::test_app().await;
+    let down = monitor(&pool, "Down service").await;
+    let flappy = monitor(&pool, "Flappy").await;
+    let old = monitor(&pool, "Old outage").await;
+    create_page(&app, &[down, flappy, old]).await;
+    const DAY: i64 = 86_400_000;
+    let now = now_ms();
+    incident(&pool, down, now - 5 * DAY, None).await;
+    for i in 0..12 {
+        incident(&pool, flappy, now - DAY - i * 60_000, Some(now - DAY)).await;
+    }
+    incident(&pool, old, now - 91 * DAY, Some(now - 89 * DAY)).await;
+
+    let r = get(&app.logged_out(), "/status/status").await;
+    assert!(
+        r.body.contains("Ongoing"),
+        "an open incident is never cut off"
+    );
+    let rows = r.body.matches("<td>Flappy</td>").count();
+    assert_eq!(rows, 9, "10 incidents in all");
+
+    sqlx::query("DELETE FROM incidents WHERE monitor_id = ?")
+        .bind(flappy)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let id = page_id(&pool).await;
+    let r = get(&app, &format!("/public-pages/{id}/preview")).await;
+    assert!(
+        r.body.contains("<td>Old outage</td>"),
+        "resolved within 90 days"
+    );
 }

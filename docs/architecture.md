@@ -231,14 +231,16 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   published or not, never cached.
 - **Public** (`GET /status/{slug}`, no session). An unpublished page is a 404, like an unknown slug. It shows the
   overall state (*Some systems are down* when a monitor that is not paused is down), then per monitor its display
-  name, status, 90 daily bars and 90-day uptime, then the last 10 incidents of the last 90 days (plus any still open)
-  with their start and duration. A monitor's URL, errors and incident causes are never shown: they can reveal
+  name, status, 90 daily bars and 90-day uptime, then the last 10 incidents open at some point in the last 90 days, open
+  ones first, with their start and duration. A monitor's URL, errors and incident causes are never shown: they can reveal
   internal hosts. `live.js` refreshes it like the admin pages.
 - **Cache** (`page_cache.rs`). The rendered HTML is kept 60 s per page id, behind one async mutex per page, so
   concurrent requests wait for a single render: at most one render per page per minute, whatever the traffic. The
   slug lookup still runs on every request (one indexed read), so unpublishing or deleting takes effect at once and
-  unknown slugs add no entry. Editing or deleting a page drops its entry; other changes (monitor renamed, paused)
-  show within 60 s. Responses carry `Cache-Control: public, max-age=60`.
+  unknown slugs add no entry; the render reads the page again by id once it holds the slot, so a request racing an
+  edit never caches stale data. Editing or deleting a page drops its entry, and expired entries are dropped at the
+  next request; other changes (monitor renamed, paused) show within 60 s. Responses carry `Cache-Control: no-cache`:
+  browsers and proxies revalidate instead of keeping a page that was unpublished.
 - **Daily bars** of several monitors come from `DailyHistory::load_many`: one query on `daily_stats`, then one
   `Bucket::query` per day not rolled up yet, for all of them at once.
 

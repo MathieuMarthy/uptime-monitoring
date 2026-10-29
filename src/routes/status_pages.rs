@@ -1,11 +1,10 @@
 use crate::error::AppError;
 use crate::forms::monitor::FieldErrors;
 use crate::forms::status_page::StatusPageForm;
-use crate::models::{MonitorSummary, Session, StatusPage, is_unique_violation};
-use crate::page_cache::TTL;
+use crate::models::{Monitor, MonitorSummary, Session, StatusPage, is_unique_violation};
 use crate::routes::{PathId, form_or_invalid};
 use crate::state::AppState;
-use crate::views::status_pages::{FormTemplate, IndexTemplate, PublicTemplate, form_monitors};
+use crate::views::status_pages::{FormTemplate, IndexTemplate, PublicTemplate};
 use axum::extract::rejection::FormRejection;
 use axum::extract::{Path, State};
 use axum::http::{HeaderValue, header};
@@ -49,7 +48,7 @@ async fn new_form(
         form,
         FieldErrors::new(),
         session.csrf_token,
-        form_monitors(&state.db).await?,
+        Monitor::summaries(&state.db).await?,
     ))
 }
 
@@ -59,7 +58,7 @@ async fn create(
     form: Result<Form<StatusPageForm>, FormRejection>,
 ) -> Result<Response, AppError> {
     let form = form_or_invalid(form)?;
-    let monitors = form_monitors(&state.db).await?;
+    let monitors = Monitor::summaries(&state.db).await?;
     let input = match form.validate(&ids(&monitors)) {
         Ok(input) => input,
         Err(errors) => {
@@ -94,7 +93,7 @@ async fn edit_form(
         form,
         FieldErrors::new(),
         session.csrf_token,
-        form_monitors(&state.db).await?,
+        Monitor::summaries(&state.db).await?,
     ))
 }
 
@@ -106,7 +105,7 @@ async fn update(
 ) -> Result<Response, AppError> {
     load(&state, id).await?;
     let form = form_or_invalid(form)?;
-    let monitors = form_monitors(&state.db).await?;
+    let monitors = Monitor::summaries(&state.db).await?;
     let input = match form.validate(&ids(&monitors)) {
         Ok(input) => input,
         Err(errors) => {
@@ -153,24 +152,29 @@ async fn public_page(
     State(state): State<AppState>,
     Path(slug): Path<String>,
 ) -> Result<Response, AppError> {
-    let stored = StatusPage::find_by_slug(&state.db, &slug)
+    let id = StatusPage::find_by_slug(&state.db, &slug)
         .await?
         .filter(|p| p.published)
-        .ok_or(AppError::NotFound)?;
+        .ok_or(AppError::NotFound)?
+        .id;
     let html = state
         .public_pages
-        .get_or_render(stored.id, || async {
+        .get_or_render(id, || async {
+            // Read again once the cache slot is held: a page edited or deleted since the slug
+            // lookup is not rendered from stale data.
+            let stored = StatusPage::find(&state.db, id)
+                .await?
+                .filter(|p| p.published)
+                .ok_or(AppError::NotFound)?;
             PublicTemplate::load(&state.db, &stored)
                 .await?
                 .render_html()
         })
         .await?;
-    let max_age = format!("public, max-age={}", TTL.as_secs());
+    // The server cache absorbs the traffic; browsers and proxies revalidate, so unpublishing
+    // takes effect at once.
     Ok((
-        [(
-            header::CACHE_CONTROL,
-            HeaderValue::from_str(&max_age).expect("ASCII header"),
-        )],
+        [(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"))],
         Html(html),
     )
         .into_response())

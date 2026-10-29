@@ -2,7 +2,7 @@ use crate::error::AppError;
 use crate::forms::monitor::FieldErrors;
 use crate::forms::status_page::StatusPageForm;
 use crate::models::{
-    Incident, Monitor, MonitorStatus, MonitorSummary, Settings, StatusPage, StatusPageSummary,
+    Incident, MonitorStatus, MonitorSummary, Settings, StatusPage, StatusPageSummary,
 };
 use crate::time::{DAY_MS, format_datetime, format_duration, now_ms};
 use crate::views::heartbeat::{DAYS, DailyHistory};
@@ -10,6 +10,7 @@ use crate::views::monitors::{status_class, status_label};
 use askama::Template;
 use askama_web::WebTemplate;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 
 /// Incidents listed on a public page.
 const RECENT_INCIDENTS: i64 = 10;
@@ -90,18 +91,20 @@ impl PublicTemplate {
         let ids: Vec<i64> = shown.iter().map(|m| m.monitor_id).collect();
         let mut daily = DailyHistory::load_many(pool, &ids, &tz, now).await?;
 
-        let name_of = |id: i64| {
-            shown
-                .iter()
-                .find(|m| m.monitor_id == id)
-                .map_or_else(String::new, |m| m.name.clone())
-        };
+        let names: HashMap<i64, &str> = shown
+            .iter()
+            .map(|m| (m.monitor_id, m.name.as_str()))
+            .collect();
         let incidents =
             Incident::recent_for_monitors(pool, &ids, now - DAYS * DAY_MS, RECENT_INCIDENTS)
                 .await?
                 .into_iter()
                 .map(|i| PublicIncident {
-                    monitor: name_of(i.monitor_id),
+                    monitor: names
+                        .get(&i.monitor_id)
+                        .copied()
+                        .unwrap_or_default()
+                        .to_string(),
                     started: format_datetime(&tz, i.started_at),
                     duration: i.resolved_at.map(|at| format_duration(at - i.started_at)),
                 })
@@ -137,9 +140,4 @@ impl PublicTemplate {
         self.render()
             .map_err(|e| AppError::Internal(format!("public page render: {e}").into()))
     }
-}
-
-/// The monitors offered by the form, by name.
-pub async fn form_monitors(pool: &SqlitePool) -> Result<Vec<MonitorSummary>, AppError> {
-    Ok(Monitor::summaries(pool).await?)
 }

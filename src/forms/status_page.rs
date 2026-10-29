@@ -132,8 +132,8 @@ impl StatusPageForm {
             }
             let name = self.display_name(id).trim();
             if name.chars().count() > DISPLAY_NAME_MAX_CHARS {
-                errors.insert(
-                    "monitors",
+                add_error(
+                    &mut errors,
                     format!("Display names must be at most {DISPLAY_NAME_MAX_CHARS} characters."),
                 );
             }
@@ -142,8 +142,8 @@ impl StatusPageForm {
                 raw => match raw.parse::<i64>() {
                     Ok(p) if (0..=POSITION_MAX).contains(&p) => p,
                     _ => {
-                        errors.insert(
-                            "monitors",
+                        add_error(
+                            &mut errors,
                             format!("Order must be a whole number from 0 to {POSITION_MAX}."),
                         );
                         continue;
@@ -172,6 +172,20 @@ impl StatusPageForm {
             published: self.published.is_some(),
             monitors: shown.into_iter().map(|(_, _, m)| m).collect(),
         })
+    }
+}
+
+/// The monitor rows share one error: each distinct problem is added once.
+fn add_error(errors: &mut FieldErrors, message: String) {
+    match errors.get_mut("monitors") {
+        Some(existing) if existing.contains(&message) => {}
+        Some(existing) => {
+            existing.push(' ');
+            existing.push_str(&message);
+        }
+        None => {
+            errors.insert("monitors", message);
+        }
     }
 }
 
@@ -285,6 +299,20 @@ mod tests {
                 "{key}={value}"
             );
         }
+        let f = form(&[
+            ("monitor_1", "on"),
+            ("display_name_1", &"x".repeat(101)),
+            ("monitor_2", "on"),
+            ("position_2", "-1"),
+            ("monitor_3", "on"),
+            ("position_3", "-1"),
+        ]);
+        let errors = f.validate(&[1, 2, 3]).unwrap_err();
+        assert_eq!(
+            errors["monitors"],
+            "Display names must be at most 100 characters. Order must be a whole number from 0 to 9999.",
+            "every distinct problem is reported once"
+        );
         let f = form(&[("monitor_2", "on"), ("position_1", "x")]);
         assert!(f.validate(&[1, 2]).is_ok(), "unchecked rows are not read");
     }
