@@ -96,3 +96,15 @@
         margin-left: 0;
     }
 }
+
+/* The admin's public note on an incident, under its row. */
+.incident-note-row td {
+    padding-top: 0;
+}
+
+.incident-note {
+    margin: 0;
+    color: var(--ink-soft);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

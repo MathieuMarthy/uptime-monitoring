@@ -3,6 +3,8 @@
 // left open or closed (matched by id), and reads out a changed `data-announce` text (the status
 // sentence) in a polite live region. A redirect means the session expired, a 404 that the monitor
 // was deleted: reload to show it.
+// A block with a field being edited (focused, or changed and not saved yet) is left alone: the
+// swap would lose the typing.
 const PERIOD_MS = 30_000;
 
 const announcer = document.createElement("p");
@@ -12,6 +14,14 @@ document.body.append(announcer);
 
 // The bars rise once on load (CSS); blocks swapped in later stay still.
 setTimeout(() => document.documentElement.classList.add("settled"), 1000);
+
+const editing = (root) =>
+    [...root.querySelectorAll("textarea, input:not([type=hidden])")].some(
+        (field) =>
+            field === document.activeElement ||
+            field.value !== field.defaultValue ||
+            field.checked !== field.defaultChecked,
+    );
 
 const announced = (root) => root.querySelector("[data-announce]")?.textContent.trim() ?? "";
 
@@ -38,7 +48,7 @@ async function refresh() {
     const focusedDetails = active?.matches("summary") ? active.parentElement.id : "";
     for (const element of document.querySelectorAll("[data-live]")) {
         const next = page.getElementById(element.id);
-        if (!next) {
+        if (!next || editing(element)) {
             continue;
         }
         for (const details of element.querySelectorAll("details[id]")) {

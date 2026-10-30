@@ -65,6 +65,32 @@
             </ul>
             {% endif %}
         </div>
+        <div class="event-part">
+            <h3>Note</h3>
+            {% if let Some(note) = incident.note %}
+            <p class="incident-note">{{ note }}</p>
+            <p class="section-note">{% if incident.note_public %}Shown on status pages.{% else %}Private: only shown here.{% endif %}</p>
+            {% endif %}
+            <form class="note-form" action="/incidents/{{ incident.id }}/note" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <label class="visually-hidden" for="note-{{ incident.id }}">Note on this incident</label>
+                <textarea class="form-textarea" id="note-{{ incident.id }}" name="note" maxlength="2000"
+                          placeholder="What happened, what was done. Leave empty to remove the note.">
+                    {%- if let Some(note) = incident.note %}{{ note }}{% endif -%}
+                </textarea>
+                <label class="checkbox-group" for="note-public-{{ incident.id }}">
+                    <input type="checkbox" id="note-public-{{ incident.id }}" name="public"
+                           {%- if incident.note_public %} checked{% endif %}/>
+                    <span class="checkbox-label-group">
+                        <span class="form-label">Show on status pages</span>
+                        <span class="form-hint">Visitors see it under this incident. Status pages refresh within a minute.</span>
+                    </span>
+                </label>
+                <div>
+                    <button class="button-secondary button-small" type="submit">Save note</button>
+                </div>
+            </form>
+        </div>
         {% if incident.link_monitor %}
         <a class="button-secondary button-small event-link" href="/monitors/{{ incident.monitor_id }}">Open {{ incident.monitor_name }}</a>
         {% endif %}

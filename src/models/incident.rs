@@ -10,6 +10,10 @@ pub struct Incident {
     pub resolved_at: Option<i64>,
     pub error_kind: String,
     pub cause: Option<String>,
+    /// Written by the admin.
+    pub note: Option<String>,
+    /// The note also shows on status pages.
+    pub note_public: bool,
 }
 
 /// An incident with the name of its monitor and the bounds of the next incident on that monitor.
@@ -34,7 +38,7 @@ impl Incident {
         limit: i64,
     ) -> Result<Vec<NamedIncident>, sqlx::Error> {
         sqlx::query_as(
-            "SELECT i.id, i.monitor_id, i.started_at, i.resolved_at, i.error_kind, i.cause,
+            "SELECT i.id, i.monitor_id, i.started_at, i.resolved_at, i.error_kind, i.cause, i.note, i.note_public,
                     m.name AS monitor_name, n.started_at AS next_started_at,
                     n.resolved_at AS next_resolved_at
              FROM incidents i JOIN monitors m ON m.id = i.monitor_id
@@ -67,7 +71,7 @@ impl Incident {
         limit: i64,
     ) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as(
-            "SELECT id, monitor_id, started_at, resolved_at, error_kind, cause FROM incidents
+            "SELECT id, monitor_id, started_at, resolved_at, error_kind, cause, note, note_public FROM incidents
              WHERE monitor_id = ? ORDER BY started_at DESC LIMIT ?",
         )
         .bind(monitor_id)
@@ -85,7 +89,7 @@ impl Incident {
         limit: i64,
     ) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as(
-            "SELECT id, monitor_id, started_at, resolved_at, error_kind, cause FROM incidents
+            "SELECT id, monitor_id, started_at, resolved_at, error_kind, cause, note, note_public FROM incidents
              WHERE monitor_id IN (SELECT value FROM json_each(?))
                AND (resolved_at IS NULL OR resolved_at >= ?)
              ORDER BY resolved_at IS NULL DESC, started_at DESC LIMIT ?",
@@ -94,6 +98,24 @@ impl Incident {
         .bind(since)
         .bind(limit)
         .fetch_all(pool)
+        .await
+    }
+
+    /// Sets the note (`None` clears it, and its publication). Returns the incident's monitor, or
+    /// `None` when no incident has this id.
+    pub async fn set_note(
+        pool: &SqlitePool,
+        id: i64,
+        note: Option<&str>,
+        public: bool,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar(
+            "UPDATE incidents SET note = ?, note_public = ? WHERE id = ? RETURNING monitor_id",
+        )
+        .bind(note)
+        .bind(public && note.is_some())
+        .bind(id)
+        .fetch_optional(pool)
         .await
     }
 

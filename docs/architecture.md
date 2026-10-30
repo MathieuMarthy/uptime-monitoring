@@ -68,6 +68,7 @@ uptime-monitoring/
 │   ├── forms/
 │   │   ├── auth.rs               # SetupForm, LoginForm
 │   │   ├── channel.rs            # ChannelForm → ChannelInput | FieldErrors
+│   │   ├── incident.rs           # NoteForm → NoteInput
 │   │   ├── monitor.rs            # MonitorForm (raw strings) → MonitorInput | FieldErrors
 │   │   ├── settings.rs           # GeneralForm, DataForm, PasswordForm
 │   │   └── status_page.rs        # StatusPageForm → StatusPageInput | FieldErrors
@@ -87,6 +88,7 @@ uptime-monitoring/
 │       ├── alerts.rs             # /alerts/*
 │       ├── auth.rs               # /setup, /login, /logout
 │       ├── health.rs             # GET /health
+│       ├── incidents.rs          # /incidents/{id}/note
 │       ├── monitors.rs           # /, /monitors/*
 │       ├── settings.rs           # /settings/*
 │       └── status_pages.rs       # /public-pages/* (admin), /status/{slug} (public)
@@ -268,7 +270,11 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Live refresh.** `static/js/live.js` refetches the page every 30 s while the tab is visible and swaps the elements
   marked `data-live` (each with an id) whose content changed, keeping the focused link or summary and the `<details>`
   the user opened or closed (by id). A changed status sentence (`data-announce`) is read out by a polite live region,
-  nothing else. A redirect (expired session) reloads the page. No extra route or JSON.
+  nothing else. A redirect (expired session) reloads the page. No extra route or JSON. A block with a field being
+  edited (focused, or changed since load, such as an incident's note) is not swapped.
+- **Incident notes.** Each unfolded incident (detail and Activity pages) has a note form posting to
+  `/incidents/{id}/note`, which redirects to the incident on its monitor's page. A public note shows under the incident
+  on status pages, after their one-minute cache.
 - **Search.** `static/js/search.js` filters the rows on `data-search` (name and URL), ignoring case and accents, hides the groups left without a row and unfolds those with matches.
 
 ## Activity

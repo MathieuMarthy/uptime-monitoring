@@ -113,6 +113,8 @@ pub struct PublicIncident {
     pub started: String,
     /// `None` while the incident is open.
     pub duration: Option<String>,
+    /// The admin's note, when made public.
+    pub note: Option<String>,
 }
 
 impl PublicTemplate {
@@ -142,6 +144,7 @@ impl PublicTemplate {
                         .to_string(),
                     started: format_datetime(&tz, i.started_at),
                     duration: i.resolved_at.map(|at| format_duration(at - i.started_at)),
+                    note: i.note.filter(|_| i.note_public),
                 })
                 .collect();
 

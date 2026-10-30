@@ -83,6 +83,9 @@
                         {% when None %}<td class="num text-red">Ongoing</td>
                         {% endmatch %}
                     </tr>
+                    {% if let Some(note) = incident.note %}
+                    <tr class="incident-note-row"><td colspan="3"><p class="incident-note">{{ note }}</p></td></tr>
+                    {% endif %}
                     {% endfor %}
                     </tbody>
                 </table>

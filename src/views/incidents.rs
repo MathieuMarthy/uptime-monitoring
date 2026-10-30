@@ -101,6 +101,8 @@ pub struct IncidentDetail {
     /// Failures in the incident beyond those listed.
     pub more_failures: i64,
     pub alerts: Vec<AlertRow>,
+    pub note: Option<String>,
+    pub note_public: bool,
 }
 
 impl IncidentDetail {
@@ -198,6 +200,8 @@ impl IncidentDetail {
         }
 
         Ok(Self {
+            note: incident.note.clone(),
+            note_public: incident.note_public,
             id: incident.id,
             monitor_id: incident.monitor_id,
             monitor_name: monitor_name.to_string(),

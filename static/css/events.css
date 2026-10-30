@@ -153,3 +153,19 @@
         padding: 4px 16px 18px;
     }
 }
+
+/* An incident's note: kept as typed, line breaks included. */
+.incident-note {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.note-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.note-form .form-textarea {
+    min-height: 72px;
+}
