@@ -178,9 +178,10 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   the last recorded check, so a restart or an edit does not postpone them; an overdue monitor gets `grace_s` after the
   task starts. Recording, incidents and alerts are shared with HTTP checks; alerts carry no URL (`null` in webhooks).
 - **Form test.** The monitor form's Test button posts to `/monitors/new/test` or `/monitors/{id}/edit/test`: the
-  values are validated, then checked once by a fresh `HttpChecker` with the shared `Guard`, and the form comes back
-  with the result; nothing is saved. Two tests run at once at most (`AppState::monitor_tests`); a third is told to
-  retry. Push monitors have nothing to test.
+  values are validated, then checked once by `AppState::form_checker` (its own `HttpChecker`, with the shared
+  `Guard`), with the timeout capped at 30 s, and the form comes back with the result; nothing is saved. A certificate
+  already within the warning period is pointed out: saving would alert at once. Two tests run at once at most
+  (`AppState::monitor_tests`); a third is told to retry. Push monitors have nothing to test.
 - **Pace.** The next check starts `interval_s` after the start of the previous one, or `retry_interval_s` while a
   failure series has not reached `failure_threshold`.
 - **Check.** One shared client per `(follow_redirects, ignore_tls_errors)` pair, no proxy, no connection reuse (each

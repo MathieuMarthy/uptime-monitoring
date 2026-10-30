@@ -1,12 +1,9 @@
-use crate::engine::http::HttpChecker;
-use crate::engine::verdict::CheckOutcome;
 use crate::error::AppError;
 use crate::forms::monitor::{FieldErrors, MonitorForm, PUSH};
 use crate::models::{Channel, Monitor, Session, is_unique_violation};
 use crate::routes::{PathId, form_or_invalid};
 use crate::state::AppState;
-use crate::time::days_left;
-use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate, Range};
+use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate, Range, test_summary};
 use axum::extract::rejection::{FormRejection, QueryRejection};
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
@@ -14,6 +11,8 @@ use axum::routing::{get, post};
 use axum::{Extension, Form, Router};
 use serde::Deserialize;
 
+/// The Test button's checks stop after this long, whatever the monitor's timeout.
+const TEST_TIMEOUT_S: i64 = 30;
 const DUPLICATE_NAME: &str = "This name is already used.";
 
 pub fn router() -> Router<AppState> {
@@ -230,10 +229,11 @@ async fn test_page(
     } else {
         match state.monitor_tests.clone().try_acquire_owned() {
             Ok(_permit) => {
-                let outcome = HttpChecker::new(state.guard.clone())
-                    .check(&Monitor::unsaved(&input))
-                    .await;
-                test_summary(&outcome)
+                let mut monitor = Monitor::unsaved(&input);
+                // The page waits for the answer: a reverse proxy may give up sooner.
+                monitor.timeout_s = monitor.timeout_s.min(TEST_TIMEOUT_S);
+                let outcome = state.form_checker.check(&monitor).await;
+                test_summary(&outcome, input.tls_expiry_warn_days)
             }
             Err(_) => Err("Other tests are running: try again in a moment.".to_string()),
         }
@@ -241,25 +241,6 @@ async fn test_page(
     let mut page = page(state, id, form, FieldErrors::new(), csrf_token).await?;
     page.test_result = Some(result);
     Ok(page)
-}
-
-/// `HTTP 200 in 84 ms. Certificate: 41 days left.`, or the failure.
-fn test_summary(outcome: &CheckOutcome) -> Result<String, String> {
-    if let Some(failure) = &outcome.failure {
-        return Err(failure.message.clone());
-    }
-    let mut summary = match (outcome.status_code, outcome.latency_ms) {
-        (Some(code), Some(ms)) => format!("HTTP {code} in {ms} ms."),
-        _ => "The check passed.".to_string(),
-    };
-    if let Some(expires_at) = outcome.tls_expires_at {
-        let left = days_left(expires_at, outcome.checked_at);
-        summary.push_str(&format!(
-            " Certificate: {left} day{} left.",
-            if left == 1 { "" } else { "s" }
-        ));
-    }
-    Ok(summary)
 }
 
 async fn delete(State(state): State<AppState>, PathId(id): PathId) -> Result<Redirect, AppError> {

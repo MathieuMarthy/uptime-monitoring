@@ -2,6 +2,7 @@ use crate::auth::random_token;
 use crate::auth::rate_limit::LoginLimiter;
 use crate::engine::EngineHandle;
 use crate::engine::guard::Guard;
+use crate::engine::http::HttpChecker;
 use crate::models::Admin;
 use crate::notify::Notifier;
 use crate::page_cache::PageCache;
@@ -33,6 +34,8 @@ pub struct AppState {
     pub public_pages: PageCache,
     /// Checks run from the monitor form's Test button at the same time.
     pub monitor_tests: Arc<Semaphore>,
+    /// Runs those checks; its clients are built once. Rebuilt by `with_guard`.
+    pub form_checker: Arc<HttpChecker>,
 }
 
 impl AppState {
@@ -49,6 +52,7 @@ impl AppState {
             notifier: Notifier::default(),
             public_pages: PageCache::default(),
             monitor_tests: Arc::new(Semaphore::new(MONITOR_TESTS)),
+            form_checker: Arc::new(HttpChecker::new(Guard::default())),
         }
     }
 
@@ -68,6 +72,7 @@ impl AppState {
     }
 
     pub fn with_guard(mut self, guard: Guard) -> Self {
+        self.form_checker = Arc::new(HttpChecker::new(guard.clone()));
         self.guard = guard;
         self
     }

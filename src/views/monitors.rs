@@ -1,10 +1,13 @@
+use crate::engine::verdict::CheckOutcome;
 use crate::error::AppError;
 use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm, PUSH, UNGROUPED};
 use crate::models::{
     Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
     name_key,
 };
-use crate::time::{day_of, days_left, format_datetime, format_duration, format_time, now_ms};
+use crate::time::{
+    DAY_MS, day_of, days_left, format_datetime, format_duration, format_time, now_ms,
+};
 use crate::views::heartbeat::{Axis, DailyHistory, Heartbeat};
 use crate::views::incidents::{Context, Following, IncidentDetail, error_kind_label};
 use askama::Template;
@@ -402,12 +405,10 @@ impl DetailTemplate {
             .next_back()
             .unwrap_or_default();
 
-        let certificate = match view.state.tls_expires_at.map(|at| days_left(at, now)) {
-            None => "—".to_string(),
-            Some(left) if left < 0 => "Expired".to_string(),
-            Some(1) => "1 day left".to_string(),
-            Some(left) => format!("{left} days left"),
-        };
+        let certificate = view
+            .state
+            .tls_expires_at
+            .map_or_else(|| "—".to_string(), |at| certificate_label(at, now));
         let recent = Incident::recent(pool, id, RECENT).await?;
         let status_line = status_line(&view, recent.first(), &tz, now);
         let mut incidents = Vec::with_capacity(recent.len());
@@ -460,6 +461,38 @@ impl DetailTemplate {
             push_url,
         })
     }
+}
+
+/// `Expired`, `1 day left`, `41 days left`.
+pub fn certificate_label(expires_at: i64, now: i64) -> String {
+    match days_left(expires_at, now) {
+        left if left < 0 => "Expired".to_string(),
+        1 => "1 day left".to_string(),
+        left => format!("{left} days left"),
+    }
+}
+
+/// What the form's Test button found: `HTTP 200 in 84 ms. Certificate: 41 days left.`, with a
+/// note when saving would send a certificate alert at once; or the failure.
+pub fn test_summary(outcome: &CheckOutcome, tls_warn_days: Option<i64>) -> Result<String, String> {
+    if let Some(failure) = &outcome.failure {
+        return Err(failure.message.clone());
+    }
+    let mut summary = match (outcome.status_code, outcome.latency_ms) {
+        (Some(code), Some(ms)) => format!("HTTP {code} in {ms} ms."),
+        _ => "The check passed.".to_string(),
+    };
+    if let Some(expires_at) = outcome.tls_expires_at {
+        let label = certificate_label(expires_at, outcome.checked_at);
+        // The engine's rule (`MonitorState::record`).
+        match tls_warn_days.filter(|days| expires_at < outcome.checked_at + days * DAY_MS) {
+            Some(days) => summary.push_str(&format!(
+                " Certificate: {label}, within the {days}-day warning: saving sends a certificate alert."
+            )),
+            None => summary.push_str(&format!(" Certificate: {label}.")),
+        }
+    }
+    Ok(summary)
 }
 
 /// The hourly average latencies, scaled to the tallest one.
@@ -570,7 +603,64 @@ impl FormTemplate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::verdict::{ErrorKind, Failure};
     use crate::views::heartbeat::Tick;
+
+    fn passed(tls_expires_at: Option<i64>) -> CheckOutcome {
+        CheckOutcome {
+            checked_at: 100 * DAY_MS,
+            latency_ms: Some(84),
+            status_code: Some(200),
+            failure: None,
+            tls_expires_at,
+        }
+    }
+
+    #[test]
+    fn certificate_label_says_expired_and_counts_days() {
+        assert_eq!(certificate_label(10 * DAY_MS - 1, 10 * DAY_MS), "Expired");
+        assert_eq!(certificate_label(11 * DAY_MS, 10 * DAY_MS), "1 day left");
+        assert_eq!(certificate_label(15 * DAY_MS, 10 * DAY_MS), "5 days left");
+    }
+
+    #[test]
+    fn test_summary_gives_response_certificate_and_coming_warning() {
+        assert_eq!(
+            test_summary(&passed(None), Some(14)),
+            Ok("HTTP 200 in 84 ms.".to_string())
+        );
+        assert_eq!(
+            test_summary(&passed(Some(150 * DAY_MS)), Some(14)),
+            Ok("HTTP 200 in 84 ms. Certificate: 50 days left.".to_string())
+        );
+        assert_eq!(
+            test_summary(&passed(Some(105 * DAY_MS)), Some(14)),
+            Ok(
+                "HTTP 200 in 84 ms. Certificate: 5 days left, within the 14-day warning: \
+                saving sends a certificate alert."
+                    .to_string()
+            )
+        );
+        assert_eq!(
+            test_summary(&passed(Some(105 * DAY_MS)), None),
+            Ok("HTTP 200 in 84 ms. Certificate: 5 days left.".to_string())
+        );
+        assert_eq!(
+            test_summary(&passed(Some(99 * DAY_MS)), None),
+            Ok("HTTP 200 in 84 ms. Certificate: Expired.".to_string())
+        );
+        let failed = CheckOutcome {
+            failure: Some(Failure {
+                kind: ErrorKind::Status,
+                message: "HTTP 500, expected 200-299".to_string(),
+            }),
+            ..passed(None)
+        };
+        assert_eq!(
+            test_summary(&failed, Some(14)),
+            Err("HTTP 500, expected 200-299".to_string())
+        );
+    }
 
     fn tick(class: &'static str, span: &str, latency_ms: Option<i64>) -> Tick {
         Tick {
