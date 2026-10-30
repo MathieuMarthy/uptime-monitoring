@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::forms::monitor::{FieldErrors, MonitorForm, PUSH};
 use crate::models::{Channel, Monitor, Session, is_unique_violation};
-use crate::routes::{PathId, form_or_invalid};
+use crate::routes::{PathId, form_or_invalid, parse_id};
 use crate::state::AppState;
 use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate, Range, test_summary};
 use axum::extract::rejection::{FormRejection, QueryRejection};
@@ -146,10 +146,9 @@ async fn duplicate_form(
     let mut form = MonitorForm::from_monitor(&monitor);
     form.name = format!("{} (copy)", monitor.name);
     form.active = Some("on".to_string());
+    form.copy_of = id.to_string();
     form.set_channels(&Channel::ids_for_monitor(&state.db, id).await?);
-    let mut page = page(&state, None, form, FieldErrors::new(), session.csrf_token).await?;
-    page.cancel_url = format!("/monitors/{id}");
-    Ok(page)
+    page(&state, None, form, FieldErrors::new(), session.csrf_token).await
 }
 
 async fn update(
@@ -285,9 +284,17 @@ async fn page(
     errors: FieldErrors,
     csrf_token: String,
 ) -> Result<FormTemplate, AppError> {
-    let (action_url, cancel_url) = match id {
-        Some(id) => (format!("/monitors/{id}/edit"), format!("/monitors/{id}")),
-        None => ("/monitors/new".to_string(), "/".to_string()),
+    // A copy's form goes back to its source, as long as that still exists.
+    let copy_of = match parse_id(&form.copy_of) {
+        Ok(source) if id.is_none() && Monitor::find(&state.db, source).await?.is_some() => {
+            Some(source)
+        }
+        _ => None,
+    };
+    let (action_url, cancel_url) = match (id, copy_of) {
+        (Some(id), _) => (format!("/monitors/{id}/edit"), format!("/monitors/{id}")),
+        (None, Some(source)) => ("/monitors/new".to_string(), format!("/monitors/{source}")),
+        (None, None) => ("/monitors/new".to_string(), "/".to_string()),
     };
     Ok(FormTemplate {
         form,
@@ -296,6 +303,7 @@ async fn page(
         action_url,
         cancel_url,
         monitor_id: id,
+        copy_of,
         channels: Channel::all(&state.db).await?,
         groups: Monitor::group_names(&state.db).await?,
         test_result: None,

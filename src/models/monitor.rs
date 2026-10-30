@@ -51,31 +51,53 @@ pub struct MonitorSummary {
 }
 
 impl Monitor {
-    /// A monitor that is not stored, for a one-off check of a form's values.
+    /// A monitor that is not stored, for a one-off check of a form's values. Both structs are
+    /// spelled out whole: a field added to either one fails to compile here until it is mapped.
     pub fn unsaved(input: &MonitorInput) -> Self {
+        let MonitorInput {
+            name,
+            group_name,
+            kind,
+            url,
+            method,
+            headers,
+            body,
+            keyword,
+            accepted_statuses,
+            follow_redirects,
+            ignore_tls_errors,
+            interval_s,
+            retry_interval_s,
+            timeout_s,
+            failure_threshold,
+            tls_expiry_warn_days,
+            grace_s,
+            paused,
+            channel_ids: _,
+        } = input.clone();
         Self {
             id: 0,
-            name: input.name.clone(),
-            group_name: input.group_name.clone(),
-            kind: input.kind.clone(),
-            url: input.url.clone(),
-            method: input.method.clone(),
-            headers: input.headers.clone(),
-            body: input.body.clone(),
-            keyword: input.keyword.clone(),
-            accepted_statuses: input.accepted_statuses.clone(),
-            follow_redirects: input.follow_redirects,
-            ignore_tls_errors: input.ignore_tls_errors,
-            interval_s: input.interval_s,
-            retry_interval_s: input.retry_interval_s,
-            timeout_s: input.timeout_s,
-            failure_threshold: input.failure_threshold,
-            tls_expiry_warn_days: input.tls_expiry_warn_days,
-            paused: input.paused,
+            name,
+            group_name,
+            kind,
+            url,
+            method,
+            headers,
+            body,
+            keyword,
+            accepted_statuses,
+            follow_redirects,
+            ignore_tls_errors,
+            interval_s,
+            retry_interval_s,
+            timeout_s,
+            failure_threshold,
+            tls_expiry_warn_days,
+            paused,
             created_at: 0,
             updated_at: 0,
             push_token: None,
-            grace_s: input.grace_s,
+            grace_s,
         }
     }
 

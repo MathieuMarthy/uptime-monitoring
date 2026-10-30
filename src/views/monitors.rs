@@ -574,6 +574,8 @@ pub struct FormTemplate {
     pub action_url: String,
     pub cancel_url: String,
     pub monitor_id: Option<i64>,
+    /// The monitor a create form was copied from, checked to exist.
+    pub copy_of: Option<i64>,
     /// Every channel, sorted by name, for the alert checkboxes.
     pub channels: Vec<Channel>,
     /// The groups in use, suggested by the group field.

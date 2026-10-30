@@ -43,6 +43,7 @@
     <div class="form-card">
         <form action="{{ action_url }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% if let Some(source) = copy_of %}<input type="hidden" name="copy_of" value="{{ source }}">{% endif %}
             <div class="form-section">
                 <h2 class="section-title">General Settings</h2>
 

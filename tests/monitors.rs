@@ -618,3 +618,27 @@ async fn detail_links_to_duplicate() {
     let r = get(&app, "/monitors/1").await;
     assert!(r.body.contains(r#"href="/monitors/1/duplicate""#));
 }
+
+#[tokio::test]
+async fn copy_form_keeps_its_cancel_target_after_a_test_or_an_error() {
+    let (app, _) = common::test_app().await;
+    create(&app, "API").await;
+    let r = get(&app, "/monitors/1/duplicate").await;
+    assert!(r.body.contains(r#"name="copy_of" value="1""#), "{}", r.body);
+
+    let invalid = form("", "&copy_of=1");
+    let r = post_form(&app, "/monitors/new", &invalid).await;
+    assert!(r.body.contains(r#"href="/monitors/1">Cancel"#));
+    let r = post_form(&app, "/monitors/new/test", &invalid).await;
+    assert!(r.body.contains(r#"href="/monitors/1">Cancel"#));
+
+    for bogus in ["abc", "0", "-1", "//evil.example", "99"] {
+        let r = post_form(
+            &app,
+            "/monitors/new",
+            &form("", &format!("&copy_of={bogus}")),
+        )
+        .await;
+        assert!(r.body.contains(r#"href="/">Cancel"#), "copy_of={bogus}");
+    }
+}

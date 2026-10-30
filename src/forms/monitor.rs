@@ -43,6 +43,8 @@ pub struct MonitorForm {
     pub follow_redirects: Option<String>,
     pub ignore_tls_errors: Option<String>,
     pub active: Option<String>,
+    /// The monitor a create form was copied from (its Cancel goes back there); not stored.
+    pub copy_of: String,
     /// Every other field. The checkbox of channel 3 is `channel_3`: a form cannot send a list.
     #[serde(flatten)]
     pub other: BTreeMap<String, String>,
@@ -100,6 +102,7 @@ impl MonitorForm {
             follow_redirects: Some("on".to_string()),
             ignore_tls_errors: None,
             active: Some("on".to_string()),
+            copy_of: String::new(),
             other: BTreeMap::new(),
         }
     }
@@ -134,6 +137,7 @@ impl MonitorForm {
             follow_redirects: checkbox(m.follow_redirects),
             ignore_tls_errors: checkbox(m.ignore_tls_errors),
             active: checkbox(!m.paused),
+            copy_of: String::new(),
             other: BTreeMap::new(),
         }
     }
