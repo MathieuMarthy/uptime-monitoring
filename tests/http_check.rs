@@ -49,6 +49,7 @@ fn monitor(url: &str) -> Monitor {
     Monitor {
         id: 1,
         name: "target".to_string(),
+        group_name: None,
         kind: "http".to_string(),
         url: url.to_string(),
         method: "GET".to_string(),

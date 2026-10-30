@@ -200,6 +200,7 @@ async fn page(
         cancel_url,
         monitor_id: id,
         channels: Channel::all(&state.db).await?,
+        groups: Monitor::group_names(&state.db).await?,
     })
 }
 

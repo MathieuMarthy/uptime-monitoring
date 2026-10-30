@@ -40,6 +40,19 @@
                     {% call field_error("name") %}{% endcall %}
                 </div>
 
+                <div class="form-group">
+                    <label class="form-label" for="group">Group</label>
+                    <input class="form-input" id="group" name="group" type="text" maxlength="64" list="group-names"
+                           placeholder="e.g. Production, Customers" value="{{ form.group }}"/>
+                    <datalist id="group-names">
+                        {%- for group in groups %}
+                        <option value="{{ group }}">
+                        {%- endfor %}
+                    </datalist>
+                    <span class="form-hint">Monitors sharing a group are listed together on the dashboard. Leave blank for none.</span>
+                    {% call field_error("group") %}{% endcall %}
+                </div>
+
                 <div class="form-row form-row-wide-first">
                     <div class="form-group">
                         <label class="form-label" for="url">URL to monitor *</label>

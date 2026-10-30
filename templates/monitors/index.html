@@ -35,7 +35,7 @@
     </div>
 
     <section aria-label="Monitors" class="panel monitor-panel">
-        {% if rows.is_empty() %}
+        {% if groups.is_empty() %}
         <p class="empty-state">No monitor yet. <a href="/monitors/new">Add the first one</a> to start checking a site.</p>
         {% else %}
         <div class="monitor-head" aria-hidden="true">
@@ -46,33 +46,52 @@
             <span class="num">Uptime</span>
             <span class="num">Response</span>
         </div>
-        <ul class="monitor-list" id="live-rows" data-live>
-            {% for row in rows %}
-            {% let m = row.monitor %}
-            <li data-search="{{ m.name }} {{ m.url }}">
-                <a class="monitor-row row-{{ row.status_key() }}" href="/monitors/{{ m.id }}">
-                    <span class="monitor-name">
-                        <span class="lamp lamp-{{ row.status_key() }}" aria-hidden="true"></span>
-                        <span class="monitor-name-text">{{ m.name }}</span>
-                        {%- if row.status_key() == "up" %}
-                        <span class="visually-hidden">, Up</span>
-                        {%- else %}
-                        <span class="row-state state-{{ row.status_key() }}">{{ row.status_label() }}</span>
-                        {%- endif %}
-                    </span>
-                    <span class="trace trace-{{ bars() }}" aria-hidden="true">
-                        {%- for tick in row.heartbeat.ticks -%}
-                        <span class="tick {{ tick.class }}{% if loop.index0 > 0 && loop.index0 % axis.step == 0 %} tick-guide{% endif %}" data-tip="{{ tick.title }}"></span>
-                        {%- endfor -%}
-                    </span>
-                    <span class="num monitor-uptime">{{ row.heartbeat.uptime_label() }}<span class="visually-hidden"> uptime</span></span>
-                    <span class="num monitor-latency">
-                        {%- match m.last_latency_ms %}{% when Some with (latency) %}{{ latency }} ms<span class="visually-hidden"> response</span>{% when None %}—{% endmatch -%}
-                    </span>
-                </a>
-            </li>
-            {% endfor %}
-        </ul>
+        <div id="live-rows" data-live>
+            {%- for group in groups %}
+            {%- if grouped %}
+            <details class="monitor-group" id="{{ group.id }}" open data-group>
+                <summary class="monitor-group-head">
+                    <svg class="monitor-group-chevron" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
+                        <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="lamp lamp-{{ group.state }}" aria-hidden="true"></span>
+                    <span class="monitor-group-name">{{ group.label() }}</span>
+                    <span class="monitor-group-counts">{{ group.counts }}</span>
+                </summary>
+            {%- endif %}
+                <ul class="monitor-list">
+                    {%- for row in group.rows %}
+                    {%- let m = row.monitor %}
+                    <li data-search="{{ m.name }} {{ m.url }}">
+                        <a class="monitor-row row-{{ row.status_key() }}" href="/monitors/{{ m.id }}">
+                            <span class="monitor-name">
+                                <span class="lamp lamp-{{ row.status_key() }}" aria-hidden="true"></span>
+                                <span class="monitor-name-text">{{ m.name }}</span>
+                                {%- if row.status_key() == "up" %}
+                                <span class="visually-hidden">, Up</span>
+                                {%- else %}
+                                <span class="row-state state-{{ row.status_key() }}">{{ row.status_label() }}</span>
+                                {%- endif %}
+                            </span>
+                            <span class="trace trace-{{ bars() }}" aria-hidden="true">
+                                {%- for tick in row.heartbeat.ticks -%}
+                                <span class="tick {{ tick.class }}{% if loop.index0 > 0 && loop.index0 % axis.step == 0 %} tick-guide{% endif %}" data-tip="{{ tick.title }}"></span>
+                                {%- endfor -%}
+                            </span>
+                            <span class="num monitor-uptime">{{ row.heartbeat.uptime_label() }}<span class="visually-hidden"> uptime</span></span>
+                            <span class="num monitor-latency">
+                                {%- match m.last_latency_ms %}{% when Some with (latency) %}{{ latency }} ms<span class="visually-hidden"> response</span>{% when None %}—{% endmatch -%}
+                            </span>
+                        </a>
+                    </li>
+                    {%- endfor %}
+                </ul>
+            {%- if grouped %}
+            </details>
+            {%- endif %}
+            {%- endfor %}
+        </div>
         {% endif %}
     </section>
     <p class="section-note">Red bars are outages, full height once they last a tenth of the bar's time. Orange bars are

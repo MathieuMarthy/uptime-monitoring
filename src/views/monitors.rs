@@ -2,6 +2,7 @@ use crate::error::AppError;
 use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm};
 use crate::models::{
     Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
+    name_key,
 };
 use crate::time::{day_of, days_left, format_datetime, format_duration, format_time, now_ms};
 use crate::views::heartbeat::{Axis, DailyHistory, Heartbeat};
@@ -10,6 +11,7 @@ use askama::Template;
 use askama_web::WebTemplate;
 use jiff::tz::TimeZone;
 use sqlx::SqlitePool;
+use std::collections::BTreeMap;
 
 /// A monitor's configuration together with its runtime state.
 pub struct MonitorView {
@@ -81,6 +83,70 @@ impl MonitorRow {
 
     pub fn status_key(&self) -> &'static str {
         status_key(self.monitor.paused, self.monitor.status)
+    }
+}
+
+/// The monitors of one group on the dashboard, in dashboard order.
+pub struct MonitorGroup {
+    /// `None` for the monitors without a group.
+    pub name: Option<String>,
+    /// The `<details>` id, stable across refreshes so `live.js` keeps it open or closed.
+    pub id: String,
+    /// The worst state of its monitors: the suffix of the lamp class.
+    pub state: &'static str,
+    /// `1 down, 4 up`.
+    pub counts: String,
+    pub rows: Vec<MonitorRow>,
+}
+
+impl MonitorGroup {
+    pub fn label(&self) -> &str {
+        self.name.as_deref().unwrap_or("Ungrouped")
+    }
+
+    /// Groups the rows, given in name order: by group name ignoring case (spelled as on its first
+    /// monitor), then ungrouped. Rows keep the dashboard order within a group.
+    fn split(rows: Vec<MonitorRow>) -> Vec<Self> {
+        let mut groups: BTreeMap<Option<String>, Vec<MonitorRow>> = BTreeMap::new();
+        for row in rows {
+            groups
+                .entry(row.monitor.group_name.as_deref().map(name_key))
+                .or_default()
+                .push(row);
+        }
+        // `None` sorts first in the map: move it last.
+        let mut groups: Vec<_> = groups.into_iter().collect();
+        if groups.first().is_some_and(|(key, _)| key.is_none()) {
+            groups.rotate_left(1);
+        }
+        groups
+            .into_iter()
+            .map(|(key, mut rows)| {
+                let name = rows[0].monitor.group_name.clone();
+                rows.sort_by_key(|r| status_rank(r.monitor.paused, r.monitor.status));
+                let id = match key {
+                    Some(key) => key.bytes().fold("group-".to_string(), |mut id, b| {
+                        id.push_str(&format!("{b:02x}"));
+                        id
+                    }),
+                    None => "group-none".to_string(),
+                };
+                let counts: Vec<String> = ["down", "pending", "up", "paused"]
+                    .into_iter()
+                    .filter_map(|key| {
+                        let count = rows.iter().filter(|r| r.status_key() == key).count();
+                        (count > 0).then(|| format!("{count} {key}"))
+                    })
+                    .collect();
+                Self {
+                    name,
+                    id,
+                    state: rows[0].status_key(),
+                    counts: counts.join(", "),
+                    rows,
+                }
+            })
+            .collect()
     }
 }
 
@@ -180,7 +246,9 @@ fn missing_state(monitor_id: i64) -> AppError {
 #[template(path = "monitors/index.html")]
 pub struct IndexTemplate {
     pub headline: Headline,
-    pub rows: Vec<MonitorRow>,
+    pub groups: Vec<MonitorGroup>,
+    /// Whether any monitor has a group: without, the list has no group headers.
+    pub grouped: bool,
     pub range: Range,
     pub axis: Axis,
     pub csrf_token: String,
@@ -206,8 +274,7 @@ impl IndexTemplate {
     ) -> Result<Self, AppError> {
         let tz = Settings::load(pool).await?.tz();
         let now = now_ms();
-        let mut monitors = Monitor::summaries(pool).await?;
-        monitors.sort_by_key(|m| status_rank(m.paused, m.status));
+        let monitors = Monitor::summaries(pool).await?;
         let (mut heartbeats, axis) = match range {
             Range::Hours => (
                 Heartbeat::hourly(pool, None, &tz, now).await?,
@@ -235,6 +302,7 @@ impl IndexTemplate {
                 .filter(|r| !r.monitor.paused && r.monitor.status == status)
                 .count()
         };
+        // Rows are still in name order, the order of the down monitors in the headline.
         let down = rows
             .iter()
             .filter(|r| !r.monitor.paused && r.monitor.status == MonitorStatus::Down)
@@ -246,10 +314,13 @@ impl IndexTemplate {
             rows.iter().filter(|r| r.monitor.paused).count(),
             down,
         );
+        let grouped = rows.iter().any(|r| r.monitor.group_name.is_some());
+        let groups = MonitorGroup::split(rows);
 
         Ok(Self {
             headline,
-            rows,
+            groups,
+            grouped,
             range,
             axis,
             csrf_token,
@@ -456,6 +527,8 @@ pub struct FormTemplate {
     pub monitor_id: Option<i64>,
     /// Every channel, sorted by name, for the alert checkboxes.
     pub channels: Vec<Channel>,
+    /// The groups in use, suggested by the group field.
+    pub groups: Vec<String>,
 }
 
 impl FormTemplate {

@@ -236,7 +236,13 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   in the new zone overlaps the last one (moving east) or leaves hours out (moving west).
 - **Dashboard.** One query for monitors and states (no body or headers), one for the 24 hourly bars of all monitors
   (`?range=90d`: the 90 daily bars, through `DailyHistory::load_many`). Monitors are listed down first, then pending,
-  up and paused, by name within each group; a sentence on top names the down ones. Every row shares one time axis.
+  up and paused, by name within each state; a sentence on top names the down ones. Every row shares one time axis.
+- **Groups.** A monitor's optional `group_name` is free text; its form suggests the groups in use (`<datalist>`). A group
+  exists while a monitor uses it: renaming means editing its monitors. Once any monitor has a group, the dashboard
+  shows one `<details>` per group, by name ignoring case (spelled as on its first monitor by name), *Ungrouped* last,
+  each headed by its worst state's lamp and its counts; the order above applies within a group, the headline still
+  covers every monitor. The `<details>` id is the hex of the group's key, so `live.js` keeps it folded across
+  refreshes. Without any group, the list has no headers.
   Bars (`Tick::class`): a dot without checks, short green, mid-height orange with failures but no downtime, red with
   downtime, full height once it reaches a tenth of the bar's time. Uptime is truncated, never rounded up to 100 %.
 - **Detail page.** A status sentence (from `monitor_state` and the latest incident), 24 h and 30 d uptime, 24 h average
@@ -247,7 +253,7 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   marked `data-live` (each with an id) whose content changed, keeping the focused link or summary and the `<details>`
   the user opened or closed (by id). A changed status sentence (`data-announce`) is read out by a polite live region,
   nothing else. A redirect (expired session) reloads the page. No extra route or JSON.
-- **Search.** `static/js/search.js` filters the rows on `data-search` (name and URL), ignoring case and accents.
+- **Search.** `static/js/search.js` filters the rows on `data-search` (name and URL), ignoring case and accents, hides the groups left without a row and unfolds those with matches.
 
 ## Activity
 

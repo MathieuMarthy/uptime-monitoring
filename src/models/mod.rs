@@ -16,7 +16,7 @@ pub use channel::{Channel, ChannelSummary};
 pub use check::{Check, FailedCheck, RecentCheck};
 pub use daily_stat::DailyStat;
 pub use incident::{Incident, NamedIncident};
-pub use monitor::{Monitor, MonitorSummary};
+pub use monitor::{Monitor, MonitorSummary, name_key};
 pub use monitor_state::{CertificateWarning, MonitorState, MonitorStatus, Recorded};
 pub use notification_log::{Delivery, LogEntry, NotificationLog};
 pub use session::{NewSession, Session};

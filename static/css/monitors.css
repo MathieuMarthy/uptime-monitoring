@@ -31,6 +31,63 @@
     border-radius: 0 0 6px 6px;
 }
 
+.monitor-group:not(:last-child) .monitor-list li:last-child .monitor-row {
+    border-radius: 0;
+}
+
+/* A group folds to its header: name, worst state, counts. */
+.monitor-group-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 22px 8px;
+    border-top: 1px solid var(--rule);
+    list-style: none;
+    cursor: pointer;
+}
+
+.monitor-group-head::-webkit-details-marker {
+    display: none;
+}
+
+.monitor-group-head:focus-visible {
+    outline-offset: -3px;
+}
+
+.monitor-group:last-child:not([open]) > .monitor-group-head {
+    border-radius: 0 0 6px 6px;
+}
+
+.monitor-group-name {
+    font-family: var(--font-title);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+}
+
+.monitor-group-head:hover .monitor-group-name {
+    color: var(--go);
+}
+
+.monitor-group-counts {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.monitor-group-chevron {
+    flex: none;
+    color: var(--muted);
+    transition: transform 150ms ease;
+}
+
+.monitor-group[open] > .monitor-group-head .monitor-group-chevron {
+    transform: rotate(90deg);
+}
+
 .monitor-row {
     padding-block: 8px;
     color: var(--ink);

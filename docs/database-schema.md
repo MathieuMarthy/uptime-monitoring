@@ -42,6 +42,7 @@ erDiagram
 | `id` | INTEGER | PK | |
 | `name` | TEXT | NOT NULL | |
 | `name_key` | TEXT | NOT NULL UNIQUE | Unicode lowercase of `name` in NFC, computed by the application: uniqueness and sort order (`COLLATE NOCASE` only folds ASCII) |
+| `group_name` | TEXT | NULL | dashboard group, free text (at most 64 characters); NULL = ungrouped. Compared through its `name_key` form, in the application |
 | `kind` | TEXT | NOT NULL DEFAULT `'http'`, CHECK IN (`'http'`) | extension point for future check types |
 | `url` | TEXT | NOT NULL | |
 | `method` | TEXT | NOT NULL DEFAULT `'GET'`, CHECK IN (GET, HEAD, POST, PUT, PATCH, DELETE) | |

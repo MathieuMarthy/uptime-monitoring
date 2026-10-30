@@ -4,7 +4,7 @@ use crate::time::now_ms;
 use sqlx::{FromRow, SqlitePool};
 use unicode_normalization::UnicodeNormalization;
 
-const COLUMNS: &str = "id, name, kind, url, method, headers, body, keyword, accepted_statuses, \
+const COLUMNS: &str = "id, name, group_name, kind, url, method, headers, body, keyword, accepted_statuses, \
     follow_redirects, ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold, tls_expiry_warn_days, paused, \
     created_at, updated_at";
 
@@ -13,6 +13,7 @@ const COLUMNS: &str = "id, name, kind, url, method, headers, body, keyword, acce
 pub struct Monitor {
     pub id: i64,
     pub name: String,
+    pub group_name: Option<String>,
     pub kind: String,
     pub url: String,
     pub method: String,
@@ -37,6 +38,7 @@ pub struct Monitor {
 pub struct MonitorSummary {
     pub id: i64,
     pub name: String,
+    pub group_name: Option<String>,
     pub url: String,
     pub paused: bool,
     pub status: MonitorStatus,
@@ -47,12 +49,26 @@ impl Monitor {
     /// Every monitor with its state, sorted by name.
     pub async fn summaries(pool: &SqlitePool) -> Result<Vec<MonitorSummary>, sqlx::Error> {
         sqlx::query_as(
-            "SELECT m.id, m.name, m.url, m.paused, s.status, s.last_latency_ms
+            "SELECT m.id, m.name, m.group_name, m.url, m.paused, s.status, s.last_latency_ms
              FROM monitors m JOIN monitor_state s ON s.monitor_id = m.id
              ORDER BY m.name_key",
         )
         .fetch_all(pool)
         .await
+    }
+
+    /// The group names in use, sorted, each spelled as on its first monitor by name, like on the
+    /// dashboard: the form's suggestions.
+    pub async fn group_names(pool: &SqlitePool) -> Result<Vec<String>, sqlx::Error> {
+        let mut names: Vec<String> = sqlx::query_scalar(
+            "SELECT group_name FROM monitors WHERE group_name IS NOT NULL ORDER BY name_key",
+        )
+        .fetch_all(pool)
+        .await?;
+        // Stable: within a group, the first monitor's spelling stays first and is kept.
+        names.sort_by_cached_key(|n| name_key(n));
+        names.dedup_by(|a, b| name_key(a) == name_key(b));
+        Ok(names)
     }
 
     /// The longest a failure series can run before reaching its threshold, over all monitors.
@@ -91,15 +107,16 @@ impl Monitor {
         let id = sqlx::query(
             r#"
             INSERT INTO monitors (
-                name, name_key, url, method, headers, body, keyword, accepted_statuses, follow_redirects,
+                name, name_key, group_name, url, method, headers, body, keyword, accepted_statuses, follow_redirects,
                 ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold,
                 tls_expiry_warn_days, paused, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&input.name)
         .bind(name_key(&input.name))
+        .bind(&input.group_name)
         .bind(&input.url)
         .bind(&input.method)
         .bind(&input.headers)
@@ -141,7 +158,7 @@ impl Monitor {
         let result = sqlx::query(
             r#"
             UPDATE monitors
-            SET name = ?, name_key = ?, url = ?, method = ?, headers = ?, body = ?, keyword = ?,
+            SET name = ?, name_key = ?, group_name = ?, url = ?, method = ?, headers = ?, body = ?, keyword = ?,
                 accepted_statuses = ?, follow_redirects = ?, ignore_tls_errors = ?, interval_s = ?,
                 retry_interval_s = ?, timeout_s = ?, failure_threshold = ?, tls_expiry_warn_days = ?, paused = ?, updated_at = ?
             WHERE id = ?
@@ -149,6 +166,7 @@ impl Monitor {
         )
         .bind(&input.name)
         .bind(name_key(&input.name))
+        .bind(&input.group_name)
         .bind(&input.url)
         .bind(&input.method)
         .bind(&input.headers)
@@ -215,6 +233,6 @@ impl Monitor {
 
 /// The key that makes names unique and sorts them: `COLLATE NOCASE` only folds ASCII letters, and an accented letter
 /// can be typed as one code point or as a letter plus a combining accent (NFC makes them equal).
-fn name_key(name: &str) -> String {
+pub fn name_key(name: &str) -> String {
     name.to_lowercase().nfc().collect()
 }

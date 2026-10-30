@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 pub const METHODS: [&str; 6] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
 
 const NAME_MAX_CHARS: usize = 100;
+const GROUP_MAX_CHARS: usize = 64;
 const URL_MAX_BYTES: usize = 2048;
 const BODY_MAX_BYTES: usize = 64 * 1024;
 const KEYWORD_MAX_BYTES: usize = 1024;
@@ -19,6 +20,7 @@ pub type FieldErrors = BTreeMap<&'static str, String>;
 #[serde(default)]
 pub struct MonitorForm {
     pub name: String,
+    pub group: String,
     pub url: String,
     pub method: String,
     pub accepted_statuses: String,
@@ -44,6 +46,8 @@ const CHANNEL_PREFIX: &str = "channel_";
 #[derive(Debug, Clone, PartialEq)]
 pub struct MonitorInput {
     pub name: String,
+    /// `None`: ungrouped.
+    pub group_name: Option<String>,
     pub url: String,
     pub method: String,
     pub headers: Option<String>,
@@ -66,6 +70,7 @@ impl MonitorForm {
     pub fn new_defaults() -> Self {
         Self {
             name: String::new(),
+            group: String::new(),
             url: "https://".to_string(),
             method: "GET".to_string(),
             accepted_statuses: "200-299".to_string(),
@@ -88,6 +93,7 @@ impl MonitorForm {
         let checkbox = |on: bool| on.then(|| "on".to_string());
         Self {
             name: m.name.clone(),
+            group: m.group_name.clone().unwrap_or_default(),
             url: m.url.clone(),
             method: m.method.clone(),
             accepted_statuses: m.accepted_statuses.clone(),
@@ -141,6 +147,15 @@ impl MonitorForm {
             errors.insert(
                 "name",
                 format!("Name must be at most {NAME_MAX_CHARS} characters."),
+            );
+        }
+
+        let group = self.group.trim();
+        let group_name = has_visible_char(group).then(|| group.to_string());
+        if group_name.is_some() && group.chars().count() > GROUP_MAX_CHARS {
+            errors.insert(
+                "group",
+                format!("Group must be at most {GROUP_MAX_CHARS} characters."),
             );
         }
 
@@ -235,6 +250,7 @@ impl MonitorForm {
 
         Ok(MonitorInput {
             name: name.to_string(),
+            group_name,
             url: url.to_string(),
             method,
             headers,
@@ -400,6 +416,25 @@ mod tests {
             errors.contains_key(field),
             "expected error on {field}, got {errors:?}"
         );
+    }
+
+    #[test]
+    fn group_is_trimmed_blank_is_none_and_bounded() {
+        let group = |g: &str| {
+            MonitorForm {
+                group: g.to_string(),
+                ..valid()
+            }
+            .validate()
+        };
+        assert_eq!(
+            group("  Production ").unwrap().group_name.as_deref(),
+            Some("Production")
+        );
+        assert_eq!(group(" \u{200b} ").unwrap().group_name, None);
+        assert!(group(&"é".repeat(64)).is_ok());
+        assert!(group(&"é".repeat(65)).unwrap_err().contains_key("group"));
+        assert_eq!(group(&"\u{200b}".repeat(65)).unwrap().group_name, None);
     }
 
     #[test]

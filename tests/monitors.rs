@@ -502,3 +502,80 @@ async fn monitor_form_links_checked_channels() {
         "kept on error"
     );
 }
+
+async fn create_in(app: &TestApp, name: &str, group: &str) {
+    let r = post_form(
+        app,
+        "/monitors/new",
+        &form(name, &format!("&group={group}")),
+    )
+    .await;
+    assert_eq!(r.status, 303, "body: {}", r.body);
+}
+
+#[tokio::test]
+async fn group_is_saved_prefilled_and_suggested() {
+    let (app, pool) = common::test_app().await;
+    create_in(&app, "API", "+Production+").await;
+    let (group,): (Option<String>,) = sqlx::query_as("SELECT group_name FROM monitors")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(group.as_deref(), Some("Production"));
+    let r = get(&app, "/monitors/1/edit").await;
+    assert!(r.body.contains(r#"value="Production""#), "{}", r.body);
+    let r = get(&app, "/monitors/new").await;
+    assert!(
+        r.body.contains(r#"<option value="Production">"#),
+        "{}",
+        r.body
+    );
+}
+
+#[tokio::test]
+async fn dashboard_without_groups_has_no_sections() {
+    let (app, _) = common::test_app().await;
+    create(&app, "API").await;
+    let body = get(&app, "/").await.body;
+    assert!(!body.contains("monitor-group"), "{body}");
+    assert!(body.contains(r#"data-search="API "#));
+}
+
+#[tokio::test]
+async fn dashboard_lists_groups_by_name_with_ungrouped_last() {
+    let (app, pool) = common::test_app().await;
+    create_in(&app, "d", "API").await;
+    create_in(&app, "a", "Web").await;
+    create_in(&app, "b", "api").await;
+    create_in(&app, "c", "").await;
+    sqlx::query(
+        "UPDATE monitor_state SET status = CASE monitor_id WHEN 1 THEN 'down' ELSE 'up' END",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let body = get(&app, "/").await.body;
+    let position = |needle: &str| {
+        body.find(needle)
+            .unwrap_or_else(|| panic!("missing {needle}: {body}"))
+    };
+    // "api" and "API" are one group, spelled as on its first monitor by name (b, created after
+    // d); the form suggests the same spelling.
+    assert_eq!(body.matches(r#"class="monitor-group-name">"#).count(), 3);
+    assert!(position(r#"monitor-group-name">api<"#) < position(r#"monitor-group-name">Web<"#));
+    assert!(
+        position(r#"monitor-group-name">Web<"#) < position(r#"monitor-group-name">Ungrouped<"#)
+    );
+    assert!(body.contains("1 down, 1 up"), "{body}");
+    assert!(
+        position(r#"data-search="d "#) < position(r#"data-search="b "#),
+        "down first"
+    );
+    assert!(position(r#"data-search="b "#) < position(r#"data-search="a "#));
+    assert!(position(r#"data-search="a "#) < position(r#"data-search="c "#));
+    // The headline still covers every monitor.
+    assert!(body.contains("1 monitor is down"));
+    let form = get(&app, "/monitors/new").await.body;
+    assert!(form.contains(r#"<option value="api">"#), "{form}");
+    assert!(!form.contains(r#"<option value="API">"#), "{form}");
+}
