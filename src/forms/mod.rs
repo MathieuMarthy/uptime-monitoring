@@ -11,7 +11,12 @@ pub fn has_visible_char(text: &str) -> bool {
         .any(|c| !c.is_whitespace() && !c.is_control() && !is_invisible_format(c))
 }
 
-fn is_invisible_format(c: char) -> bool {
+/// Length as the browser's `maxlength` counts it, in UTF-16 code units: an emoji counts two.
+pub fn text_len(text: &str) -> usize {
+    text.encode_utf16().count()
+}
+
+pub fn is_invisible_format(c: char) -> bool {
     matches!(
         c,
         '\u{00AD}'

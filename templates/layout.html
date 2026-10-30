@@ -15,23 +15,23 @@
     </div>
     <div class="site-header-group">
         {% include "partials/theme-switch.html" %}
-        <a href="/settings" class="header-link" {% block nav_settings %}{% endblock %}>
+        <a href="/settings" class="header-link" aria-label="Settings" {% block nav_settings %}{% endblock %}>
             <svg class="header-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16">
                 <path d="M2 4.5h7M13 4.5h1M2 11.5h1M7 11.5h7" fill="none" stroke="currentColor" stroke-width="1.6"
                       stroke-linecap="round"/>
                 <circle cx="11" cy="4.5" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/>
                 <circle cx="5" cy="11.5" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/>
             </svg>
-            <span class="header-label">Settings</span>
+            <span class="header-label" aria-hidden="true">Settings</span>
         </a>
         <form action="/logout" method="POST" class="inline-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="button-secondary button-small logout-button" type="submit">
+            <button class="button-secondary button-small logout-button" type="submit" aria-label="Log out">
                 <svg class="header-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16">
                     <path d="M6.5 2.5h-3v11h3M10 5l3 3-3 3M13 8H6.5" fill="none" stroke="currentColor"
                           stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <span class="header-label">Log out</span>
+                <span class="header-label" aria-hidden="true">Log out</span>
             </button>
         </form>
     </div>

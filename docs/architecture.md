@@ -106,7 +106,8 @@ uptime-monitoring/
 - **Errors.** Handlers return `Result<_, AppError>` and use `?`. `AppError::Internal` is logged with its source; the
   user only sees a generic 500 page. No SQL or framework error text reaches a response.
 - **Forms.** Every form field is deserialized as a `String`, so a blank or malformed value becomes a field error shown
-  under its input instead of a raw 422. Validation reports all errors at once.
+  under its input instead of a raw 422. Validation reports all errors at once. Lengths are counted in UTF-16 units (`forms::text_len`), as
+  the browser's `maxlength` counts them.
 - **Ids.** Integer ids. Path ids are parsed with `routes::parse_id` (the `PathId` extractor); anything that is not a positive integer is a 404.
 - **Time.** Timestamps are Unix epoch milliseconds (`i64`), from `time::now_ms()`.
 - **Protected by default.** `routes::all` merges a protected router, behind `middleware::require_session`, and a
@@ -237,7 +238,8 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Dashboard.** One query for monitors and states (no body or headers), one for the 24 hourly bars of all monitors
   (`?range=90d`: the 90 daily bars, through `DailyHistory::load_many`). Monitors are listed down first, then pending,
   up and paused, by name within each state; a sentence on top names the down ones. Every row shares one time axis.
-- **Groups.** A monitor's optional `group_name` is free text; its form suggests the groups in use (`<datalist>`). A group
+- **Groups.** A monitor's optional `group_name` is free text, invisible characters dropped and spaces collapsed so
+  that look-alike names make one group (*Ungrouped* is refused: it titles the monitors without one); its form suggests the groups in use (`<datalist>`). A group
   exists while a monitor uses it: renaming means editing its monitors. Once any monitor has a group, the dashboard
   shows one `<details>` per group, by name ignoring case (spelled as on its first monitor by name), *Ungrouped* last,
   each headed by its worst state's lamp and its counts; the order above applies within a group, the headline still
@@ -288,7 +290,7 @@ alerts follow the checks retention: older incidents only show their facts.
 - **Accessibility.** Colour pairs meet WCAG AA in both palettes (4.5:1 for text, 3:1 for lamps and bars); a state is
   always written out next to its lamp, except *Up* (visually hidden).
 - **Menu.** A page marks its menu entry by filling the matching `nav_*` block of `layout.html`. Under 720 px, CSS alone
-  puts the brand and three icon buttons (theme, settings, log out; labels kept for screen readers) on one line and
+  puts the brand and three icon buttons (theme, settings, log out; named by `aria-label`) on one line and
   the four sections as equal tabs under them.
 
 ## Public pages

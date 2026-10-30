@@ -1,5 +1,5 @@
-use crate::forms::has_visible_char;
-use crate::models::Monitor;
+use crate::forms::{has_visible_char, is_invisible_format, text_len};
+use crate::models::{Monitor, name_key};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -7,6 +7,8 @@ pub const METHODS: [&str; 6] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
 
 const NAME_MAX_CHARS: usize = 100;
 const GROUP_MAX_CHARS: usize = 64;
+/// The dashboard's title for the monitors without a group, which no group may take.
+pub const UNGROUPED: &str = "Ungrouped";
 const URL_MAX_BYTES: usize = 2048;
 const BODY_MAX_BYTES: usize = 64 * 1024;
 const KEYWORD_MAX_BYTES: usize = 1024;
@@ -143,21 +145,32 @@ impl MonitorForm {
         let name = self.name.trim();
         if !has_visible_char(name) {
             errors.insert("name", "Name is required.".to_string());
-        } else if name.chars().count() > NAME_MAX_CHARS {
+        } else if text_len(name) > NAME_MAX_CHARS {
             errors.insert(
                 "name",
                 format!("Name must be at most {NAME_MAX_CHARS} characters."),
             );
         }
 
-        let group = self.group.trim();
-        let group_name = has_visible_char(group).then(|| group.to_string());
-        if group_name.is_some() && group.chars().count() > GROUP_MAX_CHARS {
+        // Invisible characters dropped and spaces collapsed: groups that look alike are one.
+        let group: String = self
+            .group
+            .chars()
+            .filter(|&c| c.is_whitespace() || !(c.is_control() || is_invisible_format(c)))
+            .collect();
+        let group = group.split_whitespace().collect::<Vec<_>>().join(" ");
+        if text_len(&group) > GROUP_MAX_CHARS {
             errors.insert(
                 "group",
                 format!("Group must be at most {GROUP_MAX_CHARS} characters."),
             );
+        } else if name_key(&group) == name_key(UNGROUPED) {
+            errors.insert(
+                "group",
+                format!("“{UNGROUPED}” is kept for the monitors without a group."),
+            );
         }
+        let group_name = (!group.is_empty()).then_some(group);
 
         let url = self.url.trim();
         if let Err(message) = validate_url(url) {
@@ -435,6 +448,36 @@ mod tests {
         assert!(group(&"é".repeat(64)).is_ok());
         assert!(group(&"é".repeat(65)).unwrap_err().contains_key("group"));
         assert_eq!(group(&"\u{200b}".repeat(65)).unwrap().group_name, None);
+        // Counted like the browser's maxlength, in UTF-16 units: an emoji takes two.
+        assert!(group(&"😀".repeat(32)).is_ok());
+        assert!(group(&"😀".repeat(33)).unwrap_err().contains_key("group"));
+    }
+
+    #[test]
+    fn group_drops_invisible_characters_and_extra_spaces() {
+        let group = |g: &str| {
+            MonitorForm {
+                group: g.to_string(),
+                ..valid()
+            }
+            .validate()
+        };
+        assert_eq!(
+            group("Prod\u{200b}  \u{feff}API\t")
+                .unwrap()
+                .group_name
+                .as_deref(),
+            Some("Prod API")
+        );
+    }
+
+    #[test]
+    fn ungrouped_is_reserved() {
+        let errors = errors_of(MonitorForm {
+            group: " unGROUPED ".to_string(),
+            ..valid()
+        });
+        assert!(errors.contains_key("group"), "{errors:?}");
     }
 
     #[test]

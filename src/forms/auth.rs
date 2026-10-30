@@ -1,5 +1,5 @@
-use crate::forms::has_visible_char;
 use crate::forms::monitor::FieldErrors;
+use crate::forms::{has_visible_char, text_len};
 use serde::Deserialize;
 
 const USERNAME_MAX_CHARS: usize = 64;
@@ -39,7 +39,7 @@ impl SetupForm {
         let username = self.username.trim();
         if !has_visible_char(username) {
             errors.insert("username", "Username is required.".to_string());
-        } else if username.chars().count() > USERNAME_MAX_CHARS {
+        } else if text_len(username) > USERNAME_MAX_CHARS {
             errors.insert(
                 "username",
                 format!("Username must be at most {USERNAME_MAX_CHARS} characters."),

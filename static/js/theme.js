@@ -31,6 +31,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const show = (theme) => {
         button.dataset.mode = theme;
         label.textContent = theme[0].toUpperCase() + theme.slice(1);
+        // The visible label is dropped on phones: the name is on the button.
+        button.setAttribute("aria-label", `Theme: ${label.textContent}`);
     };
     show(storedTheme());
     button.hidden = false; // useless without this script

@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm};
+use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm, UNGROUPED};
 use crate::models::{
     Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
     name_key,
@@ -101,7 +101,7 @@ pub struct MonitorGroup {
 
 impl MonitorGroup {
     pub fn label(&self) -> &str {
-        self.name.as_deref().unwrap_or("Ungrouped")
+        self.name.as_deref().unwrap_or(UNGROUPED)
     }
 
     /// Groups the rows, given in name order: by group name ignoring case (spelled as on its first

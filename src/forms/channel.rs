@@ -1,5 +1,5 @@
-use crate::forms::has_visible_char;
 use crate::forms::monitor::{FieldErrors, validate_url};
+use crate::forms::{has_visible_char, text_len};
 use crate::notify::channel::{ChannelConfig, KINDS, NtfyConfig, WebhookConfig};
 use serde::Deserialize;
 
@@ -73,7 +73,7 @@ impl ChannelForm {
         let name = self.name.trim();
         if !has_visible_char(name) {
             errors.insert("name", "Name is required.".to_string());
-        } else if name.chars().count() > NAME_MAX_CHARS {
+        } else if text_len(name) > NAME_MAX_CHARS {
             errors.insert(
                 "name",
                 format!("Name must be at most {NAME_MAX_CHARS} characters."),

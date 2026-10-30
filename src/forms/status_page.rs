@@ -1,5 +1,5 @@
-use crate::forms::has_visible_char;
 use crate::forms::monitor::FieldErrors;
+use crate::forms::{has_visible_char, text_len};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -100,7 +100,7 @@ impl StatusPageForm {
         let title = self.title.trim();
         if !has_visible_char(title) {
             errors.insert("title", "Title is required.".to_string());
-        } else if title.chars().count() > TITLE_MAX_CHARS {
+        } else if text_len(title) > TITLE_MAX_CHARS {
             errors.insert(
                 "title",
                 format!("Title must be at most {TITLE_MAX_CHARS} characters."),
@@ -118,7 +118,7 @@ impl StatusPageForm {
         }
 
         let description = self.description.trim();
-        if description.chars().count() > DESCRIPTION_MAX_CHARS {
+        if text_len(description) > DESCRIPTION_MAX_CHARS {
             errors.insert(
                 "description",
                 format!("Description must be at most {DESCRIPTION_MAX_CHARS} characters."),
@@ -131,7 +131,7 @@ impl StatusPageForm {
                 continue;
             }
             let name = self.display_name(id).trim();
-            if name.chars().count() > DISPLAY_NAME_MAX_CHARS {
+            if text_len(name) > DISPLAY_NAME_MAX_CHARS {
                 add_error(
                     &mut errors,
                     format!("Display names must be at most {DISPLAY_NAME_MAX_CHARS} characters."),

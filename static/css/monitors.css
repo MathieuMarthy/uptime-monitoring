@@ -27,11 +27,12 @@
     border-top: 1px solid var(--rule-soft);
 }
 
-.monitor-list li:last-child .monitor-row {
+/* The last row shown rounds the panel's bottom corners; "shown" ignores what search hid. */
+.monitor-list li:nth-last-child(1 of :not([hidden])) .monitor-row {
     border-radius: 0 0 6px 6px;
 }
 
-.monitor-group:not(:last-child) .monitor-list li:last-child .monitor-row {
+.monitor-group:not(:nth-last-child(1 of :not([hidden]))) .monitor-list li .monitor-row {
     border-radius: 0;
 }
 
@@ -54,7 +55,7 @@
     outline-offset: -3px;
 }
 
-.monitor-group:last-child:not([open]) > .monitor-group-head {
+.monitor-group:nth-last-child(1 of :not([hidden])):not([open]) > .monitor-group-head {
     border-radius: 0 0 6px 6px;
 }
 

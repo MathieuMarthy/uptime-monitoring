@@ -237,7 +237,7 @@ h1, h2, h3 {
 }
 
 /* Phones: the brand and icon buttons on one line, the sections as equal tabs under them. The icon
-   buttons keep their label for screen readers. */
+   buttons are named by their aria-label. */
 @media (max-width: 719.98px) {
     .site-header {
         display: grid;
@@ -286,12 +286,7 @@ h1, h2, h3 {
     }
 
     .header-label {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-        white-space: nowrap;
+        display: none;
     }
 }
 
