@@ -3,7 +3,9 @@ use crate::forms::monitor::{FieldErrors, MonitorForm, PUSH};
 use crate::models::{Channel, Monitor, Session, is_unique_violation};
 use crate::routes::{PathId, form_or_invalid, parse_id};
 use crate::state::AppState;
-use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate, Range, test_summary};
+use crate::views::monitors::{
+    DashboardFilter, DetailTemplate, FormTemplate, IndexTemplate, Range, test_summary,
+};
 use axum::extract::rejection::{FormRejection, QueryRejection};
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
@@ -29,9 +31,12 @@ pub fn router() -> Router<AppState> {
         .route("/monitors/{id}/push-token", post(renew_push_token))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct IndexQuery {
     range: Option<String>,
+    q: Option<String>,
+    status: Option<String>,
+    group: Option<String>,
 }
 
 async fn index(
@@ -39,13 +44,14 @@ async fn index(
     Extension(session): Extension<Session>,
     query: Result<Query<IndexQuery>, QueryRejection>,
 ) -> Result<IndexTemplate, AppError> {
-    let range = query.ok().and_then(|Query(q)| q.range);
-    IndexTemplate::load(
-        &state.db,
-        Range::parse(range.as_deref()),
-        session.csrf_token,
-    )
-    .await
+    let query = query.map(|Query(q)| q).unwrap_or_default();
+    let filter = DashboardFilter::parse(
+        Range::parse(query.range.as_deref()),
+        query.q.as_deref(),
+        query.status.as_deref(),
+        query.group.as_deref(),
+    );
+    IndexTemplate::load(&state.db, filter, session.csrf_token).await
 }
 
 async fn detail(

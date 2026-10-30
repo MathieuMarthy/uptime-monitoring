@@ -1,5 +1,5 @@
 /* Dashboard: every monitor on one shared clock, so outages at the same hour line up. */
-.toolbar .search-bar {
+.filter-form .search-bar {
     width: 240px;
     max-width: 100%;
 }
@@ -159,4 +159,30 @@
         grid-column: 1 / -1;
         grid-row: 2;
     }
+}
+
+/* Filters above the list: state chips with their counts, then search and group. */
+.dashboard-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.filter-count {
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.75;
+}
+
+.filter-form [data-submit][hidden] {
+    display: none;
 }

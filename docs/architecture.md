@@ -276,7 +276,13 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `/incidents/{id}/note`. Line breaks count once, as `maxlength` counts them. Saving drops every cached status page,
   so a public note shows (or goes) at once, then returns to the `Referer`'s path and query (never its host) at
   `#incident-{id}`, which `open-target.js` unfolds; the monitor's page without a `Referer`.
-- **Search.** `static/js/search.js` filters the rows on `data-search` (name and URL), ignoring case and accents, hides the groups left without a row and unfolds those with matches.
+- **Search and filters.** The dashboard state lives in its URL (`/?range=90d&q=api&status=down&group=Web`):
+  `DashboardFilter` renders every row and marks those left out `hidden`, with the groups left empty, so the page
+  works without JS and a link shares it. The search matches name, URL and group (`data-search`), ignoring case and
+  accents; `status` is `down` or `paused`; `group` compares like group names, `Ungrouped` picking the monitors
+  without one. The state chips count every monitor and are a `data-live` block. `static/js/filter.js` applies the
+  same filter at once in the browser, keeps the URL in step with `history.replaceState` (so the live refresh
+  fetches the same filter), unfolds groups with matches; `/` focuses the search, Esc clears it.
 
 ## Activity
 

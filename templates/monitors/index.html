@@ -7,7 +7,7 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/live.js" defer></script>
-<script src="/static/js/search.js" defer></script>
+<script src="/static/js/filter.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -25,14 +25,43 @@
 
         <div class="toolbar">
             <nav class="segmented" aria-label="Time range">
-                <a href="/" {% if range == Range::Hours %}aria-current="true"{% endif %}>24 hours</a>
-                <a href="/?range=90d" {% if range == Range::Days %}aria-current="true"{% endif %}>90 days</a>
+                <a href="{{ filter.range_url(Range::Hours) }}" data-range="" {% if range == Range::Hours %}aria-current="true"{% endif %}>24 hours</a>
+                <a href="{{ filter.range_url(Range::Days) }}" data-range="90d" {% if range == Range::Days %}aria-current="true"{% endif %}>90 days</a>
             </nav>
-            <label class="visually-hidden" for="search-monitors">Search monitors</label>
-            <input class="search-bar" id="search-monitors" type="search" placeholder="Search by name or address">
             <a class="button-primary" href="/monitors/new">Add monitor</a>
         </div>
     </div>
+
+    {% if !groups.is_empty() %}
+    <div class="dashboard-filters">
+        <nav class="segmented" aria-label="Monitor state" id="status-filter" data-live>
+            {%- for chip in chips %}
+            <a href="{{ chip.url }}" data-status="{{ chip.key }}" {% if chip.current %}aria-current="true"{% endif %}>{{ chip.label }} <span class="filter-count">{{ chip.count }}</span></a>
+            {%- endfor %}
+        </nav>
+        <form class="filter-form" action="/" method="GET" id="filter-form">
+            {%- if range == Range::Days %}
+            <input type="hidden" name="range" value="90d">
+            {%- endif %}
+            {%- if let Some(status) = filter.status %}
+            <input type="hidden" name="status" value="{{ status.param() }}">
+            {%- endif %}
+            <label class="visually-hidden" for="search-monitors">Search monitors</label>
+            <input class="search-bar" id="search-monitors" name="q" type="search" value="{{ filter.q }}"
+                   placeholder="Search name, address, group" title="Press / to search, Esc to clear">
+            {%- if grouped %}
+            <label class="visually-hidden" for="filter-group">Group</label>
+            <select class="field" id="filter-group" name="group">
+                <option value="">All groups</option>
+                {%- for group in groups %}
+                <option value="{{ group.label() }}"{% if filter.is_group(group.label()) %} selected{% endif %}>{{ group.label() }}</option>
+                {%- endfor %}
+            </select>
+            {%- endif %}
+            <button class="button-secondary" type="submit" data-submit>Show</button>
+        </form>
+    </div>
+    {% endif %}
 
     <section aria-label="Monitors" class="panel monitor-panel">
         {% if groups.is_empty() %}
@@ -49,7 +78,7 @@
         <div id="live-rows" data-live>
             {%- for group in groups %}
             {%- if grouped %}
-            <details class="monitor-group" id="{{ group.id }}" open data-group>
+            <details class="monitor-group" id="{{ group.id }}" open data-group="{{ group.label() }}"{% if group.hidden %} hidden{% endif %}>
                 <summary class="monitor-group-head">
                     <svg class="monitor-group-chevron" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
                         <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -63,7 +92,7 @@
                 <ul class="monitor-list">
                     {%- for row in group.rows %}
                     {%- let m = row.monitor %}
-                    <li data-search="{{ m.name }} {{ m.url }}">
+                    <li data-search="{{ row.search_text() }}" data-status="{{ row.status_key() }}"{% if row.hidden %} hidden{% endif %}>
                         <a class="monitor-row row-{{ row.status_key() }}" href="/monitors/{{ m.id }}">
                             <span class="monitor-name">
                                 <span class="lamp lamp-{{ row.status_key() }}" aria-hidden="true"></span>
@@ -92,6 +121,8 @@
             {%- endif %}
             {%- endfor %}
         </div>
+        <p class="empty-state" data-no-match{% if matches %} hidden{% endif %}>No monitor matches these filters.
+            <a href="{{ filter.reset_url() }}" data-reset>Show every monitor</a></p>
         {% endif %}
     </section>
     <p class="section-note">Red bars are outages, full height once they last a tenth of the bar's time. Orange bars are

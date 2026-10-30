@@ -337,7 +337,7 @@ async fn dashboard_shows_uptime_and_hourly_heartbeat() {
     );
     for script in [
         "/static/js/live.js",
-        "/static/js/search.js",
+        "/static/js/filter.js",
         "/static/js/theme.js",
         "/static/images/favicon.svg",
         "/static/images/favicon-32.png",
@@ -641,4 +641,105 @@ async fn copy_form_keeps_its_cancel_target_after_a_test_or_an_error() {
         .await;
         assert!(r.body.contains(r#"href="/">Cancel"#), "copy_of={bogus}");
     }
+}
+
+/// The opening tag of the dashboard row of the monitor `name`.
+fn row_tag<'a>(body: &'a str, name: &str) -> &'a str {
+    let needle = format!(r#"data-search="{name} "#);
+    let start = body
+        .find(&needle)
+        .unwrap_or_else(|| panic!("no row for {name}: {body}"));
+    let start = body[..start].rfind('<').unwrap();
+    &body[start..start + body[start..].find('>').unwrap()]
+}
+
+fn group_tag<'a>(body: &'a str, group: &str) -> &'a str {
+    let needle = format!(r#"data-group="{group}""#);
+    let at = body
+        .find(&needle)
+        .unwrap_or_else(|| panic!("no group {group}: {body}"));
+    let start = body[..at].rfind('<').unwrap();
+    &body[start..start + body[start..].find('>').unwrap()]
+}
+
+#[tokio::test]
+async fn dashboard_filters_rows_from_the_url() {
+    let (app, pool) = common::test_app().await;
+    create_in(&app, "Shop", "Web").await;
+    create_in(&app, "Gateway", "API").await;
+    create_in(&app, "Café", "").await;
+    post_form(&app, "/monitors/3/toggle-pause", "").await;
+    sqlx::query("UPDATE monitor_state SET status = 'down' WHERE monitor_id = 2")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let visible = |body: &str, name: &str| !row_tag(body, name).contains(" hidden");
+
+    // Unfiltered: every row shows, the chips count the states.
+    let body = get(&app, "/").await.body;
+    for name in ["Shop", "Gateway", "Café"] {
+        assert!(visible(&body, name), "{name}: {body}");
+    }
+    assert!(body.contains(r#"All <span class="filter-count">3</span>"#), "{body}");
+    assert!(body.contains(r#"Down <span class="filter-count">1</span>"#), "{body}");
+    assert!(body.contains(r#"Paused <span class="filter-count">1</span>"#), "{body}");
+    assert!(body.contains(r#"<option value="API">"#), "{body}");
+    assert!(body.contains(r#"<option value="Ungrouped">"#), "{body}");
+    assert!(!body.contains(r#"class="empty-state" data-no-match>"#), "{body}");
+
+    // Status: the other rows and the groups left empty are hidden.
+    let body = get(&app, "/?status=down").await.body;
+    assert!(visible(&body, "Gateway"));
+    assert!(!visible(&body, "Shop") && !visible(&body, "Café"));
+    assert!(group_tag(&body, "Web").contains(" hidden"), "{body}");
+    assert!(!group_tag(&body, "API").contains(" hidden"), "{body}");
+    let body = get(&app, "/?status=paused").await.body;
+    assert!(visible(&body, "Café") && !visible(&body, "Gateway"));
+
+    // Search: name, address or group, ignoring case and accents.
+    let body = get(&app, "/?q=CAFE").await.body;
+    assert!(visible(&body, "Café") && !visible(&body, "Shop"));
+    assert!(body.contains(r#"value="CAFE""#), "{body}");
+    let body = get(&app, "/?q=api").await.body;
+    assert!(visible(&body, "Gateway") && !visible(&body, "Shop"));
+    let body = get(&app, "/?q=example.com").await.body;
+    assert!(visible(&body, "Shop") && visible(&body, "Café"));
+
+    // Group, ignoring case; the reserved name picks the monitors without one.
+    let body = get(&app, "/?group=web").await.body;
+    assert!(visible(&body, "Shop") && !visible(&body, "Gateway"));
+    assert!(body.contains(r#"<option value="Web" selected>"#), "{body}");
+    let body = get(&app, "/?group=Ungrouped").await.body;
+    assert!(visible(&body, "Café") && !visible(&body, "Shop"));
+
+    // Nothing left: the empty state offers to reset, keeping the range.
+    let body = get(&app, "/?q=nothing&range=90d").await.body;
+    assert!(body.contains(r#"class="empty-state" data-no-match>"#), "{body}");
+    assert!(body.contains(r#"href="/?range=90d" data-reset"#), "{body}");
+
+    // Unknown values filter nothing.
+    let body = get(&app, "/?status=bogus&group=").await.body;
+    assert!(visible(&body, "Shop") && visible(&body, "Café"));
+}
+
+#[tokio::test]
+async fn dashboard_links_keep_the_filters() {
+    let (app, _) = common::test_app().await;
+    create_in(&app, "Shop", "Web").await;
+    let body = get(&app, "/?range=90d&q=a+b%26c&status=down&group=Web").await.body;
+    assert!(
+        body.contains(r#"href="/?q=a+b%26c&#38;status=down&#38;group=Web""#),
+        "24 hours keeps the filters: {body}"
+    );
+    assert!(
+        body.contains(r#"href="/?range=90d&#38;q=a+b%26c&#38;group=Web""#),
+        "All drops the status only: {body}"
+    );
+    assert!(
+        body.contains(r#"href="/?range=90d&#38;q=a+b%26c&#38;status=paused&#38;group=Web""#),
+        "{body}"
+    );
+    // The search form carries what its fields do not.
+    assert!(body.contains(r#"<input type="hidden" name="range" value="90d">"#), "{body}");
+    assert!(body.contains(r#"<input type="hidden" name="status" value="down">"#), "{body}");
 }

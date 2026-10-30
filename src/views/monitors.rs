@@ -15,6 +15,8 @@ use askama_web::WebTemplate;
 use jiff::tz::TimeZone;
 use sqlx::SqlitePool;
 use std::collections::BTreeMap;
+use unicode_normalization::UnicodeNormalization;
+use unicode_normalization::char::is_combining_mark;
 
 /// A monitor's configuration together with its runtime state.
 pub struct MonitorView {
@@ -77,9 +79,19 @@ fn status_rank(paused: bool, status: MonitorStatus) -> u8 {
 pub struct MonitorRow {
     pub monitor: MonitorSummary,
     pub heartbeat: Heartbeat,
+    /// Left out by the dashboard filter: rendered hidden, so `filter.js` can show it again.
+    pub hidden: bool,
 }
 
 impl MonitorRow {
+    /// What the search matches: name, address and group.
+    pub fn search_text(&self) -> String {
+        let m = &self.monitor;
+        format!("{} {} {}", m.name, m.url, m.group_name.as_deref().unwrap_or(""))
+            .trim_end()
+            .to_string()
+    }
+
     pub fn status_label(&self) -> &'static str {
         status_label(self.monitor.paused, self.monitor.status)
     }
@@ -100,6 +112,8 @@ pub struct MonitorGroup {
     /// `1 down, 4 up`.
     pub counts: String,
     pub rows: Vec<MonitorRow>,
+    /// Every row hidden by the dashboard filter.
+    pub hidden: bool,
 }
 
 impl MonitorGroup {
@@ -147,6 +161,7 @@ impl MonitorGroup {
                     state: rows[0].status_key(),
                     counts: counts.join(", "),
                     rows,
+                    hidden: false,
                 }
             })
             .collect()
@@ -168,6 +183,132 @@ impl Range {
             _ => Self::Hours,
         }
     }
+}
+
+/// The dashboard's state filter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusFilter {
+    Down,
+    Paused,
+}
+
+impl StatusFilter {
+    fn parse(value: Option<&str>) -> Option<Self> {
+        match value {
+            Some("down") => Some(Self::Down),
+            Some("paused") => Some(Self::Paused),
+            _ => None,
+        }
+    }
+
+    pub fn param(self) -> &'static str {
+        match self {
+            Self::Down => "down",
+            Self::Paused => "paused",
+        }
+    }
+
+    fn matches(self, row: &MonitorRow) -> bool {
+        match self {
+            Self::Down => row.status_key() == "down",
+            Self::Paused => row.monitor.paused,
+        }
+    }
+}
+
+/// Lower case, without accents: what the search compares, as `filter.js` does.
+fn fold(text: &str) -> String {
+    text.nfd()
+        .filter(|&c| !is_combining_mark(c))
+        .collect::<String>()
+        .to_lowercase()
+}
+
+/// What the dashboard shows, read from its URL (`/?range=90d&q=api&status=down&group=Web`) so a
+/// filtered list works without JS and can be shared as a link.
+pub struct DashboardFilter {
+    pub range: Range,
+    /// Searched in the name, address and group, ignoring case and accents.
+    pub q: String,
+    pub status: Option<StatusFilter>,
+    /// A group name, ignoring case, or `Ungrouped` for the monitors without one.
+    pub group: Option<String>,
+}
+
+impl DashboardFilter {
+    pub fn parse(
+        range: Range,
+        q: Option<&str>,
+        status: Option<&str>,
+        group: Option<&str>,
+    ) -> Self {
+        Self {
+            range,
+            q: q.unwrap_or_default().trim().to_string(),
+            status: StatusFilter::parse(status),
+            group: group
+                .map(str::trim)
+                .filter(|g| !g.is_empty())
+                .map(String::from),
+        }
+    }
+
+    fn matches(&self, row: &MonitorRow, group: &str) -> bool {
+        self.status.is_none_or(|s| s.matches(row))
+            && self
+                .group
+                .as_deref()
+                .is_none_or(|g| name_key(g) == name_key(group))
+            && fold(&row.search_text()).contains(&fold(&self.q))
+    }
+
+    /// Whether `label` is the chosen group.
+    pub fn is_group(&self, label: &str) -> bool {
+        self.group
+            .as_deref()
+            .is_some_and(|g| name_key(g) == name_key(label))
+    }
+
+    /// `/` with this filter, the range and status replaced.
+    pub fn url(&self, range: Range, status: Option<StatusFilter>) -> String {
+        let mut params = form_urlencoded::Serializer::new(String::new());
+        if range == Range::Days {
+            params.append_pair("range", "90d");
+        }
+        if !self.q.is_empty() {
+            params.append_pair("q", &self.q);
+        }
+        if let Some(status) = status {
+            params.append_pair("status", status.param());
+        }
+        if let Some(group) = &self.group {
+            params.append_pair("group", group);
+        }
+        match params.finish() {
+            query if query.is_empty() => "/".to_string(),
+            query => format!("/?{query}"),
+        }
+    }
+
+    /// `/` with this filter over another range.
+    pub fn range_url(&self, range: Range) -> String {
+        self.url(range, self.status)
+    }
+
+    /// `/` with only the range: every monitor.
+    pub fn reset_url(&self) -> String {
+        Self::parse(self.range, None, None, None).url(self.range, None)
+    }
+}
+
+/// A state filter above the dashboard list, with its count of monitors.
+pub struct StatusChip {
+    pub label: &'static str,
+    /// `data-status` for `filter.js`: empty for every monitor.
+    pub key: &'static str,
+    pub count: usize,
+    pub url: String,
+    pub current: bool,
 }
 
 /// A monitor named in the headline, followed by the separator that comes after it.
@@ -252,6 +393,10 @@ pub struct IndexTemplate {
     pub groups: Vec<MonitorGroup>,
     /// Whether any monitor has a group: without, the list has no group headers.
     pub grouped: bool,
+    pub filter: DashboardFilter,
+    pub chips: Vec<StatusChip>,
+    /// Whether the filter leaves any row: without, the list says so and offers to reset.
+    pub matches: bool,
     pub range: Range,
     pub axis: Axis,
     pub csrf_token: String,
@@ -272,9 +417,10 @@ impl IndexTemplate {
 
     pub async fn load(
         pool: &SqlitePool,
-        range: Range,
+        filter: DashboardFilter,
         csrf_token: String,
     ) -> Result<Self, AppError> {
+        let range = filter.range;
         let tz = Settings::load(pool).await?.tz();
         let now = now_ms();
         let monitors = Monitor::summaries(pool).await?;
@@ -297,6 +443,7 @@ impl IndexTemplate {
                     .remove(&monitor.id)
                     .unwrap_or_else(|| Heartbeat::empty(&tz, now)),
                 monitor,
+                hidden: false,
             })
             .collect();
 
@@ -306,24 +453,50 @@ impl IndexTemplate {
                 .count()
         };
         // Rows are still in name order, the order of the down monitors in the headline.
-        let down = rows
+        let down: Vec<_> = rows
             .iter()
             .filter(|r| !r.monitor.paused && r.monitor.status == MonitorStatus::Down)
             .map(|r| (r.monitor.id, r.monitor.name.clone()))
             .collect();
+        let paused = rows.iter().filter(|r| r.monitor.paused).count();
+        let chips = [
+            ("All", None, rows.len()),
+            ("Down", Some(StatusFilter::Down), down.len()),
+            ("Paused", Some(StatusFilter::Paused), paused),
+        ]
+        .into_iter()
+        .map(|(label, status, count)| StatusChip {
+            label,
+            key: status.map_or("", StatusFilter::param),
+            count,
+            url: filter.url(range, status),
+            current: filter.status == status,
+        })
+        .collect();
         let headline = Headline::new(
             active_with(MonitorStatus::Up),
             active_with(MonitorStatus::Pending),
-            rows.iter().filter(|r| r.monitor.paused).count(),
+            paused,
             down,
         );
         let grouped = rows.iter().any(|r| r.monitor.group_name.is_some());
-        let groups = MonitorGroup::split(rows);
+        let mut groups = MonitorGroup::split(rows);
+        for group in &mut groups {
+            let label = group.label().to_string();
+            for row in &mut group.rows {
+                row.hidden = !filter.matches(row, &label);
+            }
+            group.hidden = group.rows.iter().all(|r| r.hidden);
+        }
+        let matches = groups.iter().any(|g| !g.hidden);
 
         Ok(Self {
             headline,
             groups,
             grouped,
+            filter,
+            chips,
+            matches,
             range,
             axis,
             csrf_token,
