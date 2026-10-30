@@ -753,3 +753,134 @@ async fn dashboard_links_keep_the_filters() {
     assert!(body.contains(r#"<input type="hidden" name="range" value="90d">"#), "{body}");
     assert!(body.contains(r#"<input type="hidden" name="status" value="down">"#), "{body}");
 }
+
+async fn paused_ids(pool: &SqlitePool) -> Vec<i64> {
+    sqlx::query_scalar("SELECT id FROM monitors WHERE paused = 1 ORDER BY id")
+        .fetch_all(pool)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn bulk_pause_resume_and_delete_count_what_changed() {
+    let (app, pool) = common::test_app().await;
+    for name in ["a", "b", "c"] {
+        create(&app, name).await;
+    }
+    sqlx::query("UPDATE monitor_state SET status = 'down' WHERE monitor_id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // Unknown ids are ignored; the dashboard filter comes back with the notice.
+    let r = post_form(&app, "/monitors/bulk", "action=pause&id=1&id=2&id=99&back=%2F%3Fstatus%3Ddown").await;
+    assert_redirect(&r, "/?status=down&done=paused&count=2");
+    assert_eq!(paused_ids(&pool).await, [1, 2]);
+    let (status,): (String,) =
+        sqlx::query_as("SELECT status FROM monitor_state WHERE monitor_id = 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(status, "pending", "pausing resets the state");
+    // Already paused: nothing changes.
+    let r = post_form(&app, "/monitors/bulk", "action=pause&id=1&id=3&back=%2F").await;
+    assert_redirect(&r, "/?done=paused&count=1");
+    let r = post_form(&app, "/monitors/bulk", "action=resume&id=1&id=2").await;
+    assert_redirect(&r, "/?done=resumed&count=2");
+    assert_eq!(paused_ids(&pool).await, [3]);
+    let r = post_form(&app, "/monitors/bulk", "action=delete&id=1&id=3&back=%2F%3Frange%3D90d").await;
+    assert_redirect(&r, "/?range=90d&done=deleted&count=2");
+    assert_eq!(count_monitors(&pool).await, 1);
+}
+
+#[tokio::test]
+async fn bulk_moves_to_a_group_or_out_of_it() {
+    let (app, pool) = common::test_app().await;
+    create_in(&app, "a", "Web").await;
+    create(&app, "b").await;
+    let groups = || async {
+        sqlx::query_scalar::<_, Option<String>>("SELECT group_name FROM monitors ORDER BY id")
+            .fetch_all(&pool)
+            .await
+            .unwrap()
+    };
+    let r = post_form(&app, "/monitors/bulk", "action=group&group=+Prod++site+&id=1&id=2").await;
+    assert_redirect(&r, "/?done=moved&count=2");
+    assert_eq!(groups().await, [Some("Prod site".into()), Some("Prod site".into())]);
+    let r = post_form(&app, "/monitors/bulk", "action=group&group=&id=2").await;
+    assert_redirect(&r, "/?done=moved&count=1");
+    assert_eq!(groups().await, [Some("Prod site".into()), None]);
+    // The reserved name is refused, nothing moves.
+    let r = post_form(&app, "/monitors/bulk", "action=group&group=ungrouped&id=1").await;
+    assert_redirect(&r, "/?done=invalid-group");
+    assert_eq!(groups().await, [Some("Prod site".into()), None]);
+}
+
+#[tokio::test]
+async fn bulk_links_and_unlinks_a_channel() {
+    let (app, pool) = common::test_app().await;
+    create(&app, "a").await;
+    create(&app, "b").await;
+    let channel = add_channel(&pool, "Ops", true).await;
+    let r = post_form(&app, "/monitors/bulk", &format!("action=link&channel={channel}&id=1&id=2")).await;
+    assert_redirect(&r, "/?done=linked&count=2");
+    assert_eq!(linked_channels(&pool, 2).await, [channel]);
+    let r = post_form(&app, "/monitors/bulk", &format!("action=link&channel={channel}&id=1")).await;
+    assert_redirect(&r, "/?done=linked&count=0");
+    let r = post_form(&app, "/monitors/bulk", &format!("action=unlink&channel={channel}&id=1")).await;
+    assert_redirect(&r, "/?done=unlinked&count=1");
+    assert!(linked_channels(&pool, 1).await.is_empty());
+    assert_eq!(linked_channels(&pool, 2).await, [channel]);
+    // A channel deleted meanwhile links nothing.
+    let r = post_form(&app, "/monitors/bulk", "action=link&channel=99&id=1").await;
+    assert_redirect(&r, "/?done=linked&count=0");
+}
+
+#[tokio::test]
+async fn bulk_rejects_odd_requests() {
+    let (app, _) = common::test_app().await;
+    create(&app, "a").await;
+    let r = post_form(&app, "/monitors/bulk", "action=pause&back=%2F").await;
+    assert_redirect(&r, "/?done=none");
+    // Only a dashboard address is followed back.
+    for back in ["%2F%2Fevil.example", "https%3A%2F%2Fevil.example", "%2Fmonitors%2F1"] {
+        let r = post_form(&app, "/monitors/bulk", &format!("action=pause&id=1&back={back}")).await;
+        assert_eq!(r.headers["location"], "/?done=paused&count=1", "{back}");
+        post_form(&app, "/monitors/bulk", "action=resume&id=1").await;
+    }
+    let r = post_form(&app, "/monitors/bulk", "action=explode&id=1").await;
+    assert_eq!(r.status, 400, "{}", r.body);
+    let r = post_form(&app, "/monitors/bulk", "action=pause&id=x").await;
+    assert_eq!(r.status, 400, "{}", r.body);
+}
+
+#[tokio::test]
+async fn dashboard_offers_bulk_actions_and_shows_their_outcome() {
+    let (app, pool) = common::test_app().await;
+    create_in(&app, "a", "Web").await;
+    add_channel(&pool, "Ops", true).await;
+    let body = get(&app, "/").await.body;
+    assert!(body.contains(r#"<form id="bulk-form" method="POST" action="/monitors/bulk""#), "{body}");
+    assert!(body.contains(r#"name="id" value="1""#), "{body}");
+    assert!(body.contains(r#"<option value="1">Ops</option>"#), "{body}");
+    assert!(body.contains(r#"<input type="hidden" name="back" value="/">"#), "{body}");
+    let body = get(&app, "/?status=down").await.body;
+    assert!(body.contains(r#"name="back" value="/?status=down">"#), "{body}");
+    assert!(!body.contains(r#"role="status""#), "no notice unasked");
+
+    for (query, notice) in [
+        ("done=paused&count=2", "2 monitors paused."),
+        ("done=resumed&count=1", "1 monitor resumed."),
+        ("done=deleted&count=3", "3 monitors deleted."),
+        ("done=moved&count=0", "No monitor changed."),
+        ("done=linked&count=2", "Channel linked to 2 monitors."),
+        ("done=unlinked&count=1", "Channel unlinked from 1 monitor."),
+        ("done=none", "No monitor selected."),
+        ("done=invalid-group", "Nothing moved: group names have at most 64 characters"),
+    ] {
+        let body = get(&app, &format!("/?{query}")).await.body;
+        assert!(body.contains(notice), "{query}: {body}");
+        assert!(body.contains(r#"role="status""#), "{query}");
+    }
+    let body = get(&app, "/?done=bogus&count=2").await.body;
+    assert!(!body.contains(r#"role="status""#));
+}

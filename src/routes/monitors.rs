@@ -1,13 +1,14 @@
 use crate::error::AppError;
-use crate::forms::monitor::{FieldErrors, MonitorForm, PUSH};
+use crate::forms::monitor::{FieldErrors, MonitorForm, PUSH, clean_group};
 use crate::models::{Channel, Monitor, Session, is_unique_violation};
 use crate::routes::{PathId, form_or_invalid, parse_id};
 use crate::state::AppState;
 use crate::views::monitors::{
-    DashboardFilter, DetailTemplate, FormTemplate, IndexTemplate, Range, test_summary,
+    BulkDone, DashboardFilter, DetailTemplate, FormTemplate, IndexTemplate, Range, test_summary,
 };
 use axum::extract::rejection::FormRejection;
 use axum::extract::{RawQuery, State};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Form, Router};
@@ -21,6 +22,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(index))
         .route("/monitors/new", get(new_form).post(create))
+        .route("/monitors/bulk", post(bulk))
         .route("/monitors/new/test", post(test_new))
         .route("/monitors/{id}", get(detail))
         .route("/monitors/{id}/edit", get(edit_form).post(update))
@@ -49,7 +51,68 @@ async fn index(
         param("status"),
         param("group"),
     );
-    IndexTemplate::load(&state.db, filter, session.csrf_token).await
+    let done = BulkDone::parse(param("done"), param("count"));
+    IndexTemplate::load(&state.db, filter, done, session.csrf_token).await
+}
+
+/// One action on the monitors ticked on the dashboard (`id`, repeated), then back to the dashboard
+/// as it was filtered (`back`) with a notice of how many changed. Unknown ids are skipped.
+async fn bulk(State(state): State<AppState>, body: String) -> Result<Redirect, AppError> {
+    let invalid = || AppError::InvalidRequest(StatusCode::BAD_REQUEST);
+    let (mut action, mut ids, mut group, mut channel, mut back) =
+        (String::new(), Vec::new(), String::new(), None, None);
+    for (key, value) in form_urlencoded::parse(body.as_bytes()) {
+        match key.as_ref() {
+            "action" => action = value.into_owned(),
+            "id" => ids.push(value.parse::<i64>().map_err(|_| invalid())?),
+            "group" => group = value.into_owned(),
+            "channel" => channel = Some(value.parse::<i64>().map_err(|_| invalid())?),
+            "back" => back = Some(value.into_owned()),
+            _ => {}
+        }
+    }
+    let done = if ids.is_empty() {
+        BulkDone::NoneSelected
+    } else {
+        match action.as_str() {
+            "pause" | "resume" => {
+                let changed = Monitor::set_paused(&state.db, &ids, action == "pause").await?;
+                changed.iter().for_each(|&id| state.engine.reload(id));
+                let count = changed.len() as u64;
+                if action == "pause" {
+                    BulkDone::Paused(count)
+                } else {
+                    BulkDone::Resumed(count)
+                }
+            }
+            "delete" => {
+                let deleted = Monitor::delete_many(&state.db, &ids).await?;
+                deleted.iter().for_each(|&id| state.engine.reload(id));
+                BulkDone::Deleted(deleted.len() as u64)
+            }
+            "group" => match clean_group(&group) {
+                Ok(group) => {
+                    BulkDone::Moved(Monitor::set_group(&state.db, &ids, group.as_deref()).await?)
+                }
+                Err(_) => BulkDone::InvalidGroup,
+            },
+            "link" => {
+                let channel = channel.ok_or_else(invalid)?;
+                BulkDone::Linked(Channel::link_monitors(&state.db, channel, &ids).await?)
+            }
+            "unlink" => {
+                let channel = channel.ok_or_else(invalid)?;
+                BulkDone::Unlinked(Channel::unlink_monitors(&state.db, channel, &ids).await?)
+            }
+            _ => return Err(invalid()),
+        }
+    };
+    // Only a dashboard address: anything else could send the browser off the site.
+    let back = back
+        .filter(|b| b == "/" || b.starts_with("/?"))
+        .unwrap_or_else(|| "/".to_string());
+    let separator = if back.contains('?') { '&' } else { '?' };
+    Ok(Redirect::to(&format!("{back}{separator}{}", done.query())))
 }
 
 async fn detail(

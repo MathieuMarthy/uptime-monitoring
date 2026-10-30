@@ -9,7 +9,24 @@ pub const PUSH: &str = "push";
 pub const METHODS: [&str; 6] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
 
 const NAME_MAX_CHARS: usize = 100;
-const GROUP_MAX_CHARS: usize = 64;
+pub const GROUP_MAX_CHARS: usize = 64;
+/// A group name as typed, cleaned: invisible characters dropped and spaces collapsed, so groups that
+/// look alike are one. `None` when blank; an error when too long or the reserved name.
+pub fn clean_group(raw: &str) -> Result<Option<String>, String> {
+    let group: String = raw
+        .chars()
+        .filter(|&c| c.is_whitespace() || !(c.is_control() || is_invisible_format(c)))
+        .collect();
+    let group = group.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text_len(&group) > GROUP_MAX_CHARS {
+        Err(format!("Group must be at most {GROUP_MAX_CHARS} characters."))
+    } else if name_key(&group) == name_key(UNGROUPED) {
+        Err(format!("“{UNGROUPED}” is kept for the monitors without a group."))
+    } else {
+        Ok((!group.is_empty()).then_some(group))
+    }
+}
+
 /// The dashboard's title for the monitors without a group, which no group may take.
 pub const UNGROUPED: &str = "Ungrouped";
 const URL_MAX_BYTES: usize = 2048;
@@ -177,25 +194,13 @@ impl MonitorForm {
             );
         }
 
-        // Invisible characters dropped and spaces collapsed: groups that look alike are one.
-        let group: String = self
-            .group
-            .chars()
-            .filter(|&c| c.is_whitespace() || !(c.is_control() || is_invisible_format(c)))
-            .collect();
-        let group = group.split_whitespace().collect::<Vec<_>>().join(" ");
-        if text_len(&group) > GROUP_MAX_CHARS {
-            errors.insert(
-                "group",
-                format!("Group must be at most {GROUP_MAX_CHARS} characters."),
-            );
-        } else if name_key(&group) == name_key(UNGROUPED) {
-            errors.insert(
-                "group",
-                format!("“{UNGROUPED}” is kept for the monitors without a group."),
-            );
-        }
-        let group_name = (!group.is_empty()).then_some(group);
+        let group_name = match clean_group(&self.group) {
+            Ok(group_name) => group_name,
+            Err(error) => {
+                errors.insert("group", error);
+                None
+            }
+        };
 
         let kind = match self.kind.trim() {
             "" | HTTP => HTTP,

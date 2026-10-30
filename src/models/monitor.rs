@@ -303,6 +303,64 @@ impl Monitor {
         Ok(result.rows_affected() > 0)
     }
 
+    /// Pauses or resumes these monitors, as `toggle_pause` does each; unknown ids and monitors
+    /// already so are skipped. Returns the ids changed.
+    pub async fn set_paused(
+        pool: &SqlitePool,
+        ids: &[i64],
+        paused: bool,
+    ) -> Result<Vec<i64>, sqlx::Error> {
+        let now = now_ms();
+        let mut tx = pool.begin().await?;
+        let changed: Vec<i64> = sqlx::query_scalar(
+            "UPDATE monitors SET paused = ?, updated_at = ?
+             WHERE id IN (SELECT value FROM json_each(?)) AND paused != ? RETURNING id",
+        )
+        .bind(paused)
+        .bind(now)
+        .bind(id_list(ids))
+        .bind(paused)
+        .fetch_all(&mut *tx)
+        .await?;
+        if paused {
+            for &id in &changed {
+                MonitorState::reset_for_pause(&mut tx, id, now).await?;
+            }
+        }
+        tx.commit().await?;
+        Ok(changed)
+    }
+
+    /// Returns the ids deleted; unknown ones are skipped.
+    pub async fn delete_many(pool: &SqlitePool, ids: &[i64]) -> Result<Vec<i64>, sqlx::Error> {
+        sqlx::query_scalar(
+            "DELETE FROM monitors WHERE id IN (SELECT value FROM json_each(?)) RETURNING id",
+        )
+        .bind(id_list(ids))
+        .fetch_all(pool)
+        .await
+    }
+
+    /// Moves these monitors into a group (`None`: out of any), the name already cleaned. Returns
+    /// how many changed group.
+    pub async fn set_group(
+        pool: &SqlitePool,
+        ids: &[i64],
+        group_name: Option<&str>,
+    ) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE monitors SET group_name = ?, updated_at = ?
+             WHERE id IN (SELECT value FROM json_each(?)) AND group_name IS NOT ?",
+        )
+        .bind(group_name)
+        .bind(now_ms())
+        .bind(id_list(ids))
+        .bind(group_name)
+        .execute(pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
     /// Returns `false` when no monitor has this id. Pausing resolves the open incident and resets
     /// the state to `pending`.
     pub async fn toggle_pause(pool: &SqlitePool, id: i64) -> Result<bool, sqlx::Error> {
@@ -325,6 +383,11 @@ impl Monitor {
         tx.commit().await?;
         Ok(true)
     }
+}
+
+/// Ids as a JSON array, for `json_each`.
+pub fn id_list(ids: &[i64]) -> String {
+    serde_json::to_string(ids).expect("integers serialize")
 }
 
 /// The key that makes names unique and sorts them: `COLLATE NOCASE` only folds ASCII letters, and an accented letter

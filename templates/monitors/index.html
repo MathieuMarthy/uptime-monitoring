@@ -8,6 +8,8 @@
 {% block scripts %}
 <script src="/static/js/live.js" defer></script>
 <script src="/static/js/filter.js" defer></script>
+<script src="/static/js/bulk.js" defer></script>
+<script src="/static/js/confirm.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -66,6 +68,10 @@
     </div>
     {% endif %}
 
+    {%- if let Some(done) = done %}
+    <div class="success-banner" role="status">{{ done.notice() }}</div>
+    {%- endif %}
+
     <section aria-label="Monitors" class="panel monitor-panel">
         {% if groups.is_empty() %}
         <p class="empty-state">No monitor yet. <a href="/monitors/new">Add the first one</a> to start checking a site.</p>
@@ -79,6 +85,42 @@
             <span class="num">Response</span>
         </div>
         <div id="live-rows" data-live>
+        <form id="bulk-form" method="POST" action="/monitors/bulk">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="back" value="{{ filter.current_url() }}">
+            {#- Enter in the group field submits the form's first button: Move comes first, shown after. #}
+            <div class="bulk-bar" data-bulk-bar>
+                <span class="bulk-group">
+                    <label class="visually-hidden" for="bulk-group">Move to group</label>
+                    <input class="field" id="bulk-group" name="group" list="bulk-groups" maxlength="{{ GROUP_MAX_CHARS }}"
+                           placeholder="No group">
+                    <datalist id="bulk-groups">
+                        {%- for group in groups %}{% if let Some(name) = group.name %}
+                        <option value="{{ name }}">
+                        {%- endif %}{% endfor %}
+                    </datalist>
+                    <button class="button-secondary" type="submit" name="action" value="group">Move</button>
+                </span>
+                <label class="bulk-all" data-select-all hidden>
+                    <input type="checkbox"> <span data-selected-count>Select all</span>
+                </label>
+                <button class="button-secondary" type="submit" name="action" value="pause">Pause</button>
+                <button class="button-secondary" type="submit" name="action" value="resume">Resume</button>
+                {%- if !channels.is_empty() %}
+                <span class="bulk-channel">
+                    <label class="visually-hidden" for="bulk-channel">Alert channel</label>
+                    <select class="field" id="bulk-channel" name="channel">
+                        {%- for channel in channels %}
+                        <option value="{{ channel.id }}">{{ channel.name }}</option>
+                        {%- endfor %}
+                    </select>
+                    <button class="button-secondary" type="submit" name="action" value="link">Link</button>
+                    <button class="button-secondary" type="submit" name="action" value="unlink">Unlink</button>
+                </span>
+                {%- endif %}
+                <button class="button-danger" type="submit" name="action" value="delete"
+                        data-confirm="Delete the selected monitors and all their history?">Delete</button>
+            </div>
             {%- for group in groups %}
             {%- if grouped %}
             <details class="monitor-group" id="{{ group.id }}" open data-group="{{ group.label() }}"{% if group.hidden %} hidden{% endif %}>
@@ -96,6 +138,7 @@
                     {%- for row in group.rows %}
                     {%- let m = row.monitor %}
                     <li data-search="{{ row.search }}" data-status="{{ row.status_key() }}"{% if row.hidden %} hidden{% endif %}>
+                        <input class="row-select" type="checkbox" name="id" value="{{ m.id }}" aria-label="Select {{ m.name }}">
                         <a class="monitor-row row-{{ row.status_key() }}" href="/monitors/{{ m.id }}">
                             <span class="monitor-name">
                                 <span class="lamp lamp-{{ row.status_key() }}" aria-hidden="true"></span>
@@ -123,6 +166,7 @@
             </details>
             {%- endif %}
             {%- endfor %}
+        </form>
         </div>
         <p class="empty-state" data-no-match{% if matches %} hidden{% endif %}>No monitor matches these filters.
             <a href="{{ filter.reset_url() }}" data-reset>Show every monitor</a></p>

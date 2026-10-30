@@ -283,6 +283,14 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   without one. The state chips count every monitor and are a `data-live` block. `static/js/filter.js` applies the
   same filter at once in the browser, keeps the URL in step with `history.replaceState` (so the live refresh
   fetches the same filter), unfolds groups with matches; `/` focuses the search, Esc clears it.
+- **Bulk actions.** The dashboard rows sit in one form (`POST /monitors/bulk`: `action`, `id` repeated, `group` or
+  `channel`, `back`): pause, resume, move to a group (cleaned by `clean_group`, as in the monitor form), link or
+  unlink a channel, delete. Each is one statement over `json_each`; unknown ids are skipped and the count is what
+  actually changed. The redirect goes back to `back` (only `/` or `/?…`, never off the site) with
+  `done=paused&count=2`, shown as a notice; `filter.js` rewrites the URL without it, so a reload drops it.
+  `static/js/bulk.js` shows the actions once a row is ticked, ticks the shown rows on "Select all" and leaves rows
+  hidden by the filter out of the submission. The form is in the live block, so `live.js` keeps it, rows frozen,
+  while a box is ticked. The Move button comes first in the form so Enter in the group field moves.
 
 ## Activity
 

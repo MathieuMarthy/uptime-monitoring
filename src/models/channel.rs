@@ -1,4 +1,5 @@
 use crate::forms::channel::ChannelInput;
+use crate::models::monitor::id_list;
 use crate::notify::channel::ChannelConfig;
 use crate::time::now_ms;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
@@ -137,6 +138,42 @@ impl Channel {
             .await
     }
 
+    /// Links the channel to these monitors; returns how many were not linked yet. Unknown ids,
+    /// or a channel deleted meanwhile, link nothing.
+    pub async fn link_monitors(
+        pool: &SqlitePool,
+        channel_id: i64,
+        monitor_ids: &[i64],
+    ) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query(
+            "INSERT OR IGNORE INTO monitor_channels (monitor_id, channel_id)
+             SELECT m.id, c.id FROM monitors m, notification_channels c
+             WHERE c.id = ? AND m.id IN (SELECT value FROM json_each(?))",
+        )
+        .bind(channel_id)
+        .bind(id_list(monitor_ids))
+        .execute(pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Returns how many of these monitors were linked to the channel.
+    pub async fn unlink_monitors(
+        pool: &SqlitePool,
+        channel_id: i64,
+        monitor_ids: &[i64],
+    ) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query(
+            "DELETE FROM monitor_channels
+             WHERE channel_id = ? AND monitor_id IN (SELECT value FROM json_each(?))",
+        )
+        .bind(channel_id)
+        .bind(id_list(monitor_ids))
+        .execute(pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
     /// Links the monitor to exactly these channels; ids of channels deleted meanwhile are ignored.
     pub async fn set_for_monitor(
         conn: &mut SqliteConnection,
@@ -152,7 +189,7 @@ impl Channel {
              SELECT ?, id FROM notification_channels WHERE id IN (SELECT value FROM json_each(?))",
         )
         .bind(monitor_id)
-        .bind(serde_json::to_string(channel_ids).expect("integers serialize"))
+        .bind(id_list(channel_ids))
         .execute(conn)
         .await?;
         Ok(())

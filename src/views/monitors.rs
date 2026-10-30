@@ -1,6 +1,8 @@
 use crate::engine::verdict::CheckOutcome;
 use crate::error::AppError;
-use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm, PUSH, UNGROUPED};
+use crate::forms::monitor::{
+    FieldErrors, GROUP_MAX_CHARS, METHODS, MonitorForm, PUSH, UNGROUPED,
+};
 use crate::models::{
     Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
     name_key,
@@ -304,11 +306,86 @@ impl DashboardFilter {
         self.url(range, self.status)
     }
 
+    /// `/` with this very filter: where a bulk action comes back to.
+    pub fn current_url(&self) -> String {
+        self.url(self.range, self.status)
+    }
+
     /// `/` with only the range: every monitor.
     pub fn reset_url(&self) -> &'static str {
         match self.range {
             Range::Hours => "/",
             Range::Days => "/?range=90d",
+        }
+    }
+}
+
+/// What a bulk action did, carried to the dashboard in its URL (`done=paused&count=2`) for a
+/// notice above the list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BulkDone {
+    Paused(u64),
+    Resumed(u64),
+    Deleted(u64),
+    Moved(u64),
+    Linked(u64),
+    Unlinked(u64),
+    NoneSelected,
+    InvalidGroup,
+}
+
+impl BulkDone {
+    pub fn parse(done: Option<&str>, count: Option<&str>) -> Option<Self> {
+        let count = count.and_then(|c| c.parse().ok()).unwrap_or(0);
+        Some(match done? {
+            "paused" => Self::Paused(count),
+            "resumed" => Self::Resumed(count),
+            "deleted" => Self::Deleted(count),
+            "moved" => Self::Moved(count),
+            "linked" => Self::Linked(count),
+            "unlinked" => Self::Unlinked(count),
+            "none" => Self::NoneSelected,
+            "invalid-group" => Self::InvalidGroup,
+            _ => return None,
+        })
+    }
+
+    pub fn query(self) -> String {
+        let (done, count) = match self {
+            Self::Paused(n) => ("paused", n),
+            Self::Resumed(n) => ("resumed", n),
+            Self::Deleted(n) => ("deleted", n),
+            Self::Moved(n) => ("moved", n),
+            Self::Linked(n) => ("linked", n),
+            Self::Unlinked(n) => ("unlinked", n),
+            Self::NoneSelected => return "done=none".to_string(),
+            Self::InvalidGroup => return "done=invalid-group".to_string(),
+        };
+        format!("done={done}&count={count}")
+    }
+
+    pub fn notice(self) -> String {
+        let monitors = |n: u64| match n {
+            1 => "1 monitor".to_string(),
+            n => format!("{n} monitors"),
+        };
+        match self {
+            Self::NoneSelected => "No monitor selected.".to_string(),
+            Self::InvalidGroup => format!(
+                "Nothing moved: group names have at most {GROUP_MAX_CHARS} characters, and                  “{UNGROUPED}” is kept for the monitors without one."
+            ),
+            Self::Paused(0)
+            | Self::Resumed(0)
+            | Self::Deleted(0)
+            | Self::Moved(0)
+            | Self::Linked(0)
+            | Self::Unlinked(0) => "No monitor changed.".to_string(),
+            Self::Paused(n) => format!("{} paused.", monitors(n)),
+            Self::Resumed(n) => format!("{} resumed.", monitors(n)),
+            Self::Deleted(n) => format!("{} deleted.", monitors(n)),
+            Self::Moved(n) => format!("{} moved.", monitors(n)),
+            Self::Linked(n) => format!("Channel linked to {}.", monitors(n)),
+            Self::Unlinked(n) => format!("Channel unlinked from {}.", monitors(n)),
         }
     }
 }
@@ -409,6 +486,10 @@ pub struct IndexTemplate {
     pub chips: Vec<StatusChip>,
     /// The chosen group when no monitor is in it.
     pub missing_group: Option<String>,
+    /// The outcome of the bulk action that led here.
+    pub done: Option<BulkDone>,
+    /// Every channel, for the bulk link and unlink.
+    pub channels: Vec<Channel>,
     /// Whether the filter leaves any row: without, the list says so and offers to reset.
     pub matches: bool,
     pub range: Range,
@@ -432,9 +513,11 @@ impl IndexTemplate {
     pub async fn load(
         pool: &SqlitePool,
         filter: DashboardFilter,
+        done: Option<BulkDone>,
         csrf_token: String,
     ) -> Result<Self, AppError> {
         let range = filter.range;
+        let channels = Channel::all(pool).await?;
         let tz = Settings::load(pool).await?.tz();
         let now = now_ms();
         let monitors = Monitor::summaries(pool).await?;
@@ -515,6 +598,8 @@ impl IndexTemplate {
             filter,
             chips,
             missing_group,
+            done,
+            channels,
             matches,
             range,
             axis,

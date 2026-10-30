@@ -144,6 +144,84 @@
     color: var(--ink-soft);
 }
 
+/* Bulk selection: the box sits over the row's left padding, so the row's wash runs under it. */
+.monitor-list li {
+    position: relative;
+}
+
+.row-select {
+    position: absolute;
+    top: 50%;
+    left: 22px;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    transform: translateY(-50%);
+    accent-color: var(--ink);
+}
+
+.monitor-head,
+.monitor-row {
+    padding-left: 50px;
+}
+
+.bulk-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-bottom: 1px solid var(--rule-soft);
+}
+
+/* Nothing ticked yet: only "Select all". */
+.bulk-bar[data-empty] > :not([data-select-all]) {
+    display: none;
+}
+
+.bulk-all {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-right: auto;
+    font-weight: 500;
+}
+
+.bulk-all input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--ink);
+}
+
+.bulk-all[hidden] {
+    display: none;
+}
+
+.bulk-group,
+.bulk-channel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* First in the form for the Enter key, shown after the pause buttons. */
+.bulk-group {
+    order: 1;
+}
+
+.bulk-channel {
+    order: 2;
+}
+
+.bulk-bar .button-danger {
+    order: 3;
+}
+
+.bulk-group .field {
+    width: 160px;
+}
+
 @media (max-width: 760px) {
     .monitor-head {
         display: none;
@@ -152,6 +230,16 @@
     .monitor-row {
         grid-template-columns: minmax(0, 1fr) auto auto;
         gap: 6px 14px;
+        padding-inline: 42px 16px;
+    }
+
+    .row-select {
+        top: 11px;
+        left: 16px;
+        transform: none;
+    }
+
+    .bulk-bar {
         padding-inline: 16px;
     }
 

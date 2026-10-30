@@ -58,6 +58,11 @@ if (form) {
         }
         noMatch.querySelector("[data-reset]").href = url({ q: "", status: "", group: "" });
         history.replaceState(history.state, "", url());
+        const back = document.querySelector("#bulk-form [name=back]");
+        if (back) {
+            back.value = url(); // a bulk action comes back to this filter
+        }
+        document.dispatchEvent(new Event("dashboard:filtered"));
     };
 
     form.querySelector("[data-submit]").hidden = true;
