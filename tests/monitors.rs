@@ -579,3 +579,42 @@ async fn dashboard_lists_groups_by_name_with_ungrouped_last() {
     assert!(form.contains(r#"<option value="api">"#), "{form}");
     assert!(!form.contains(r#"<option value="API">"#), "{form}");
 }
+
+#[tokio::test]
+async fn duplicate_prefills_the_new_form_and_saves_nothing() {
+    let (app, pool) = common::test_app().await;
+    let a = add_channel(&pool, "A", true).await;
+    let b = add_channel(&pool, "B", true).await;
+    // Paused, grouped, linked to A only.
+    let body = form("API", &format!("&group=Prod&channel_{a}=on")).replace("&active=on", "");
+    assert_redirect(
+        &post_form(&app, "/monitors/new", &body).await,
+        "/monitors/1",
+    );
+
+    let r = get(&app, "/monitors/1/duplicate").await;
+    assert_eq!(r.status, 200);
+    assert!(r.body.contains(r#"value="API (copy)""#), "{}", r.body);
+    assert!(r.body.contains(r#"value="Prod""#));
+    assert!(r.body.contains(r#"value="https://example.com""#));
+    assert!(r.body.contains(r#"action="/monitors/new""#));
+    assert!(r.body.contains(r#"href="/monitors/1">Cancel"#));
+    assert!(r.body.contains(&format!(r#"name="channel_{a}" checked"#)));
+    assert!(r.body.contains(&format!(r#"name="channel_{b}"/>"#)));
+    assert!(
+        r.body.contains(r#"name="active" checked"#),
+        "a copy starts active"
+    );
+    assert!(!r.body.contains("Danger Zone"));
+    assert_eq!(count_monitors(&pool).await, 1);
+
+    assert_eq!(get(&app, "/monitors/9/duplicate").await.status, 404);
+}
+
+#[tokio::test]
+async fn detail_links_to_duplicate() {
+    let (app, _) = common::test_app().await;
+    create(&app, "API").await;
+    let r = get(&app, "/monitors/1").await;
+    assert!(r.body.contains(r#"href="/monitors/1/duplicate""#));
+}

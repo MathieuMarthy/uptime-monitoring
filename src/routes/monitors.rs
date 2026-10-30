@@ -19,6 +19,7 @@ pub fn router() -> Router<AppState> {
         .route("/monitors/new", get(new_form).post(create))
         .route("/monitors/{id}", get(detail))
         .route("/monitors/{id}/edit", get(edit_form).post(update))
+        .route("/monitors/{id}/duplicate", get(duplicate_form))
         .route("/monitors/{id}/delete", post(delete))
         .route("/monitors/{id}/toggle-pause", post(toggle_pause))
         .route("/monitors/{id}/push-token", post(renew_push_token))
@@ -126,6 +127,25 @@ async fn edit_form(
         session.csrf_token,
     )
     .await
+}
+
+/// The create form, filled from another monitor: configuration, group and channels, active.
+/// Nothing is saved until it is submitted; a push copy gets its own token then.
+async fn duplicate_form(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    PathId(id): PathId,
+) -> Result<FormTemplate, AppError> {
+    let monitor = Monitor::find(&state.db, id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let mut form = MonitorForm::from_monitor(&monitor);
+    form.name = format!("{} (copy)", monitor.name);
+    form.active = Some("on".to_string());
+    form.set_channels(&Channel::ids_for_monitor(&state.db, id).await?);
+    let mut page = page(&state, None, form, FieldErrors::new(), session.csrf_token).await?;
+    page.cancel_url = format!("/monitors/{id}");
+    Ok(page)
 }
 
 async fn update(

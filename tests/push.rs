@@ -249,3 +249,20 @@ async fn overdue_monitor_misses_soon_after_a_restart() {
     wait_for_checks(&pool, id, 1, 4).await;
     assert_eq!(checks(&pool, id).await[0].1.as_deref(), Some("missed"));
 }
+
+#[tokio::test]
+async fn duplicate_of_a_push_monitor_gets_its_own_token() {
+    let (app, pool) = common::test_app().await;
+    let id = create(&app, PUSH).await;
+    let original = token(&pool, id).await.unwrap();
+
+    let r = get(&app, &format!("/monitors/{id}/duplicate")).await;
+    assert!(r.body.contains(r#"value="push" selected"#));
+    assert!(
+        !r.body.contains(&original),
+        "the copy form does not reveal the token"
+    );
+
+    let copy = create(&app, &PUSH.replace("name=backup", "name=backup%20(copy)")).await;
+    assert_ne!(token(&pool, copy).await.unwrap(), original);
+}
