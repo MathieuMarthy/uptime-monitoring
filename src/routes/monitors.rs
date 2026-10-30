@@ -21,6 +21,7 @@ pub fn router() -> Router<AppState> {
         .route("/monitors/{id}/edit", get(edit_form).post(update))
         .route("/monitors/{id}/delete", post(delete))
         .route("/monitors/{id}/toggle-pause", post(toggle_pause))
+        .route("/monitors/{id}/push-token", post(renew_push_token))
 }
 
 #[derive(Deserialize)]
@@ -47,7 +48,13 @@ async fn detail(
     Extension(session): Extension<Session>,
     PathId(id): PathId,
 ) -> Result<DetailTemplate, AppError> {
-    DetailTemplate::load(&state.db, id, session.csrf_token).await
+    DetailTemplate::load(
+        &state.db,
+        id,
+        session.csrf_token,
+        state.public_url.as_deref(),
+    )
+    .await
 }
 
 async fn new_form(
@@ -173,6 +180,18 @@ async fn toggle_pause(
 ) -> Result<Redirect, AppError> {
     if Monitor::toggle_pause(&state.db, id).await? {
         state.engine.reload(id);
+        Ok(Redirect::to(&format!("/monitors/{id}")))
+    } else {
+        Err(AppError::NotFound)
+    }
+}
+
+/// A new push URL; the old one stops working at once.
+async fn renew_push_token(
+    State(state): State<AppState>,
+    PathId(id): PathId,
+) -> Result<Redirect, AppError> {
+    if Monitor::renew_push_token(&state.db, id).await? {
         Ok(Redirect::to(&format!("/monitors/{id}")))
     } else {
         Err(AppError::NotFound)

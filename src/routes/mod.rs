@@ -10,6 +10,7 @@ mod alerts;
 mod auth;
 mod health;
 mod monitors;
+mod push;
 mod settings;
 mod status_pages;
 
@@ -29,6 +30,7 @@ pub fn all(state: &AppState) -> Router<AppState> {
     let public = Router::new()
         .merge(health::router())
         .merge(auth::public_router())
+        .merge(push::router())
         .merge(status_pages::public_router());
     protected.merge(public)
 }

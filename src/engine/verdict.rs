@@ -13,6 +13,10 @@ pub enum ErrorKind {
     Tls,
     Status,
     Keyword,
+    /// A push monitor got no ping in time.
+    Missed,
+    /// A push monitor's job reported its own failure.
+    Reported,
 }
 
 impl ErrorKind {
@@ -25,6 +29,8 @@ impl ErrorKind {
             Self::Tls => "tls",
             Self::Status => "status",
             Self::Keyword => "keyword",
+            Self::Missed => "missed",
+            Self::Reported => "reported",
         }
     }
 }

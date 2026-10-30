@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm, UNGROUPED};
+use crate::forms::monitor::{FieldErrors, METHODS, MonitorForm, PUSH, UNGROUPED};
 use crate::models::{
     Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
     name_key,
@@ -351,6 +351,8 @@ pub struct DetailTemplate {
     pub incidents: Vec<IncidentDetail>,
     pub checks: Vec<CheckRow>,
     pub csrf_token: String,
+    /// Push monitors only: the URL their job calls, absolute when `PUBLIC_URL` is set.
+    pub push_url: Option<String>,
 }
 
 /// One hour of the latency chart. The CSP forbids inline styles, so its height is one of
@@ -372,8 +374,18 @@ pub struct CheckRow {
 }
 
 impl DetailTemplate {
-    pub async fn load(pool: &SqlitePool, id: i64, csrf_token: String) -> Result<Self, AppError> {
+    pub async fn load(
+        pool: &SqlitePool,
+        id: i64,
+        csrf_token: String,
+        public_url: Option<&str>,
+    ) -> Result<Self, AppError> {
         let view = MonitorView::load(pool, id).await?;
+        let push_url = view
+            .monitor
+            .push_token
+            .as_ref()
+            .map(|token| format!("{}/push/{token}", public_url.unwrap_or_default()));
         let tz = Settings::load(pool).await?.tz();
         let now = now_ms();
         let hourly = Heartbeat::hourly(pool, Some(id), &tz, now)
@@ -445,6 +457,7 @@ impl DetailTemplate {
             incidents,
             checks,
             csrf_token,
+            push_url,
         })
     }
 }
@@ -497,6 +510,9 @@ fn status_line(view: &MonitorView, latest: Option<&Incident>, tz: &TimeZone, now
             ),
             None => "Down.".to_string(),
         },
+        MonitorStatus::Pending if state.last_check_at.is_none() && view.monitor.is_push() => {
+            "Waiting for the first ping.".to_string()
+        }
         MonitorStatus::Pending if state.last_check_at.is_none() => {
             "Waiting for the first check.".to_string()
         }
@@ -542,6 +558,10 @@ impl FormTemplate {
 
     pub fn methods(&self) -> &'static [&'static str] {
         &METHODS
+    }
+
+    pub fn is_push(&self) -> bool {
+        self.form.kind == PUSH
     }
 }
 

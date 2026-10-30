@@ -1,7 +1,8 @@
 //! The check engine: runs the checks, records them and drives the monitor state machine.
 //!
 //! A supervisor task owns one scheduler task per active monitor. Routes send `reload(id)` after
-//! any change to a monitor; the supervisor then restarts or stops that monitor's task.
+//! any change to a monitor; the supervisor then restarts or stops that monitor's task. Pings of
+//! push monitors go through the supervisor too, to the task of their monitor.
 
 pub mod guard;
 pub mod http;
@@ -11,6 +12,7 @@ pub mod verdict;
 use crate::engine::guard::Guard;
 use crate::engine::http::HttpChecker;
 use crate::engine::scheduler::Scheduler;
+use crate::engine::verdict::CheckOutcome;
 use crate::models::Monitor;
 use crate::notify::Notifier;
 use sqlx::SqlitePool;
@@ -22,6 +24,10 @@ use tokio::task::JoinHandle;
 
 /// Checks running at the same time, across all monitors.
 const MAX_CONCURRENT_CHECKS: usize = 20;
+/// Pings waiting for the supervisor, across monitors, and for one push monitor's task. Beyond,
+/// pings are dropped: a flood cannot grow memory.
+const PING_QUEUE: usize = 256;
+const MONITOR_PING_QUEUE: usize = 4;
 /// At startup, first checks are spread over the interval, at most this long.
 const MAX_STARTUP_SPREAD: Duration = Duration::from_secs(60);
 
@@ -30,6 +36,7 @@ const MAX_STARTUP_SPREAD: Duration = Duration::from_secs(60);
 #[derive(Clone, Default)]
 pub struct EngineHandle {
     commands: Option<mpsc::UnboundedSender<i64>>,
+    pings: Option<mpsc::Sender<(i64, CheckOutcome)>>,
 }
 
 impl EngineHandle {
@@ -38,6 +45,14 @@ impl EngineHandle {
         if let Some(commands) = &self.commands {
             // Fails only once the engine has stopped, during shutdown.
             let _ = commands.send(monitor_id);
+        }
+    }
+
+    /// Hands a ping (a success, or a failure the job reported) to a push monitor's task. Dropped
+    /// when the queue is full or the monitor has no task (paused, deleted, not a push monitor).
+    pub fn ping(&self, monitor_id: i64, outcome: CheckOutcome) {
+        if let Some(pings) = &self.pings {
+            let _ = pings.try_send((monitor_id, outcome));
         }
     }
 }
@@ -70,31 +85,53 @@ pub async fn start(
     }
 
     let (commands, receiver) = mpsc::unbounded_channel();
-    tokio::spawn(supervisor.run(receiver));
+    let (pings, ping_receiver) = mpsc::channel(PING_QUEUE);
+    tokio::spawn(supervisor.run(receiver, ping_receiver));
     Ok(EngineHandle {
         commands: Some(commands),
+        pings: Some(pings),
     })
 }
 
 struct Supervisor {
     pool: SqlitePool,
     scheduler: Arc<Scheduler>,
-    tasks: HashMap<i64, JoinHandle<()>>,
+    tasks: HashMap<i64, Task>,
+}
+
+struct Task {
+    handle: JoinHandle<()>,
+    /// Push monitors only.
+    pings: Option<mpsc::Sender<CheckOutcome>>,
 }
 
 impl Supervisor {
-    async fn run(mut self, mut receiver: mpsc::UnboundedReceiver<i64>) {
-        while let Some(monitor_id) = receiver.recv().await {
-            self.reload(monitor_id).await;
+    async fn run(
+        mut self,
+        mut commands: mpsc::UnboundedReceiver<i64>,
+        mut pings: mpsc::Receiver<(i64, CheckOutcome)>,
+    ) {
+        loop {
+            tokio::select! {
+                command = commands.recv() => match command {
+                    Some(monitor_id) => self.reload(monitor_id).await,
+                    None => return,
+                },
+                Some((monitor_id, outcome)) = pings.recv() => {
+                    if let Some(sender) = self.tasks.get(&monitor_id).and_then(|t| t.pings.as_ref()) {
+                        let _ = sender.try_send(outcome);
+                    }
+                }
+            }
         }
     }
 
     async fn reload(&mut self, monitor_id: i64) {
         if let Some(task) = self.tasks.remove(&monitor_id) {
-            task.abort();
+            task.handle.abort();
             // Waits for the task to stop, so it cannot record a check after the new one reads
             // the state.
-            let _ = task.await;
+            let _ = task.handle.await;
         }
         match Monitor::find(&self.pool, monitor_id).await {
             Ok(Some(monitor)) if !monitor.paused => self.spawn(monitor, Duration::ZERO),
@@ -105,7 +142,19 @@ impl Supervisor {
 
     fn spawn(&mut self, monitor: Monitor, first_delay: Duration) {
         let id = monitor.id;
-        let task = tokio::spawn(self.scheduler.clone().run(monitor, first_delay));
+        let scheduler = self.scheduler.clone();
+        let task = if monitor.is_push() {
+            let (sender, receiver) = mpsc::channel(MONITOR_PING_QUEUE);
+            Task {
+                handle: tokio::spawn(scheduler.run_push(monitor, receiver)),
+                pings: Some(sender),
+            }
+        } else {
+            Task {
+                handle: tokio::spawn(scheduler.run(monitor, first_delay)),
+                pings: None,
+            }
+        };
         self.tasks.insert(id, task);
     }
 }

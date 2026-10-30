@@ -221,3 +221,8 @@
         padding-inline: 16px;
     }
 }
+
+/* Fields of the other monitor type (monitor-form.js). */
+[data-kind][hidden] {
+    display: none;
+}

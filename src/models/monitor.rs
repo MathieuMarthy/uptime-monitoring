@@ -1,4 +1,5 @@
-use crate::forms::monitor::MonitorInput;
+use crate::auth::random_token;
+use crate::forms::monitor::{MonitorInput, PUSH};
 use crate::models::{Channel, MonitorState, MonitorStatus};
 use crate::time::now_ms;
 use sqlx::{FromRow, SqlitePool};
@@ -6,7 +7,7 @@ use unicode_normalization::UnicodeNormalization;
 
 const COLUMNS: &str = "id, name, group_name, kind, url, method, headers, body, keyword, accepted_statuses, \
     follow_redirects, ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold, tls_expiry_warn_days, paused, \
-    created_at, updated_at";
+    created_at, updated_at, push_token, grace_s";
 
 /// A monitor's configuration, written only by the admin.
 #[derive(Debug, Clone, FromRow)]
@@ -31,6 +32,10 @@ pub struct Monitor {
     pub paused: bool,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Push monitors only: the secret part of their `/push/{token}` URL.
+    pub push_token: Option<String>,
+    /// Push monitors only: how late a ping may be; 0 for HTTP.
+    pub grace_s: i64,
 }
 
 /// What the dashboard shows of a monitor: no request body or headers.
@@ -46,6 +51,35 @@ pub struct MonitorSummary {
 }
 
 impl Monitor {
+    /// The monitored job pings the instance instead of being checked; `url` is empty.
+    pub fn is_push(&self) -> bool {
+        self.kind == PUSH
+    }
+
+    /// The active push monitor behind a ping URL; `None` for an unknown token.
+    pub async fn find_push(
+        pool: &SqlitePool,
+        token: &str,
+    ) -> Result<Option<(i64, bool)>, sqlx::Error> {
+        sqlx::query_as("SELECT id, paused FROM monitors WHERE push_token = ?")
+            .bind(token)
+            .fetch_optional(pool)
+            .await
+    }
+
+    /// Gives a push monitor a new token, which voids the old URL. Returns `false` when no push
+    /// monitor has this id.
+    pub async fn renew_push_token(pool: &SqlitePool, id: i64) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE monitors SET push_token = ?, updated_at = ? WHERE id = ? AND kind = 'push'",
+        )
+        .bind(random_token())
+        .bind(now_ms())
+        .bind(id)
+        .execute(pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
     /// Every monitor with its state, sorted by name.
     pub async fn summaries(pool: &SqlitePool) -> Result<Vec<MonitorSummary>, sqlx::Error> {
         sqlx::query_as(
@@ -109,9 +143,9 @@ impl Monitor {
             INSERT INTO monitors (
                 name, name_key, group_name, url, method, headers, body, keyword, accepted_statuses, follow_redirects,
                 ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold,
-                tls_expiry_warn_days, paused, created_at, updated_at
+                tls_expiry_warn_days, paused, created_at, updated_at, kind, grace_s, push_token
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&input.name)
@@ -133,6 +167,9 @@ impl Monitor {
         .bind(input.paused)
         .bind(now)
         .bind(now)
+        .bind(&input.kind)
+        .bind(input.grace_s)
+        .bind((input.kind == PUSH).then(random_token))
         .execute(&mut *tx)
         .await?
         .last_insert_rowid();
@@ -160,7 +197,10 @@ impl Monitor {
             UPDATE monitors
             SET name = ?, name_key = ?, group_name = ?, url = ?, method = ?, headers = ?, body = ?, keyword = ?,
                 accepted_statuses = ?, follow_redirects = ?, ignore_tls_errors = ?, interval_s = ?,
-                retry_interval_s = ?, timeout_s = ?, failure_threshold = ?, tls_expiry_warn_days = ?, paused = ?, updated_at = ?
+                retry_interval_s = ?, timeout_s = ?, failure_threshold = ?, tls_expiry_warn_days = ?, paused = ?, updated_at = ?,
+                kind = ?, grace_s = ?,
+                -- A push monitor keeps its URL across edits; a new one gets the token bound here.
+                push_token = CASE WHEN ? = 'push' THEN COALESCE(push_token, ?) END
             WHERE id = ?
             "#,
         )
@@ -182,6 +222,11 @@ impl Monitor {
         .bind(input.tls_expiry_warn_days)
         .bind(input.paused)
         .bind(now)
+        .bind(&input.kind)
+        .bind(input.grace_s)
+        // SET expressions read the old row: the new kind is bound again.
+        .bind(&input.kind)
+        .bind(random_token())
         .bind(id)
         .execute(&mut *tx)
         .await?;

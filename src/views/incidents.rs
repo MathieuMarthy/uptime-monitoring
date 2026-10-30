@@ -229,6 +229,8 @@ pub fn error_kind_label(kind: Option<&str>) -> &'static str {
         Some("tls") => "TLS certificate",
         Some("status") => "HTTP status",
         Some("keyword") => "Keyword",
+        Some("missed") => "Missed ping",
+        Some("reported") => "Reported by the job",
         _ => "Unknown",
     }
 }

@@ -3,6 +3,9 @@ use crate::models::{Monitor, name_key};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
+pub const HTTP: &str = "http";
+/// The monitored job calls `/push/{token}`; no ping in time is a failure.
+pub const PUSH: &str = "push";
 pub const METHODS: [&str; 6] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
 
 const NAME_MAX_CHARS: usize = 100;
@@ -23,6 +26,8 @@ pub type FieldErrors = BTreeMap<&'static str, String>;
 pub struct MonitorForm {
     pub name: String,
     pub group: String,
+    /// `http` (also when blank) or `push`.
+    pub kind: String,
     pub url: String,
     pub method: String,
     pub accepted_statuses: String,
@@ -31,6 +36,7 @@ pub struct MonitorForm {
     pub timeout_s: String,
     pub failure_threshold: String,
     pub tls_expiry_warn_days: String,
+    pub grace_s: String,
     pub headers: String,
     pub body: String,
     pub keyword: String,
@@ -50,6 +56,9 @@ pub struct MonitorInput {
     pub name: String,
     /// `None`: ungrouped.
     pub group_name: Option<String>,
+    /// `http` or `push`. A push monitor stores the defaults below in place of the HTTP fields,
+    /// and an empty `url`.
+    pub kind: String,
     pub url: String,
     pub method: String,
     pub headers: Option<String>,
@@ -63,6 +72,8 @@ pub struct MonitorInput {
     pub timeout_s: i64,
     pub failure_threshold: i64,
     pub tls_expiry_warn_days: Option<i64>,
+    /// 0 for HTTP.
+    pub grace_s: i64,
     pub paused: bool,
     /// The notification channels its alerts go to.
     pub channel_ids: Vec<i64>,
@@ -73,6 +84,7 @@ impl MonitorForm {
         Self {
             name: String::new(),
             group: String::new(),
+            kind: HTTP.to_string(),
             url: "https://".to_string(),
             method: "GET".to_string(),
             accepted_statuses: "200-299".to_string(),
@@ -81,6 +93,7 @@ impl MonitorForm {
             timeout_s: "10".to_string(),
             failure_threshold: "3".to_string(),
             tls_expiry_warn_days: "14".to_string(),
+            grace_s: "60".to_string(),
             headers: String::new(),
             body: String::new(),
             keyword: String::new(),
@@ -96,17 +109,25 @@ impl MonitorForm {
         Self {
             name: m.name.clone(),
             group: m.group_name.clone().unwrap_or_default(),
-            url: m.url.clone(),
+            kind: m.kind.clone(),
+            url: if m.is_push() {
+                "https://".to_string()
+            } else {
+                m.url.clone()
+            },
             method: m.method.clone(),
             accepted_statuses: m.accepted_statuses.clone(),
             interval_s: m.interval_s.to_string(),
             retry_interval_s: m.retry_interval_s.to_string(),
             timeout_s: m.timeout_s.to_string(),
             failure_threshold: m.failure_threshold.to_string(),
-            tls_expiry_warn_days: m
-                .tls_expiry_warn_days
-                .map(|d| d.to_string())
-                .unwrap_or_default(),
+            tls_expiry_warn_days: match m.tls_expiry_warn_days {
+                _ if m.is_push() => "14".to_string(),
+                Some(days) => days.to_string(),
+                None => String::new(),
+            },
+            // HTTP monitors store 0: switching one to push offers the default.
+            grace_s: if m.is_push() { m.grace_s } else { 60 }.to_string(),
             headers: m.headers.clone().unwrap_or_default(),
             body: m.body.clone().unwrap_or_default(),
             keyword: m.keyword.clone().unwrap_or_default(),
@@ -172,21 +193,12 @@ impl MonitorForm {
         }
         let group_name = (!group.is_empty()).then_some(group);
 
-        let url = self.url.trim();
-        if let Err(message) = validate_url(url) {
-            errors.insert("url", message);
-        }
-
-        let method = self.method.trim().to_ascii_uppercase();
-        if !METHODS.contains(&method.as_str()) {
-            errors.insert("method", "Choose a supported HTTP method.".to_string());
-        }
-
-        let accepted_statuses = match parse_status_ranges(&self.accepted_statuses) {
-            Ok(ranges) => format_status_ranges(&ranges),
-            Err(message) => {
-                errors.insert("accepted_statuses", message);
-                String::new()
+        let kind = match self.kind.trim() {
+            "" | HTTP => HTTP,
+            PUSH => PUSH,
+            _ => {
+                errors.insert("kind", "Choose HTTP or push.".to_string());
+                HTTP
             }
         };
 
@@ -206,6 +218,71 @@ impl MonitorForm {
             );
         }
 
+        let failure_threshold = parse_bounded(&self.failure_threshold, 1, 10)
+            .map_err(|m| errors.insert("failure_threshold", m))
+            .ok();
+
+        let http = if kind == PUSH {
+            HttpFields::default()
+        } else {
+            self.validate_http(interval_s, &mut errors)
+        };
+        let grace_s = if kind == PUSH {
+            parse_bounded(&self.grace_s, 0, 86_400)
+                .map_err(|m| errors.insert("grace_s", m))
+                .ok()
+        } else {
+            Some(0)
+        };
+
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok(MonitorInput {
+            name: name.to_string(),
+            group_name,
+            kind: kind.to_string(),
+            url: http.url,
+            method: http.method,
+            headers: http.headers,
+            body: http.body,
+            keyword: http.keyword,
+            accepted_statuses: http.accepted_statuses,
+            follow_redirects: http.follow_redirects,
+            ignore_tls_errors: http.ignore_tls_errors,
+            // Unwraps are safe: each `None` above recorded an error and returned early.
+            interval_s: interval_s.unwrap(),
+            retry_interval_s: retry_interval_s.unwrap(),
+            timeout_s: http.timeout_s,
+            failure_threshold: failure_threshold.unwrap(),
+            tls_expiry_warn_days: http.tls_expiry_warn_days,
+            grace_s: grace_s.unwrap(),
+            paused: self.active.is_none(),
+            channel_ids: self.channel_ids(),
+        })
+    }
+
+    /// The fields only an HTTP monitor uses. On error, the returned values are placeholders.
+    fn validate_http(&self, interval_s: Option<i64>, errors: &mut FieldErrors) -> HttpFields {
+        let url = self.url.trim();
+        if let Err(message) = validate_url(url) {
+            errors.insert("url", message);
+        }
+
+        let method = self.method.trim().to_ascii_uppercase();
+        if !METHODS.contains(&method.as_str()) {
+            errors.insert("method", "Choose a supported HTTP method.".to_string());
+        }
+
+        let accepted_statuses = match parse_status_ranges(&self.accepted_statuses) {
+            Ok(ranges) => format_status_ranges(&ranges),
+            Err(message) => {
+                errors.insert("accepted_statuses", message);
+                String::new()
+            }
+        };
+
         let timeout_s = parse_bounded(&self.timeout_s, 1, 120)
             .map_err(|m| errors.insert("timeout_s", m))
             .ok();
@@ -217,10 +294,6 @@ impl MonitorForm {
                 "Timeout cannot be longer than the check interval.".to_string(),
             );
         }
-
-        let failure_threshold = parse_bounded(&self.failure_threshold, 1, 10)
-            .map_err(|m| errors.insert("failure_threshold", m))
-            .ok();
 
         let tls_expiry_warn_days = if self.tls_expiry_warn_days.trim().is_empty() {
             None
@@ -257,13 +330,7 @@ impl MonitorForm {
             );
         }
 
-        if !errors.is_empty() {
-            return Err(errors);
-        }
-
-        Ok(MonitorInput {
-            name: name.to_string(),
-            group_name,
+        HttpFields {
             url: url.to_string(),
             method,
             headers,
@@ -272,15 +339,41 @@ impl MonitorForm {
             accepted_statuses,
             follow_redirects: self.follow_redirects.is_some(),
             ignore_tls_errors: self.ignore_tls_errors.is_some(),
-            // Unwraps are safe: each `None` above recorded an error and returned early.
-            interval_s: interval_s.unwrap(),
-            retry_interval_s: retry_interval_s.unwrap(),
-            timeout_s: timeout_s.unwrap(),
-            failure_threshold: failure_threshold.unwrap(),
+            timeout_s: timeout_s.unwrap_or(10),
             tls_expiry_warn_days,
-            paused: self.active.is_none(),
-            channel_ids: self.channel_ids(),
-        })
+        }
+    }
+}
+
+/// What an HTTP monitor stores beyond the common fields; the defaults are what a push monitor
+/// stores.
+struct HttpFields {
+    url: String,
+    method: String,
+    headers: Option<String>,
+    body: Option<String>,
+    keyword: Option<String>,
+    accepted_statuses: String,
+    follow_redirects: bool,
+    ignore_tls_errors: bool,
+    timeout_s: i64,
+    tls_expiry_warn_days: Option<i64>,
+}
+
+impl Default for HttpFields {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            method: "GET".to_string(),
+            headers: None,
+            body: None,
+            keyword: None,
+            accepted_statuses: "200-299".to_string(),
+            follow_redirects: true,
+            ignore_tls_errors: false,
+            timeout_s: 10,
+            tls_expiry_warn_days: None,
+        }
     }
 }
 
@@ -902,5 +995,79 @@ mod tests {
         for field in ["name", "url", "interval_s"] {
             assert!(errors.contains_key(field), "{field}");
         }
+    }
+
+    fn push() -> MonitorForm {
+        MonitorForm {
+            name: "Backup".to_string(),
+            kind: "push".to_string(),
+            grace_s: "60".to_string(),
+            ..MonitorForm::new_defaults()
+        }
+    }
+
+    #[test]
+    fn push_ignores_the_http_fields() {
+        let i = MonitorForm {
+            url: "not a url".into(),
+            method: "BREW".into(),
+            accepted_statuses: "x".into(),
+            timeout_s: "".into(),
+            headers: "{".into(),
+            keyword: "k".into(),
+            ..push()
+        }
+        .validate()
+        .unwrap();
+        assert_eq!(i.kind, "push");
+        assert_eq!(i.url, "");
+        assert_eq!(i.method, "GET");
+        assert_eq!(i.headers, None);
+        assert_eq!(i.keyword, None);
+        assert_eq!(i.tls_expiry_warn_days, None);
+        assert_eq!(i.grace_s, 60);
+    }
+
+    #[test]
+    fn push_grace_is_bounded() {
+        assert_field_error(
+            MonitorForm {
+                grace_s: "".into(),
+                ..push()
+            },
+            "grace_s",
+        );
+        assert_field_error(
+            MonitorForm {
+                grace_s: "86401".into(),
+                ..push()
+            },
+            "grace_s",
+        );
+        let i = MonitorForm {
+            grace_s: "0".into(),
+            ..push()
+        };
+        assert_eq!(i.validate().unwrap().grace_s, 0);
+    }
+
+    #[test]
+    fn http_is_the_default_kind_and_has_no_grace() {
+        let i = MonitorForm {
+            kind: String::new(),
+            grace_s: "abc".into(),
+            ..valid()
+        }
+        .validate()
+        .unwrap();
+        assert_eq!(i.kind, "http");
+        assert_eq!(i.grace_s, 0);
+        assert_field_error(
+            MonitorForm {
+                kind: "ftp".into(),
+                ..valid()
+            },
+            "kind",
+        );
     }
 }

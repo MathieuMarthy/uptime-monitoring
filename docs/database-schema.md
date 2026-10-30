@@ -43,8 +43,8 @@ erDiagram
 | `name` | TEXT | NOT NULL | |
 | `name_key` | TEXT | NOT NULL UNIQUE | Unicode lowercase of `name` in NFC, computed by the application: uniqueness and sort order (`COLLATE NOCASE` only folds ASCII) |
 | `group_name` | TEXT | NULL | dashboard group, free text (at most 64 characters); NULL = ungrouped. Compared through its `name_key` form, in the application |
-| `kind` | TEXT | NOT NULL DEFAULT `'http'`, CHECK IN (`'http'`) | extension point for future check types |
-| `url` | TEXT | NOT NULL | |
+| `kind` | TEXT | NOT NULL DEFAULT `'http'`, CHECK IN (`'http'`, `'push'`) | `push`: the monitored job calls the instance |
+| `url` | TEXT | NOT NULL, CHECK empty exactly for `push` | |
 | `method` | TEXT | NOT NULL DEFAULT `'GET'`, CHECK IN (GET, HEAD, POST, PUT, PATCH, DELETE) | |
 | `headers` | TEXT | NULL | JSON object `{"Name": "value"}` |
 | `body` | TEXT | NULL | |
@@ -58,6 +58,8 @@ erDiagram
 | `failure_threshold` | INTEGER | NOT NULL DEFAULT 3, CHECK 1–10 | consecutive failures before Down |
 | `tls_expiry_warn_days` | INTEGER | NULL, DEFAULT 14 | NULL = certificate alert disabled |
 | `paused` | INTEGER | NOT NULL DEFAULT 0 | |
+| `push_token` | TEXT | UNIQUE, CHECK set exactly for `push` | 64 hex characters, the secret of `/push/{token}`; kept readable to be shown again |
+| `grace_s` | INTEGER | NOT NULL DEFAULT 0 | push: how late a ping may be after `interval_s`; 0 for HTTP |
 | `created_at`, `updated_at` | INTEGER | NOT NULL | |
 
 ### `monitor_state` — runtime state, written by the check engine (1:1)
@@ -75,8 +77,8 @@ open incident, in the same transaction.
 monitor is a contiguous range scan.
 
 `monitor_id`, `checked_at`, `ok` (verdict computed by the engine — the single source of truth), `latency_ms` (NULL
-without a response), `status_code`, `error_kind` (`timeout`, `dns`, `blocked`, `connect`, `tls`, `status`, `keyword`), `error`,
-`covered_ms` (time since the previous check, 0 when that gap exceeds 2 × `interval_s`), `down` (that time was
+without a response), `status_code`, `error_kind` (`timeout`, `dns`, `blocked`, `connect`, `tls`, `status`, `keyword`; push: `missed`, `reported`), `error`,
+`covered_ms` (time since the previous check, 0 when that gap exceeds 2 × (`interval_s` + `grace_s`)), `down` (that time was
 downtime: an incident was open when the check was recorded, or opened later from a failure before it).
 The first failure of an incident keeps `down = 0` (the time before it was up). Partial index on `checked_at WHERE ok = 0
 AND down = 0`: failures that were not downtime, across monitors, for the Activity page, without reading every check.

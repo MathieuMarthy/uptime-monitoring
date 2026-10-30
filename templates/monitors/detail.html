@@ -9,6 +9,8 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/live.js" defer></script>
+<script src="/static/js/confirm.js" defer></script>
+<script src="/static/js/copy.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -31,9 +33,14 @@
                 <span class="visually-hidden">{{ view.status_label() }}. </span>{{ status_line }}
             </p>
             <p class="detail-config">
+                {% if m.is_push() %}
+                Push, a ping expected every {{ m.interval_s }} s with {{ m.grace_s }} s of grace, down after
+                {{ m.failure_threshold }} {% if m.failure_threshold == 1 %}miss{% else %}misses in a row{% endif %}.
+                {% else %}
                 <a href="{{ m.url }}" target="_blank" rel="noopener noreferrer">{{ m.url }}</a>,
                 {{ m.method }} every {{ m.interval_s }} s, down after {{ m.failure_threshold }}
                 {% if m.failure_threshold == 1 %}failure{% else %}failures in a row{% endif %}.
+                {% endif %}
             </p>
         </section>
 
@@ -49,6 +56,29 @@
             <a class="button-primary" href="/monitors/{{ m.id }}/edit">Edit monitor</a>
         </div>
     </div>
+
+    {% if let Some(push_url) = push_url %}
+    <section class="panel panel-pad push-panel" aria-labelledby="push-title">
+        <div class="section-head">
+            <h2 class="section-title" id="push-title">Push URL</h2>
+            <span class="section-note">Call it after each run. GET, HEAD and POST all work.</span>
+        </div>
+        <div class="push-url">
+            <code class="code-block" id="push-url">{{ push_url }}</code>
+            <button class="button-secondary" type="button" data-copy="push-url">Copy</button>
+        </div>
+        {% if !push_url.starts_with("http") %}
+        <p class="form-hint">Set <code>PUBLIC_URL</code> to show the full address.</p>
+        {% endif %}
+        <p class="form-hint">To report a failure, add <code>?status=down&amp;msg=…</code>. For example, in a crontab:</p>
+        <pre class="code-block"><code>backup.sh &amp;&amp; curl -fsS -m 10 {{ push_url }} || curl -fsS -m 10 "{{ push_url }}?status=down&amp;msg=backup%20failed"</code></pre>
+        <form action="/monitors/{{ m.id }}/push-token" method="POST" class="inline-form"
+              data-confirm="The current URL will stop working at once. Generate a new one?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="button-secondary" type="submit">New URL</button>
+        </form>
+    </section>
+    {% endif %}
 
     <div class="detail-live" id="live-history" data-live>
         <dl class="figures">

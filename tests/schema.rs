@@ -161,3 +161,50 @@ async fn foreign_keys_are_indexed() {
         );
     }
 }
+
+#[tokio::test]
+async fn push_monitor_needs_a_token_and_no_url() {
+    let (_, pool) = common::test_app().await;
+    let insert = |kind: &'static str, url: &'static str, token: Option<&'static str>, key| {
+        sqlx::query(
+            "INSERT INTO monitors (name, name_key, kind, url, push_token, created_at, updated_at)
+             VALUES (?1, ?1, ?2, ?3, ?4, 0, 0)",
+        )
+        .bind(key)
+        .bind(kind)
+        .bind(url)
+        .bind(token)
+    };
+    assert!(
+        insert("push", "", Some("t1"), "a")
+            .execute(&pool)
+            .await
+            .is_ok()
+    );
+    assert!(insert("push", "", None, "b").execute(&pool).await.is_err());
+    assert!(
+        insert("push", "https://x", Some("t2"), "c")
+            .execute(&pool)
+            .await
+            .is_err()
+    );
+    assert!(
+        insert("push", "", Some("t1"), "d")
+            .execute(&pool)
+            .await
+            .is_err()
+    );
+    assert!(
+        insert("http", "https://x", Some("t3"), "e")
+            .execute(&pool)
+            .await
+            .is_err()
+    );
+    assert!(insert("http", "", None, "f").execute(&pool).await.is_err());
+    assert!(
+        insert("http", "https://x", None, "g")
+            .execute(&pool)
+            .await
+            .is_ok()
+    );
+}

@@ -66,8 +66,9 @@ impl Message {
             ),
         };
         let text = match &notification.monitor {
-            Some(monitor) => format!("{text}\n{}", monitor.url),
-            None => text,
+            // A push monitor has no URL.
+            Some(monitor) if !monitor.url.is_empty() => format!("{text}\n{}", monitor.url),
+            _ => text,
         };
         let link = public_url
             .zip(notification.monitor.as_ref())
@@ -120,6 +121,17 @@ mod tests {
             Message::new(&test, &TimeZone::UTC, Some("https://status.example.com")).link,
             None
         );
+    }
+
+    #[test]
+    fn push_monitor_text_has_no_url_line() {
+        let mut down = notification(Event::Down {
+            since: 10 * DAY_MS,
+            cause: "no ping for 120 s".to_string(),
+        });
+        down.monitor.as_mut().unwrap().url = String::new();
+        let m = Message::new(&down, &TimeZone::UTC, None);
+        assert_eq!(m.text, "no ping for 120 s\nDown since 1970-01-11 00:00.");
     }
 
     #[test]

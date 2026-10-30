@@ -25,6 +25,8 @@ small enough to run next to the sites it watches.
 
 **Checks**
 - HTTP(S) with method, headers, body, accepted status codes, expected keyword, redirects and timeouts.
+- Push (heartbeat): a cron job, a backup or anything behind a NAT calls a secret URL after each run; down when the
+  pings stop, or when the job reports a failure itself.
 - Down after *N* consecutive failures, with faster re-checks while a failure is being confirmed.
 - TLS certificate expiry tracked on every check.
 

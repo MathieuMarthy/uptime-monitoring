@@ -111,7 +111,7 @@ uptime-monitoring/
 - **Ids.** Integer ids. Path ids are parsed with `routes::parse_id` (the `PathId` extractor); anything that is not a positive integer is a 404.
 - **Time.** Timestamps are Unix epoch milliseconds (`i64`), from `time::now_ms()`.
 - **Protected by default.** `routes::all` merges a protected router, behind `middleware::require_session`, and a
-  public one (`/health`, `/setup`, `/login`, `/status/{slug}`, static assets). A new route goes in the protected router unless it must be
+  public one (`/health`, `/setup`, `/login`, `/status/{slug}`, `/push/{token}`, static assets). A new route goes in the protected router unless it must be
   reachable without logging in.
 - **CSRF.** `require_session` checks the `csrf_token` field of every non-GET request against the session's token, so
   handlers cannot forget it. Every admin form carries `<input type="hidden" name="csrf_token" value="{{ csrf_token }}">`;
@@ -168,6 +168,13 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `min(interval, 60 s)`. Every monitor route calls `state.engine.reload(id)` after a change: the supervisor stops the
   monitor's task, waits for it to end, re-reads the monitor and, unless it is paused or deleted, starts a new task that
   checks at once. At most 20 checks run at the same time.
+- **Push monitors.** `kind = 'push'`: no request goes out. `GET|HEAD|POST /push/{token}` looks up the active monitor
+  (unknown token → 404, paused → 200 and ignored) and hands a success, or with `?status=down&msg=…` a `reported`
+  failure, to `EngineHandle::ping`. Pings go through a bounded queue (256) to the supervisor, then to the monitor's
+  task (4); beyond, they are dropped. The task (`Scheduler::run_push`) records a ping at most once per second. With no
+  ping `interval_s + grace_s` after the last one, it records a `missed` failure; misses then repeat at the normal pace
+  below. The first deadline counts from the last check or the task's start, whichever is later, so a restart is not a
+  miss. Recording, incidents and alerts are shared with HTTP checks.
 - **Pace.** The next check starts `interval_s` after the start of the previous one, or `retry_interval_s` while a
   failure series has not reached `failure_threshold`.
 - **Check.** One shared client per `(follow_redirects, ignore_tls_errors)` pair, no proxy, no connection reuse (each

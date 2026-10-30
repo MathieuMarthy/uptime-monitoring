@@ -40,7 +40,7 @@ impl Check {
                  (monitor_id, checked_at, ok, latency_ms, status_code, error_kind, error, covered_ms,
                   down)
              SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7,
-                    COALESCE((SELECT CASE WHEN ?2 - p.checked_at <= m.interval_s * 2000
+                    COALESCE((SELECT CASE WHEN ?2 - p.checked_at <= (m.interval_s + m.grace_s) * 2000
                                           THEN ?2 - p.checked_at ELSE 0 END
                               FROM checks p JOIN monitors m ON m.id = p.monitor_id
                               WHERE p.monitor_id = ?1 AND p.checked_at < ?2

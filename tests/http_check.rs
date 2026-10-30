@@ -67,6 +67,8 @@ fn monitor(url: &str) -> Monitor {
         paused: false,
         created_at: 0,
         updated_at: 0,
+        push_token: None,
+        grace_s: 0,
     }
 }
 

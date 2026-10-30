@@ -8,6 +8,7 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/confirm.js" defer></script>
+<script src="/static/js/monitor-form.js" defer></script>
 {% endblock %}
 
 {% macro field_error(field) %}
@@ -53,7 +54,17 @@
                     {% call field_error("group") %}{% endcall %}
                 </div>
 
-                <div class="form-row form-row-wide-first">
+                <div class="form-group">
+                    <label class="form-label" for="kind">Monitor Type</label>
+                    <select class="form-select" id="kind" name="kind">
+                        <option value="http" {% if !self.is_push() %}selected{% endif %}>HTTP(S): this instance checks a URL</option>
+                        <option value="push" {% if self.is_push() %}selected{% endif %}>Push: a job calls this instance</option>
+                    </select>
+                    <span class="form-hint" data-kind="push"{% if !self.is_push() %} hidden{% endif %}>The job calls a secret URL, shown once the monitor is saved, after each run: a cron task, a backup, a job behind a NAT.</span>
+                    {% call field_error("kind") %}{% endcall %}
+                </div>
+
+                <div class="form-row form-row-wide-first" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                     <div class="form-group">
                         <label class="form-label" for="url">URL to monitor *</label>
                         <input class="form-input" id="url" name="url" type="url"
@@ -95,12 +106,20 @@
                 </div>
 
                 <div class="form-row">
-                    <div class="form-group">
+                    <div class="form-group" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                         <label class="form-label" for="timeout_s">Request Timeout (seconds)</label>
                         <input class="form-input" id="timeout_s" name="timeout_s" type="number"
                                min="1" max="120" step="1" value="{{ form.timeout_s }}"/>
                         <span class="form-hint">At most 120s and no longer than the interval. Default: 10s.</span>
                         {% call field_error("timeout_s") %}{% endcall %}
+                    </div>
+
+                    <div class="form-group" data-kind="push"{% if !self.is_push() %} hidden{% endif %}>
+                        <label class="form-label" for="grace_s">Grace Period (seconds)</label>
+                        <input class="form-input" id="grace_s" name="grace_s" type="number"
+                               min="0" max="86400" step="1" value="{{ form.grace_s }}"/>
+                        <span class="form-hint">How late a ping may arrive after the interval before it counts as missed. Default: 60s.</span>
+                        {% call field_error("grace_s") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
@@ -112,7 +131,7 @@
                     </div>
                 </div>
 
-                <div class="form-row">
+                <div class="form-row" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                     <div class="form-group">
                         <label class="form-label" for="accepted_statuses">Accepted Status Codes</label>
                         <input class="form-input" id="accepted_statuses" name="accepted_statuses" type="text"
@@ -130,7 +149,7 @@
                     </div>
                 </div>
 
-                <div class="form-row">
+                <div class="form-row" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                     <div class="form-group">
                         <label class="checkbox-group" for="follow_redirects">
                             <input type="checkbox" id="follow_redirects" name="follow_redirects"
@@ -155,7 +174,7 @@
                 </div>
             </div>
 
-            <div class="form-section">
+            <div class="form-section" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                 <h2 class="section-title">Advanced Options (Optional)</h2>
 
                 <div class="form-group">
