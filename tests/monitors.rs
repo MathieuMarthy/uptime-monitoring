@@ -339,6 +339,10 @@ async fn dashboard_shows_uptime_and_hourly_heartbeat() {
         "/static/js/live.js",
         "/static/js/search.js",
         "/static/js/theme.js",
+        "/static/images/favicon.svg",
+        "/static/images/favicon-32.png",
+        "/static/images/apple-touch-icon.png",
+        "/static/images/logo.svg",
     ] {
         assert!(body.contains(script));
         assert_eq!(get(&app, script).await.status, 200, "{script}");

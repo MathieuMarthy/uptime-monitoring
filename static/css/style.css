@@ -168,6 +168,11 @@ h1, h2, h3 {
     text-decoration: none;
 }
 
+.brand img {
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px var(--rule);
+}
+
 .site-nav {
     display: flex;
     flex-wrap: wrap;

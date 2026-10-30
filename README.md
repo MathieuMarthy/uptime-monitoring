@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/images/logo.svg" alt="" width="96" height="96">
+</p>
+
 <h1 align="center">uptime-monitoring</h1>
 
 <p align="center">
@@ -11,7 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/home_page.png" alt="Dashboard: two monitors down at the top, then one row per monitor with its last 24 hours as bars on a shared time axis" width="900">
+  <img src="docs/images/promo.png" alt="uptime-monitoring: the dashboard, with two monitors down and every monitor's last 24 hours on a shared time axis, in front of the Activity page in the dark theme" width="900">
 </p>
 
 Built to watch about a hundred HTTP(S) endpoints from an instance exposed on the Internet: secure by default, and
@@ -58,7 +62,30 @@ A bind mount (`-v ./data:/data`) works as well, even when Docker creates the dir
 starts as root only to hand the database files to its user (65532, or `PUID`/`PGID`), then drops root for good.
 
 Open the setup URL from the logs to create the admin account. Until then, the instance only shows a page
-pointing to the logs, so nobody else can claim it. A `compose.yaml` example is in the repository.
+pointing to the logs, so nobody else can claim it.
+
+### With Docker Compose
+
+```yaml
+services:
+  uptime-monitoring:
+    image: ghcr.io/mathieumarthy/uptime-monitoring:latest
+    container_name: uptime-monitoring
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      PUBLIC_URL: https://status.example.com
+      # Behind a reverse proxy: the login rate limit then sees the real client IP.
+      TRUST_PROXY_HEADERS: "true"
+    volumes:
+      - ./data:/data
+```
+
+```bash
+docker compose up -d
+docker compose logs uptime-monitoring   # prints the one-time setup URL
+```
 
 The session cookie is `Secure`: put the instance behind a reverse proxy that serves HTTPS (Caddy, Traefik,
 nginx). Over plain HTTP, logging in only works on `localhost`.
