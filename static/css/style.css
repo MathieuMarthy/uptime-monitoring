@@ -236,6 +236,77 @@ h1, h2, h3 {
     display: block;
 }
 
+/* Phones: the brand and icon buttons on one line, the sections as equal tabs under them. The icon
+   buttons keep their label for screen readers. */
+@media (max-width: 719.98px) {
+    .site-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px 8px;
+    }
+
+    .site-header-group:first-child {
+        display: contents;
+    }
+
+    .site-header-group:last-child {
+        grid-row: 1;
+        grid-column: 2;
+        flex-wrap: nowrap;
+        gap: 4px;
+    }
+
+    .site-nav {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
+        gap: 2px;
+        padding: 3px;
+        border: 1px solid var(--rule);
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .site-nav a {
+        padding: 7px 2px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .header-link,
+    .theme-switch,
+    .logout-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+    }
+
+    .header-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 359.98px) {
+    .site-nav {
+        font-size: 13px;
+    }
+}
+
+@media (min-width: 720px) {
+    .header-icon {
+        display: none;
+    }
+}
+
 /* Page frame */
 main {
     width: 100%;

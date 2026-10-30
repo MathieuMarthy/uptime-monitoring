@@ -287,7 +287,9 @@ alerts follow the checks retention: older incidents only show their facts.
   unfolded incidents fade in. `prefers-reduced-motion` turns all of it off.
 - **Accessibility.** Colour pairs meet WCAG AA in both palettes (4.5:1 for text, 3:1 for lamps and bars); a state is
   always written out next to its lamp, except *Up* (visually hidden).
-- **Menu.** A page marks its menu entry by filling the matching `nav_*` block of `layout.html`.
+- **Menu.** A page marks its menu entry by filling the matching `nav_*` block of `layout.html`. Under 720 px, CSS alone
+  puts the brand and three icon buttons (theme, settings, log out; labels kept for screen readers) on one line and
+  the four sections as equal tabs under them.
 
 ## Public pages
 
