@@ -1,8 +1,11 @@
+use crate::engine::http::HttpChecker;
+use crate::engine::verdict::CheckOutcome;
 use crate::error::AppError;
-use crate::forms::monitor::{FieldErrors, MonitorForm};
+use crate::forms::monitor::{FieldErrors, MonitorForm, PUSH};
 use crate::models::{Channel, Monitor, Session, is_unique_violation};
 use crate::routes::{PathId, form_or_invalid};
 use crate::state::AppState;
+use crate::time::days_left;
 use crate::views::monitors::{DetailTemplate, FormTemplate, IndexTemplate, Range};
 use axum::extract::rejection::{FormRejection, QueryRejection};
 use axum::extract::{Query, State};
@@ -17,8 +20,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(index))
         .route("/monitors/new", get(new_form).post(create))
+        .route("/monitors/new/test", post(test_new))
         .route("/monitors/{id}", get(detail))
         .route("/monitors/{id}/edit", get(edit_form).post(update))
+        .route("/monitors/{id}/edit/test", post(test_edit))
         .route("/monitors/{id}/duplicate", get(duplicate_form))
         .route("/monitors/{id}/delete", post(delete))
         .route("/monitors/{id}/toggle-pause", post(toggle_pause))
@@ -185,6 +190,78 @@ async fn update(
     }
 }
 
+/// The Test button of the add form: one check with the values typed, nothing saved.
+async fn test_new(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    form: Result<Form<MonitorForm>, FormRejection>,
+) -> Result<FormTemplate, AppError> {
+    let form = form_or_invalid(form)?;
+    test_page(&state, None, form, session.csrf_token).await
+}
+
+/// The Test button of the edit form; the monitor keeps its stored configuration.
+async fn test_edit(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    PathId(id): PathId,
+    form: Result<Form<MonitorForm>, FormRejection>,
+) -> Result<FormTemplate, AppError> {
+    if Monitor::find(&state.db, id).await?.is_none() {
+        return Err(AppError::NotFound);
+    }
+    let form = form_or_invalid(form)?;
+    test_page(&state, Some(id), form, session.csrf_token).await
+}
+
+/// Checks the form's values once when they are valid, and shows the form again with the result.
+async fn test_page(
+    state: &AppState,
+    id: Option<i64>,
+    form: MonitorForm,
+    csrf_token: String,
+) -> Result<FormTemplate, AppError> {
+    let input = match form.validate() {
+        Ok(input) => input,
+        Err(errors) => return page(state, id, form, errors, csrf_token).await,
+    };
+    let result = if input.kind == PUSH {
+        Err("A push monitor waits for its job: save it, then call its URL.".to_string())
+    } else {
+        match state.monitor_tests.clone().try_acquire_owned() {
+            Ok(_permit) => {
+                let outcome = HttpChecker::new(state.guard.clone())
+                    .check(&Monitor::unsaved(&input))
+                    .await;
+                test_summary(&outcome)
+            }
+            Err(_) => Err("Other tests are running: try again in a moment.".to_string()),
+        }
+    };
+    let mut page = page(state, id, form, FieldErrors::new(), csrf_token).await?;
+    page.test_result = Some(result);
+    Ok(page)
+}
+
+/// `HTTP 200 in 84 ms. Certificate: 41 days left.`, or the failure.
+fn test_summary(outcome: &CheckOutcome) -> Result<String, String> {
+    if let Some(failure) = &outcome.failure {
+        return Err(failure.message.clone());
+    }
+    let mut summary = match (outcome.status_code, outcome.latency_ms) {
+        (Some(code), Some(ms)) => format!("HTTP {code} in {ms} ms."),
+        _ => "The check passed.".to_string(),
+    };
+    if let Some(expires_at) = outcome.tls_expires_at {
+        let left = days_left(expires_at, outcome.checked_at);
+        summary.push_str(&format!(
+            " Certificate: {left} day{} left.",
+            if left == 1 { "" } else { "s" }
+        ));
+    }
+    Ok(summary)
+}
+
 async fn delete(State(state): State<AppState>, PathId(id): PathId) -> Result<Redirect, AppError> {
     if Monitor::delete(&state.db, id).await? {
         state.engine.reload(id);
@@ -240,6 +317,7 @@ async fn page(
         monitor_id: id,
         channels: Channel::all(&state.db).await?,
         groups: Monitor::group_names(&state.db).await?,
+        test_result: None,
     })
 }
 

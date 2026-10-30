@@ -9,6 +9,9 @@ use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
 
+/// Form tests running at once; more wait for none and are told to retry.
+const MONITOR_TESTS: usize = 2;
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: SqlitePool,
@@ -28,6 +31,8 @@ pub struct AppState {
     pub notifier: Notifier,
     /// Rendered public pages; every change to a page invalidates it.
     pub public_pages: PageCache,
+    /// Checks run from the monitor form's Test button at the same time.
+    pub monitor_tests: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -43,6 +48,7 @@ impl AppState {
             guard: Guard::default(),
             notifier: Notifier::default(),
             public_pages: PageCache::default(),
+            monitor_tests: Arc::new(Semaphore::new(MONITOR_TESTS)),
         }
     }
 

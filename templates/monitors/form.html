@@ -22,6 +22,18 @@
         <p class="form-subtitle">Configure URL, interval, threshold, and payload for uptime checks.</p>
     </div>
 
+    {% match test_result %}
+    {% when Some(Ok(summary)) %}
+    <div class="success-banner" role="status">
+        <span>Test passed: {{ summary }} {% if self.is_edit() %}Changes are{% else %}The monitor is{% endif %} not saved yet.</span>
+    </div>
+    {% when Some(Err(error)) %}
+    <div class="error-banner" role="alert">
+        <span>Test failed: {{ error }}</span>
+    </div>
+    {% when None %}
+    {% endmatch %}
+
     {% if !errors.is_empty() %}
     <div class="error-banner" role="alert">
         <span>Please fix the {{ errors.len() }} highlighted field(s).</span>
@@ -240,6 +252,8 @@
                     <button class="button-primary" type="submit">
                         {% if self.is_edit() %}Save Changes{% else %}Create Monitor{% endif %}
                     </button>
+                    <button class="button-secondary" type="submit" formaction="{{ action_url }}/test"
+                            data-kind="http"{% if self.is_push() %} hidden{% endif %}>Test</button>
                     <a class="button-secondary" href="{{ cancel_url }}">Cancel</a>
                 </div>
             </div>

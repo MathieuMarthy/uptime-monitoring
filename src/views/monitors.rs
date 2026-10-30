@@ -545,6 +545,8 @@ pub struct FormTemplate {
     pub channels: Vec<Channel>,
     /// The groups in use, suggested by the group field.
     pub groups: Vec<String>,
+    /// What the Test button found: a summary, or why it failed.
+    pub test_result: Option<Result<String, String>>,
 }
 
 impl FormTemplate {
