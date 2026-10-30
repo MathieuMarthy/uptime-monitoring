@@ -87,7 +87,7 @@ AND down = 0`: failures that were not downtime, across monitors, for the Activit
 
 `id`, `monitor_id`, `started_at` (first failed check of the series), `resolved_at` (NULL while open; on pause, the last check's time), `error_kind`,
 `cause`, `note` (written by the admin, at most 2 000 characters; NULL = none), `note_public` (the note shows on status
-pages; 0 without a note).
+pages; kept as ticked even without a note).
 Indexes: `(monitor_id, started_at DESC)`, `started_at` (Activity page); unique partial index on `monitor_id WHERE resolved_at IS NULL` — at most one
 open incident per monitor.
 

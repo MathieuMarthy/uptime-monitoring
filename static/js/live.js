@@ -3,8 +3,8 @@
 // left open or closed (matched by id), and reads out a changed `data-announce` text (the status
 // sentence) in a polite live region. A redirect means the session expired, a 404 that the monitor
 // was deleted: reload to show it.
-// A block with a field being edited (focused, or changed and not saved yet) is left alone: the
-// swap would lose the typing.
+// A form being edited (a field focused, or changed and not saved yet) is carried over into the
+// swapped block, matched by id: the rest of the block still refreshes and the typing is kept.
 const PERIOD_MS = 30_000;
 
 const announcer = document.createElement("p");
@@ -15,8 +15,8 @@ document.body.append(announcer);
 // The bars rise once on load (CSS); blocks swapped in later stay still.
 setTimeout(() => document.documentElement.classList.add("settled"), 1000);
 
-const editing = (root) =>
-    [...root.querySelectorAll("textarea, input:not([type=hidden])")].some(
+const editing = (form) =>
+    [...form.querySelectorAll("textarea, input:not([type=hidden])")].some(
         (field) =>
             field === document.activeElement ||
             field.value !== field.defaultValue ||
@@ -48,7 +48,7 @@ async function refresh() {
     const focusedDetails = active?.matches("summary") ? active.parentElement.id : "";
     for (const element of document.querySelectorAll("[data-live]")) {
         const next = page.getElementById(element.id);
-        if (!next || editing(element)) {
+        if (!next) {
             continue;
         }
         for (const details of element.querySelectorAll("details[id]")) {
@@ -57,8 +57,14 @@ async function refresh() {
                 twin.open = details.open;
             }
         }
+        const kept = [...element.querySelectorAll("form[id]")].filter(editing);
         if (next.outerHTML === element.outerHTML) {
             continue;
+        }
+        const field = kept.some((form) => form.contains(active)) ? active : null;
+        const selection = field ? [field.selectionStart, field.selectionEnd] : null;
+        for (const form of kept) {
+            next.querySelector(`#${CSS.escape(form.id)}`)?.replaceWith(form);
         }
         const refocus = element.contains(active);
         const before = announced(element);
@@ -67,7 +73,12 @@ async function refresh() {
         if (after && after !== before) {
             announcer.textContent = after;
         }
-        if (refocus && focusedDetails) {
+        if (field && next.contains(field)) {
+            field.focus();
+            if (selection[0] !== null) {
+                field.setSelectionRange(...selection);
+            }
+        } else if (refocus && focusedDetails) {
             next.querySelector(`#${CSS.escape(focusedDetails)} > summary`)?.focus();
         } else if (refocus && focusedHref) {
             next.querySelector(`[href="${CSS.escape(focusedHref)}"]`)?.focus();

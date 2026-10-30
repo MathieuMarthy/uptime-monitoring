@@ -19,16 +19,18 @@ pub struct NoteInput {
 }
 
 impl NoteForm {
-    /// Trimmed; blank clears the note. Refused beyond `NOTE_MAX_CHARS`, which the textarea's
-    /// `maxlength` already prevents.
+    /// Trimmed; blank clears the note. Line breaks arrive as CRLF but count once, as the
+    /// textarea's `maxlength` counts them; refused beyond `NOTE_MAX_CHARS`, which `maxlength`
+    /// already prevents. The public box is kept as ticked, even without a note.
     pub fn validate(&self) -> Result<NoteInput, String> {
-        let note = self.note.trim();
+        let note = self.note.replace("\r\n", "\n");
+        let note = note.trim();
         if text_len(note) > NOTE_MAX_CHARS {
             return Err(format!("A note is at most {NOTE_MAX_CHARS} characters."));
         }
         let note = has_visible_char(note).then(|| note.to_string());
         Ok(NoteInput {
-            public: self.public.is_some() && note.is_some(),
+            public: self.public.is_some(),
             note,
         })
     }
@@ -55,7 +57,7 @@ mod tests {
             form(" \u{200B} ", true).validate(),
             Ok(NoteInput {
                 note: None,
-                public: false
+                public: true
             })
         );
         assert!(
@@ -64,5 +66,16 @@ mod tests {
                 .is_err()
         );
         assert!(form(&"a".repeat(NOTE_MAX_CHARS), false).validate().is_ok());
+        let crlf = format!("{}{}", "a\r\n".repeat(10), "a".repeat(NOTE_MAX_CHARS - 20));
+        assert_eq!(
+            form(&crlf, false)
+                .validate()
+                .unwrap()
+                .note
+                .unwrap()
+                .matches('\n')
+                .count(),
+            10
+        );
     }
 }

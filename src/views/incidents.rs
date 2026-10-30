@@ -2,6 +2,7 @@
 //! monitor's page and on the Activity page.
 
 use crate::error::AppError;
+use crate::forms::incident::NOTE_MAX_CHARS;
 use crate::models::{Check, FailedCheck, Incident, LogEntry, NotificationLog};
 use crate::time::{format_datetime, format_duration, format_time};
 use jiff::tz::TimeZone;
@@ -106,6 +107,11 @@ pub struct IncidentDetail {
 }
 
 impl IncidentDetail {
+    /// The note's `maxlength`, the server's limit.
+    pub fn note_max(&self) -> usize {
+        NOTE_MAX_CHARS
+    }
+
     pub async fn load(
         pool: &SqlitePool,
         tz: &TimeZone,

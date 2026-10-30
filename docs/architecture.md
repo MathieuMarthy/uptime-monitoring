@@ -270,11 +270,12 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Live refresh.** `static/js/live.js` refetches the page every 30 s while the tab is visible and swaps the elements
   marked `data-live` (each with an id) whose content changed, keeping the focused link or summary and the `<details>`
   the user opened or closed (by id). A changed status sentence (`data-announce`) is read out by a polite live region,
-  nothing else. A redirect (expired session) reloads the page. No extra route or JSON. A block with a field being
-  edited (focused, or changed since load, such as an incident's note) is not swapped.
+  nothing else. A redirect (expired session) reloads the page. No extra route or JSON. A form being edited
+  (focused, or changed since load, such as an incident's note) is carried over into the swapped block by id.
 - **Incident notes.** Each unfolded incident (detail and Activity pages) has a note form posting to
-  `/incidents/{id}/note`, which redirects to the incident on its monitor's page. A public note shows under the incident
-  on status pages, after their one-minute cache.
+  `/incidents/{id}/note`. Line breaks count once, as `maxlength` counts them. Saving drops every cached status page,
+  so a public note shows (or goes) at once, then returns to the `Referer`'s path and query (never its host) at
+  `#incident-{id}`, which `open-target.js` unfolds; the monitor's page without a `Referer`.
 - **Search.** `static/js/search.js` filters the rows on `data-search` (name and URL), ignoring case and accents, hides the groups left without a row and unfolds those with matches.
 
 ## Activity

@@ -66,6 +66,11 @@ impl PageCache {
     pub fn invalidate(&self, page_id: i64) {
         self.slots.lock().unwrap().remove(&page_id);
     }
+
+    /// Drops every page, for a change that may show on any of them.
+    pub fn clear(&self) {
+        self.slots.lock().unwrap().clear();
+    }
 }
 
 #[cfg(test)]

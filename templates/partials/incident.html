@@ -71,10 +71,10 @@
             <p class="incident-note">{{ note }}</p>
             <p class="section-note">{% if incident.note_public %}Shown on status pages.{% else %}Private: only shown here.{% endif %}</p>
             {% endif %}
-            <form class="note-form" action="/incidents/{{ incident.id }}/note" method="POST">
+            <form class="note-form" id="note-form-{{ incident.id }}" action="/incidents/{{ incident.id }}/note" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <label class="visually-hidden" for="note-{{ incident.id }}">Note on this incident</label>
-                <textarea class="form-textarea" id="note-{{ incident.id }}" name="note" maxlength="2000"
+                <textarea class="form-textarea" id="note-{{ incident.id }}" name="note" maxlength="{{ incident.note_max() }}"
                           placeholder="What happened, what was done. Leave empty to remove the note.">
                     {%- if let Some(note) = incident.note %}{{ note }}{% endif -%}
                 </textarea>

@@ -101,7 +101,7 @@ impl Incident {
         .await
     }
 
-    /// Sets the note (`None` clears it, and its publication). Returns the incident's monitor, or
+    /// Sets the note (`None` clears it) and whether it is public. Returns the incident's monitor, or
     /// `None` when no incident has this id.
     pub async fn set_note(
         pool: &SqlitePool,
@@ -113,7 +113,7 @@ impl Incident {
             "UPDATE incidents SET note = ?, note_public = ? WHERE id = ? RETURNING monitor_id",
         )
         .bind(note)
-        .bind(public && note.is_some())
+        .bind(public)
         .bind(id)
         .fetch_optional(pool)
         .await

@@ -79,7 +79,7 @@ async fn note_is_saved_and_shown_on_the_admin_pages() {
 }
 
 #[tokio::test]
-async fn blank_note_clears_it_and_its_publication() {
+async fn blank_note_clears_it_and_the_public_box_is_kept() {
     let (app, pool) = common::test_app().await;
     let (_, incident) = monitor_with_incident(&pool).await;
     assert_eq!(
@@ -87,7 +87,49 @@ async fn blank_note_clears_it_and_its_publication() {
         303
     );
     assert_eq!(save(&app, incident, "note=+++&public=on").await, 303);
-    assert_eq!(note_of(&pool, incident).await, (None, false));
+    assert_eq!(note_of(&pool, incident).await, (None, true));
+}
+
+#[tokio::test]
+async fn line_breaks_count_once_like_the_textarea() {
+    let (app, pool) = common::test_app().await;
+    let (_, incident) = monitor_with_incident(&pool).await;
+    // 1 990 letters and 10 line breaks: 2 000 for the browser, sent as 2 010 with CRLF.
+    let body = format!("note={}{}", "a%0D%0A".repeat(10), "a".repeat(1980));
+    assert_eq!(save(&app, incident, &body).await, 303);
+    let stored = note_of(&pool, incident).await.0.unwrap();
+    assert_eq!(stored.matches('\n').count(), 10);
+    assert!(!stored.contains('\r'));
+}
+
+#[tokio::test]
+async fn save_returns_to_the_page_it_came_from() {
+    let (app, pool) = common::test_app().await;
+    let (monitor, incident) = monitor_with_incident(&pool).await;
+    let session = app.session.clone().unwrap();
+    let post = |referer: &'static str| {
+        axum::http::Request::post(format!("/incidents/{incident}/note"))
+            .header("cookie", format!("__Host-session={}", session.token))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("referer", referer)
+            .body(axum::body::Body::from(format!(
+                "note=x&csrf_token={}",
+                session.csrf_token
+            )))
+            .unwrap()
+    };
+    let r = common::send(&app, post("http://localhost/activity?days=30&kind=outages")).await;
+    assert_eq!(r.status, 303);
+    assert_eq!(
+        r.headers["location"],
+        format!("/activity?days=30&kind=outages#incident-{incident}").as_str()
+    );
+    // Only the path and query are kept: never another host.
+    let r = common::send(&app, post("https://evil.example//evil.example/x")).await;
+    assert_eq!(
+        r.headers["location"],
+        format!("/monitors/{monitor}#incident-{incident}").as_str()
+    );
 }
 
 #[tokio::test]
@@ -123,7 +165,7 @@ async fn too_long_note_is_refused_and_unknown_incident_is_404() {
 }
 
 #[tokio::test]
-async fn status_page_shows_only_public_notes() {
+async fn status_page_shows_only_public_notes_at_once() {
     let (app, pool) = common::test_app().await;
     let (monitor, incident) = monitor_with_incident(&pool).await;
     let body =
@@ -137,19 +179,14 @@ async fn status_page_shows_only_public_notes() {
     let page = get(&app.logged_out(), "/status/status").await.body;
     assert!(!page.contains("Secret host"));
 
-    // The page is cached for a minute: a fresh app renders it again.
-    let (app, pool) = common::test_app().await;
-    let (monitor, incident) = monitor_with_incident(&pool).await;
-    let body =
-        format!("title=Status&slug=status&published=on&monitor_{monitor}=on&position_{monitor}=1");
-    assert_eq!(
-        post_form(&app, "/public-pages/new", &body).await.status,
-        303
-    );
+    // Saving a note drops the cached pages: no minute of delay, nor of a note taken back.
     assert_eq!(
         save(&app, incident, "note=Provider+outage&public=on").await,
         303
     );
     let page = get(&app.logged_out(), "/status/status").await.body;
     assert!(page.contains("Provider outage"), "{page}");
+    assert_eq!(save(&app, incident, "note=Provider+outage").await, 303);
+    let page = get(&app.logged_out(), "/status/status").await.body;
+    assert!(!page.contains("Provider outage"));
 }
