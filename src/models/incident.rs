@@ -1,4 +1,5 @@
 use crate::engine::verdict::Failure;
+use crate::models::id_list;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
 /// An outage period: from the first failed check of the series to the first successful check.
@@ -94,7 +95,7 @@ impl Incident {
                AND (resolved_at IS NULL OR resolved_at >= ?)
              ORDER BY resolved_at IS NULL DESC, started_at DESC LIMIT ?",
         )
-        .bind(serde_json::to_string(monitor_ids).expect("integers serialize"))
+        .bind(id_list(monitor_ids))
         .bind(since)
         .bind(limit)
         .fetch_all(pool)

@@ -1,5 +1,5 @@
 use crate::forms::channel::ChannelInput;
-use crate::models::monitor::id_list;
+use crate::models::id_list;
 use crate::notify::channel::ChannelConfig;
 use crate::time::now_ms;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
@@ -134,6 +134,13 @@ impl Channel {
     ) -> Result<Vec<i64>, sqlx::Error> {
         sqlx::query_scalar("SELECT channel_id FROM monitor_channels WHERE monitor_id = ?")
             .bind(monitor_id)
+            .fetch_all(pool)
+            .await
+    }
+
+    /// Every channel's id and name, by name.
+    pub async fn names(pool: &SqlitePool) -> Result<Vec<(i64, String)>, sqlx::Error> {
+        sqlx::query_as("SELECT id, name FROM notification_channels ORDER BY name")
             .fetch_all(pool)
             .await
     }

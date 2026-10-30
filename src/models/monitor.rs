@@ -1,6 +1,6 @@
 use crate::auth::random_token;
 use crate::forms::monitor::{MonitorInput, PUSH};
-use crate::models::{Channel, MonitorState, MonitorStatus};
+use crate::models::{Channel, MonitorState, MonitorStatus, id_list};
 use crate::time::now_ms;
 use sqlx::{FromRow, SqlitePool};
 use unicode_normalization::UnicodeNormalization;
@@ -383,11 +383,6 @@ impl Monitor {
         tx.commit().await?;
         Ok(true)
     }
-}
-
-/// Ids as a JSON array, for `json_each`.
-pub fn id_list(ids: &[i64]) -> String {
-    serde_json::to_string(ids).expect("integers serialize")
 }
 
 /// The key that makes names unique and sorts them: `COLLATE NOCASE` only folds ASCII letters, and an accented letter

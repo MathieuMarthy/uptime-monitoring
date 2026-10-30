@@ -10,28 +10,44 @@ pub const METHODS: [&str; 6] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
 
 const NAME_MAX_CHARS: usize = 100;
 pub const GROUP_MAX_CHARS: usize = 64;
+/// The dashboard's title for the monitors without a group, which no group may take.
+pub const UNGROUPED: &str = "Ungrouped";
+const URL_MAX_BYTES: usize = 2048;
+const BODY_MAX_BYTES: usize = 64 * 1024;
+const KEYWORD_MAX_BYTES: usize = 1024;
+
+/// Why a group name was refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GroupError {
+    TooLong,
+    Reserved,
+}
+
+impl std::fmt::Display for GroupError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooLong => write!(f, "Group must be at most {GROUP_MAX_CHARS} characters."),
+            Self::Reserved => write!(f, "“{UNGROUPED}” is kept for the monitors without a group."),
+        }
+    }
+}
+
 /// A group name as typed, cleaned: invisible characters dropped and spaces collapsed, so groups that
-/// look alike are one. `None` when blank; an error when too long or the reserved name.
-pub fn clean_group(raw: &str) -> Result<Option<String>, String> {
+/// look alike are one. `None` when blank.
+pub fn clean_group(raw: &str) -> Result<Option<String>, GroupError> {
     let group: String = raw
         .chars()
         .filter(|&c| c.is_whitespace() || !(c.is_control() || is_invisible_format(c)))
         .collect();
     let group = group.split_whitespace().collect::<Vec<_>>().join(" ");
     if text_len(&group) > GROUP_MAX_CHARS {
-        Err(format!("Group must be at most {GROUP_MAX_CHARS} characters."))
+        Err(GroupError::TooLong)
     } else if name_key(&group) == name_key(UNGROUPED) {
-        Err(format!("“{UNGROUPED}” is kept for the monitors without a group."))
+        Err(GroupError::Reserved)
     } else {
         Ok((!group.is_empty()).then_some(group))
     }
 }
-
-/// The dashboard's title for the monitors without a group, which no group may take.
-pub const UNGROUPED: &str = "Ungrouped";
-const URL_MAX_BYTES: usize = 2048;
-const BODY_MAX_BYTES: usize = 64 * 1024;
-const KEYWORD_MAX_BYTES: usize = 1024;
 
 /// Validation messages keyed by form field name.
 pub type FieldErrors = BTreeMap<&'static str, String>;
@@ -197,7 +213,7 @@ impl MonitorForm {
         let group_name = match clean_group(&self.group) {
             Ok(group_name) => group_name,
             Err(error) => {
-                errors.insert("group", error);
+                errors.insert("group", error.to_string());
                 None
             }
         };

@@ -1,7 +1,7 @@
 use crate::engine::verdict::CheckOutcome;
 use crate::error::AppError;
 use crate::forms::monitor::{
-    FieldErrors, GROUP_MAX_CHARS, METHODS, MonitorForm, PUSH, UNGROUPED,
+    FieldErrors, GROUP_MAX_CHARS, GroupError, METHODS, MonitorForm, PUSH, UNGROUPED,
 };
 use crate::models::{
     Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
@@ -247,12 +247,7 @@ pub struct DashboardFilter {
 }
 
 impl DashboardFilter {
-    pub fn parse(
-        range: Range,
-        q: Option<&str>,
-        status: Option<&str>,
-        group: Option<&str>,
-    ) -> Self {
+    pub fn parse(range: Range, q: Option<&str>, status: Option<&str>, group: Option<&str>) -> Self {
         let q = q.unwrap_or_default().trim().to_string();
         Self {
             range,
@@ -331,7 +326,7 @@ pub enum BulkDone {
     Linked(u64),
     Unlinked(u64),
     NoneSelected,
-    InvalidGroup,
+    InvalidGroup(GroupError),
 }
 
 impl BulkDone {
@@ -345,7 +340,8 @@ impl BulkDone {
             "linked" => Self::Linked(count),
             "unlinked" => Self::Unlinked(count),
             "none" => Self::NoneSelected,
-            "invalid-group" => Self::InvalidGroup,
+            "group-too-long" => Self::InvalidGroup(GroupError::TooLong),
+            "group-reserved" => Self::InvalidGroup(GroupError::Reserved),
             _ => return None,
         })
     }
@@ -359,9 +355,15 @@ impl BulkDone {
             Self::Linked(n) => ("linked", n),
             Self::Unlinked(n) => ("unlinked", n),
             Self::NoneSelected => return "done=none".to_string(),
-            Self::InvalidGroup => return "done=invalid-group".to_string(),
+            Self::InvalidGroup(GroupError::TooLong) => return "done=group-too-long".to_string(),
+            Self::InvalidGroup(GroupError::Reserved) => return "done=group-reserved".to_string(),
         };
         format!("done={done}&count={count}")
+    }
+
+    /// Nothing was done: shown as an error.
+    pub fn is_error(self) -> bool {
+        matches!(self, Self::NoneSelected | Self::InvalidGroup(_))
     }
 
     pub fn notice(self) -> String {
@@ -371,9 +373,7 @@ impl BulkDone {
         };
         match self {
             Self::NoneSelected => "No monitor selected.".to_string(),
-            Self::InvalidGroup => format!(
-                "Nothing moved: group names have at most {GROUP_MAX_CHARS} characters, and                  “{UNGROUPED}” is kept for the monitors without one."
-            ),
+            Self::InvalidGroup(error) => format!("Nothing moved: {error}"),
             Self::Paused(0)
             | Self::Resumed(0)
             | Self::Deleted(0)
@@ -488,8 +488,8 @@ pub struct IndexTemplate {
     pub missing_group: Option<String>,
     /// The outcome of the bulk action that led here.
     pub done: Option<BulkDone>,
-    /// Every channel, for the bulk link and unlink.
-    pub channels: Vec<Channel>,
+    /// Every channel's id and name, for the bulk link and unlink.
+    pub channels: Vec<(i64, String)>,
     /// Whether the filter leaves any row: without, the list says so and offers to reset.
     pub matches: bool,
     pub range: Range,
@@ -517,7 +517,7 @@ impl IndexTemplate {
         csrf_token: String,
     ) -> Result<Self, AppError> {
         let range = filter.range;
-        let channels = Channel::all(pool).await?;
+        let channels = Channel::names(pool).await?;
         let tz = Settings::load(pool).await?.tz();
         let now = now_ms();
         let monitors = Monitor::summaries(pool).await?;

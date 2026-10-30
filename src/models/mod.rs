@@ -27,3 +27,8 @@ pub use status_page::{ShownMonitor, StatusPage, StatusPageSummary};
 pub fn is_unique_violation(e: &sqlx::Error) -> bool {
     matches!(e, sqlx::Error::Database(db) if db.is_unique_violation())
 }
+
+/// Ids as a JSON array, for `json_each`.
+pub fn id_list(ids: &[i64]) -> String {
+    serde_json::to_string(ids).expect("integers serialize")
+}

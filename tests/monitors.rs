@@ -680,12 +680,24 @@ async fn dashboard_filters_rows_from_the_url() {
     for name in ["Shop", "Gateway", "Café"] {
         assert!(visible(&body, name), "{name}: {body}");
     }
-    assert!(body.contains(r#"All <span class="filter-count">3</span>"#), "{body}");
-    assert!(body.contains(r#"Down <span class="filter-count">1</span>"#), "{body}");
-    assert!(body.contains(r#"Paused <span class="filter-count">1</span>"#), "{body}");
+    assert!(
+        body.contains(r#"All <span class="filter-count">3</span>"#),
+        "{body}"
+    );
+    assert!(
+        body.contains(r#"Down <span class="filter-count">1</span>"#),
+        "{body}"
+    );
+    assert!(
+        body.contains(r#"Paused <span class="filter-count">1</span>"#),
+        "{body}"
+    );
     assert!(body.contains(r#"<option value="API">"#), "{body}");
     assert!(body.contains(r#"<option value="Ungrouped">"#), "{body}");
-    assert!(!body.contains(r#"class="empty-state" data-no-match>"#), "{body}");
+    assert!(
+        !body.contains(r#"class="empty-state" data-no-match>"#),
+        "{body}"
+    );
 
     // Status: the other rows and the groups left empty are hidden.
     let body = get(&app, "/?status=down").await.body;
@@ -714,7 +726,10 @@ async fn dashboard_filters_rows_from_the_url() {
 
     // Nothing left: the empty state offers to reset, keeping the range.
     let body = get(&app, "/?q=nothing&range=90d").await.body;
-    assert!(body.contains(r#"class="empty-state" data-no-match>"#), "{body}");
+    assert!(
+        body.contains(r#"class="empty-state" data-no-match>"#),
+        "{body}"
+    );
     assert!(body.contains(r#"href="/?range=90d" data-reset"#), "{body}");
 
     // Unknown values filter nothing.
@@ -727,7 +742,9 @@ async fn dashboard_filters_rows_from_the_url() {
     assert!(!visible(&body, "Shop"));
 
     // A repeated key keeps its first value and the other parameters.
-    let body = get(&app, "/?range=90d&status=down&status=paused").await.body;
+    let body = get(&app, "/?range=90d&status=down&status=paused")
+        .await
+        .body;
     assert_eq!(body.matches(r#"class="tick tick-"#).count(), 3 * 90);
     assert!(visible(&body, "Gateway") && !visible(&body, "Café"));
 }
@@ -736,7 +753,9 @@ async fn dashboard_filters_rows_from_the_url() {
 async fn dashboard_links_keep_the_filters() {
     let (app, _) = common::test_app().await;
     create_in(&app, "Shop", "Web").await;
-    let body = get(&app, "/?range=90d&q=a+b%26c&status=down&group=Web").await.body;
+    let body = get(&app, "/?range=90d&q=a+b%26c&status=down&group=Web")
+        .await
+        .body;
     assert!(
         body.contains(r#"href="/?q=a+b%26c&#38;status=down&#38;group=Web""#),
         "24 hours keeps the filters: {body}"
@@ -750,8 +769,14 @@ async fn dashboard_links_keep_the_filters() {
         "{body}"
     );
     // The search form carries what its fields do not.
-    assert!(body.contains(r#"<input type="hidden" name="range" value="90d">"#), "{body}");
-    assert!(body.contains(r#"<input type="hidden" name="status" value="down">"#), "{body}");
+    assert!(
+        body.contains(r#"<input type="hidden" name="range" value="90d">"#),
+        "{body}"
+    );
+    assert!(
+        body.contains(r#"<input type="hidden" name="status" value="down">"#),
+        "{body}"
+    );
 }
 
 async fn paused_ids(pool: &SqlitePool) -> Vec<i64> {
@@ -772,7 +797,12 @@ async fn bulk_pause_resume_and_delete_count_what_changed() {
         .await
         .unwrap();
     // Unknown ids are ignored; the dashboard filter comes back with the notice.
-    let r = post_form(&app, "/monitors/bulk", "action=pause&id=1&id=2&id=99&back=%2F%3Fstatus%3Ddown").await;
+    let r = post_form(
+        &app,
+        "/monitors/bulk",
+        "action=pause&id=1&id=2&id=99&back=%2F%3Fstatus%3Ddown",
+    )
+    .await;
     assert_redirect(&r, "/?status=down&done=paused&count=2");
     assert_eq!(paused_ids(&pool).await, [1, 2]);
     let (status,): (String,) =
@@ -787,7 +817,12 @@ async fn bulk_pause_resume_and_delete_count_what_changed() {
     let r = post_form(&app, "/monitors/bulk", "action=resume&id=1&id=2").await;
     assert_redirect(&r, "/?done=resumed&count=2");
     assert_eq!(paused_ids(&pool).await, [3]);
-    let r = post_form(&app, "/monitors/bulk", "action=delete&id=1&id=3&back=%2F%3Frange%3D90d").await;
+    let r = post_form(
+        &app,
+        "/monitors/bulk",
+        "action=delete&id=1&id=3&back=%2F%3Frange%3D90d",
+    )
+    .await;
     assert_redirect(&r, "/?range=90d&done=deleted&count=2");
     assert_eq!(count_monitors(&pool).await, 1);
 }
@@ -803,15 +838,31 @@ async fn bulk_moves_to_a_group_or_out_of_it() {
             .await
             .unwrap()
     };
-    let r = post_form(&app, "/monitors/bulk", "action=group&group=+Prod++site+&id=1&id=2").await;
+    let r = post_form(
+        &app,
+        "/monitors/bulk",
+        "action=group&group=+Prod++site+&id=1&id=2",
+    )
+    .await;
     assert_redirect(&r, "/?done=moved&count=2");
-    assert_eq!(groups().await, [Some("Prod site".into()), Some("Prod site".into())]);
+    assert_eq!(
+        groups().await,
+        [Some("Prod site".into()), Some("Prod site".into())]
+    );
     let r = post_form(&app, "/monitors/bulk", "action=group&group=&id=2").await;
     assert_redirect(&r, "/?done=moved&count=1");
     assert_eq!(groups().await, [Some("Prod site".into()), None]);
     // The reserved name is refused, nothing moves.
     let r = post_form(&app, "/monitors/bulk", "action=group&group=ungrouped&id=1").await;
-    assert_redirect(&r, "/?done=invalid-group");
+    assert_redirect(&r, "/?done=group-reserved");
+    let long = "x".repeat(65);
+    let r = post_form(
+        &app,
+        "/monitors/bulk",
+        &format!("action=group&group={long}&id=1"),
+    )
+    .await;
+    assert_redirect(&r, "/?done=group-too-long");
     assert_eq!(groups().await, [Some("Prod site".into()), None]);
 }
 
@@ -821,12 +872,27 @@ async fn bulk_links_and_unlinks_a_channel() {
     create(&app, "a").await;
     create(&app, "b").await;
     let channel = add_channel(&pool, "Ops", true).await;
-    let r = post_form(&app, "/monitors/bulk", &format!("action=link&channel={channel}&id=1&id=2")).await;
+    let r = post_form(
+        &app,
+        "/monitors/bulk",
+        &format!("action=link&channel={channel}&id=1&id=2"),
+    )
+    .await;
     assert_redirect(&r, "/?done=linked&count=2");
     assert_eq!(linked_channels(&pool, 2).await, [channel]);
-    let r = post_form(&app, "/monitors/bulk", &format!("action=link&channel={channel}&id=1")).await;
+    let r = post_form(
+        &app,
+        "/monitors/bulk",
+        &format!("action=link&channel={channel}&id=1"),
+    )
+    .await;
     assert_redirect(&r, "/?done=linked&count=0");
-    let r = post_form(&app, "/monitors/bulk", &format!("action=unlink&channel={channel}&id=1")).await;
+    let r = post_form(
+        &app,
+        "/monitors/bulk",
+        &format!("action=unlink&channel={channel}&id=1"),
+    )
+    .await;
     assert_redirect(&r, "/?done=unlinked&count=1");
     assert!(linked_channels(&pool, 1).await.is_empty());
     assert_eq!(linked_channels(&pool, 2).await, [channel]);
@@ -842,14 +908,30 @@ async fn bulk_rejects_odd_requests() {
     let r = post_form(&app, "/monitors/bulk", "action=pause&back=%2F").await;
     assert_redirect(&r, "/?done=none");
     // Only a dashboard address is followed back.
-    for back in ["%2F%2Fevil.example", "https%3A%2F%2Fevil.example", "%2Fmonitors%2F1"] {
-        let r = post_form(&app, "/monitors/bulk", &format!("action=pause&id=1&back={back}")).await;
+    for back in [
+        "%2F%2Fevil.example",
+        "https%3A%2F%2Fevil.example",
+        "%2Fmonitors%2F1",
+        "%2F%3F%0D%0ALocation%3A+x",
+        "%2F%3Fq%3D%C3%A9",
+    ] {
+        let r = post_form(
+            &app,
+            "/monitors/bulk",
+            &format!("action=pause&id=1&back={back}"),
+        )
+        .await;
         assert_eq!(r.headers["location"], "/?done=paused&count=1", "{back}");
         post_form(&app, "/monitors/bulk", "action=resume&id=1").await;
     }
     let r = post_form(&app, "/monitors/bulk", "action=explode&id=1").await;
     assert_eq!(r.status, 400, "{}", r.body);
     let r = post_form(&app, "/monitors/bulk", "action=pause&id=x").await;
+    assert_eq!(r.status, 400, "{}", r.body);
+    // The channel menu is sent with every action; only link and unlink read it.
+    let r = post_form(&app, "/monitors/bulk", "action=pause&id=1&channel=").await;
+    assert_redirect(&r, "/?done=paused&count=1");
+    let r = post_form(&app, "/monitors/bulk", "action=link&id=1&channel=").await;
     assert_eq!(r.status, 400, "{}", r.body);
 }
 
@@ -859,12 +941,21 @@ async fn dashboard_offers_bulk_actions_and_shows_their_outcome() {
     create_in(&app, "a", "Web").await;
     add_channel(&pool, "Ops", true).await;
     let body = get(&app, "/").await.body;
-    assert!(body.contains(r#"<form id="bulk-form" method="POST" action="/monitors/bulk""#), "{body}");
+    assert!(
+        body.contains(r#"<form id="bulk-form" method="POST" action="/monitors/bulk""#),
+        "{body}"
+    );
     assert!(body.contains(r#"name="id" value="1""#), "{body}");
     assert!(body.contains(r#"<option value="1">Ops</option>"#), "{body}");
-    assert!(body.contains(r#"<input type="hidden" name="back" value="/">"#), "{body}");
+    assert!(
+        body.contains(r#"<input type="hidden" name="back" value="/">"#),
+        "{body}"
+    );
     let body = get(&app, "/?status=down").await.body;
-    assert!(body.contains(r#"name="back" value="/?status=down">"#), "{body}");
+    assert!(
+        body.contains(r#"name="back" value="/?status=down">"#),
+        "{body}"
+    );
     assert!(!body.contains(r#"role="status""#), "no notice unasked");
 
     for (query, notice) in [
@@ -874,12 +965,29 @@ async fn dashboard_offers_bulk_actions_and_shows_their_outcome() {
         ("done=moved&count=0", "No monitor changed."),
         ("done=linked&count=2", "Channel linked to 2 monitors."),
         ("done=unlinked&count=1", "Channel unlinked from 1 monitor."),
-        ("done=none", "No monitor selected."),
-        ("done=invalid-group", "Nothing moved: group names have at most 64 characters"),
     ] {
         let body = get(&app, &format!("/?{query}")).await.body;
         assert!(body.contains(notice), "{query}: {body}");
         assert!(body.contains(r#"role="status""#), "{query}");
+    }
+    // What changed nothing reads as an error.
+    for (query, notice) in [
+        ("done=none", "No monitor selected."),
+        (
+            "done=group-reserved",
+            "Nothing moved: “Ungrouped” is kept for the monitors without a group.",
+        ),
+        (
+            "done=group-too-long",
+            "Nothing moved: Group must be at most 64 characters.",
+        ),
+    ] {
+        let body = get(&app, &format!("/?{query}")).await.body;
+        assert!(body.contains(notice), "{query}: {body}");
+        assert!(
+            body.contains(r#"class="error-banner" role="alert""#),
+            "{query}"
+        );
     }
     let body = get(&app, "/?done=bogus&count=2").await.body;
     assert!(!body.contains(r#"role="status""#));

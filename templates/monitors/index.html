@@ -69,7 +69,11 @@
     {% endif %}
 
     {%- if let Some(done) = done %}
+    {%- if done.is_error() %}
+    <div class="error-banner" role="alert">{{ done.notice() }}</div>
+    {%- else %}
     <div class="success-banner" role="status">{{ done.notice() }}</div>
+    {%- endif %}
     {%- endif %}
 
     <section aria-label="Monitors" class="panel monitor-panel">
@@ -110,8 +114,8 @@
                 <span class="bulk-channel">
                     <label class="visually-hidden" for="bulk-channel">Alert channel</label>
                     <select class="field" id="bulk-channel" name="channel">
-                        {%- for channel in channels %}
-                        <option value="{{ channel.id }}">{{ channel.name }}</option>
+                        {%- for (id, name) in channels %}
+                        <option value="{{ id }}">{{ name }}</option>
                         {%- endfor %}
                     </select>
                     <button class="button-secondary" type="submit" name="action" value="link">Link</button>

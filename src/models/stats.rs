@@ -1,3 +1,4 @@
+use crate::models::id_list;
 use sqlx::{FromRow, SqlitePool};
 
 /// Availability of one monitor over one time bucket, summed from its raw checks.
@@ -47,7 +48,7 @@ impl Bucket {
         .bind(from)
         .bind(width)
         .bind(to)
-        .bind(monitor_ids.map(|ids| serde_json::to_string(ids).expect("integers serialize")))
+        .bind(monitor_ids.map(id_list))
         .fetch_all(pool)
         .await
     }

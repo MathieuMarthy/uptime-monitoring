@@ -66,7 +66,7 @@ async fn bulk(State(state): State<AppState>, body: String) -> Result<Redirect, A
             "action" => action = value.into_owned(),
             "id" => ids.push(value.parse::<i64>().map_err(|_| invalid())?),
             "group" => group = value.into_owned(),
-            "channel" => channel = Some(value.parse::<i64>().map_err(|_| invalid())?),
+            "channel" => channel = Some(value.into_owned()),
             "back" => back = Some(value.into_owned()),
             _ => {}
         }
@@ -94,22 +94,24 @@ async fn bulk(State(state): State<AppState>, body: String) -> Result<Redirect, A
                 Ok(group) => {
                     BulkDone::Moved(Monitor::set_group(&state.db, &ids, group.as_deref()).await?)
                 }
-                Err(_) => BulkDone::InvalidGroup,
+                Err(error) => BulkDone::InvalidGroup(error),
             },
             "link" => {
-                let channel = channel.ok_or_else(invalid)?;
+                let channel = parse_channel(channel)?;
                 BulkDone::Linked(Channel::link_monitors(&state.db, channel, &ids).await?)
             }
             "unlink" => {
-                let channel = channel.ok_or_else(invalid)?;
+                let channel = parse_channel(channel)?;
                 BulkDone::Unlinked(Channel::unlink_monitors(&state.db, channel, &ids).await?)
             }
             _ => return Err(invalid()),
         }
     };
-    // Only a dashboard address: anything else could send the browser off the site.
+    // Only a dashboard address: anything else could send the browser off the site. Visible ASCII
+    // only, as the browser encodes it: a header value cannot hold the rest.
     let back = back
         .filter(|b| b == "/" || b.starts_with("/?"))
+        .filter(|b| b.bytes().all(|c| c.is_ascii_graphic()))
         .unwrap_or_else(|| "/".to_string());
     let separator = if back.contains('?') { '&' } else { '?' };
     Ok(Redirect::to(&format!("{back}{separator}{}", done.query())))
@@ -340,6 +342,13 @@ async fn renew_push_token(
     } else {
         Err(AppError::NotFound)
     }
+}
+
+/// The channel of a bulk link or unlink: only those actions read it.
+fn parse_channel(channel: Option<String>) -> Result<i64, AppError> {
+    channel
+        .and_then(|c| c.parse().ok())
+        .ok_or(AppError::InvalidRequest(StatusCode::BAD_REQUEST))
 }
 
 /// The create (`id` = `None`) or edit form, with every channel for the alert checkboxes: a

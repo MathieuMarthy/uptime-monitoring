@@ -1,4 +1,4 @@
-use crate::models::Bucket;
+use crate::models::{Bucket, id_list};
 use sqlx::{FromRow, SqlitePool};
 
 /// One monitor's availability over one local day, rolled up from its raw checks.
@@ -37,7 +37,7 @@ impl DailyStat {
              WHERE monitor_id IN (SELECT value FROM json_each(?)) AND day >= ?
              ORDER BY monitor_id, day",
         )
-        .bind(serde_json::to_string(monitor_ids).expect("integers serialize"))
+        .bind(id_list(monitor_ids))
         .bind(first_day)
         .fetch_all(pool)
         .await
