@@ -6,12 +6,12 @@ use crate::state::AppState;
 use crate::views::monitors::{
     DashboardFilter, DetailTemplate, FormTemplate, IndexTemplate, Range, test_summary,
 };
-use axum::extract::rejection::{FormRejection, QueryRejection};
-use axum::extract::{Query, State};
+use axum::extract::rejection::FormRejection;
+use axum::extract::{RawQuery, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Form, Router};
-use serde::Deserialize;
+use std::collections::HashMap;
 
 /// The Test button's checks stop after this long, whatever the monitor's timeout.
 const TEST_TIMEOUT_S: i64 = 30;
@@ -31,25 +31,23 @@ pub fn router() -> Router<AppState> {
         .route("/monitors/{id}/push-token", post(renew_push_token))
 }
 
-#[derive(Deserialize, Default)]
-struct IndexQuery {
-    range: Option<String>,
-    q: Option<String>,
-    status: Option<String>,
-    group: Option<String>,
-}
-
+/// Reads the parameters one by one, keeping the first of a repeated key: a hand-edited link
+/// loses only what it got wrong.
 async fn index(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
-    query: Result<Query<IndexQuery>, QueryRejection>,
+    RawQuery(query): RawQuery,
 ) -> Result<IndexTemplate, AppError> {
-    let query = query.map(|Query(q)| q).unwrap_or_default();
+    let mut params: HashMap<String, String> = HashMap::new();
+    for (key, value) in form_urlencoded::parse(query.unwrap_or_default().as_bytes()) {
+        params.entry(key.into_owned()).or_insert(value.into_owned());
+    }
+    let param = |key: &str| params.get(key).map(String::as_str);
     let filter = DashboardFilter::parse(
-        Range::parse(query.range.as_deref()),
-        query.q.as_deref(),
-        query.status.as_deref(),
-        query.group.as_deref(),
+        Range::parse(param("range")),
+        param("q"),
+        param("status"),
+        param("group"),
     );
     IndexTemplate::load(&state.db, filter, session.csrf_token).await
 }

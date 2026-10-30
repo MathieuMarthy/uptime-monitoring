@@ -51,8 +51,11 @@
                    placeholder="Search name, address, group" title="Press / to search, Esc to clear">
             {%- if grouped %}
             <label class="visually-hidden" for="filter-group">Group</label>
-            <select class="field" id="filter-group" name="group">
+            <select class="field" id="filter-group" name="group" data-live>
                 <option value="">All groups</option>
+                {%- if let Some(group) = missing_group %}
+                <option value="{{ group }}" selected>{{ group }}</option>
+                {%- endif %}
                 {%- for group in groups %}
                 <option value="{{ group.label() }}"{% if filter.is_group(group.label()) %} selected{% endif %}>{{ group.label() }}</option>
                 {%- endfor %}
@@ -92,7 +95,7 @@
                 <ul class="monitor-list">
                     {%- for row in group.rows %}
                     {%- let m = row.monitor %}
-                    <li data-search="{{ row.search_text() }}" data-status="{{ row.status_key() }}"{% if row.hidden %} hidden{% endif %}>
+                    <li data-search="{{ row.search }}" data-status="{{ row.status_key() }}"{% if row.hidden %} hidden{% endif %}>
                         <a class="monitor-row row-{{ row.status_key() }}" href="/monitors/{{ m.id }}">
                             <span class="monitor-name">
                                 <span class="lamp lamp-{{ row.status_key() }}" aria-hidden="true"></span>

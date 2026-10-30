@@ -79,17 +79,24 @@ fn status_rank(paused: bool, status: MonitorStatus) -> u8 {
 pub struct MonitorRow {
     pub monitor: MonitorSummary,
     pub heartbeat: Heartbeat,
+    /// What the search matches: name, address and group.
+    pub search: String,
     /// Left out by the dashboard filter: rendered hidden, so `filter.js` can show it again.
     pub hidden: bool,
 }
 
 impl MonitorRow {
-    /// What the search matches: name, address and group.
-    pub fn search_text(&self) -> String {
-        let m = &self.monitor;
-        format!("{} {} {}", m.name, m.url, m.group_name.as_deref().unwrap_or(""))
+    fn new(monitor: MonitorSummary, heartbeat: Heartbeat) -> Self {
+        let group = monitor.group_name.as_deref().unwrap_or("");
+        let search = format!("{} {} {group}", monitor.name, monitor.url)
             .trim_end()
-            .to_string()
+            .to_string();
+        Self {
+            monitor,
+            heartbeat,
+            search,
+            hidden: false,
+        }
     }
 
     pub fn status_label(&self) -> &'static str {
@@ -230,6 +237,8 @@ pub struct DashboardFilter {
     pub range: Range,
     /// Searched in the name, address and group, ignoring case and accents.
     pub q: String,
+    /// `q` folded once for every row.
+    folded: String,
     pub status: Option<StatusFilter>,
     /// A group name, ignoring case, or `Ungrouped` for the monitors without one.
     pub group: Option<String>,
@@ -242,9 +251,11 @@ impl DashboardFilter {
         status: Option<&str>,
         group: Option<&str>,
     ) -> Self {
+        let q = q.unwrap_or_default().trim().to_string();
         Self {
             range,
-            q: q.unwrap_or_default().trim().to_string(),
+            folded: fold(&q),
+            q,
             status: StatusFilter::parse(status),
             group: group
                 .map(str::trim)
@@ -253,13 +264,11 @@ impl DashboardFilter {
         }
     }
 
-    fn matches(&self, row: &MonitorRow, group: &str) -> bool {
-        self.status.is_none_or(|s| s.matches(row))
-            && self
-                .group
-                .as_deref()
-                .is_none_or(|g| name_key(g) == name_key(group))
-            && fold(&row.search_text()).contains(&fold(&self.q))
+    /// `in_group`: whether the row's group passes the group filter.
+    fn matches(&self, row: &MonitorRow, in_group: bool) -> bool {
+        in_group
+            && self.status.is_none_or(|s| s.matches(row))
+            && fold(&row.search).contains(&self.folded)
     }
 
     /// Whether `label` is the chosen group.
@@ -296,8 +305,11 @@ impl DashboardFilter {
     }
 
     /// `/` with only the range: every monitor.
-    pub fn reset_url(&self) -> String {
-        Self::parse(self.range, None, None, None).url(self.range, None)
+    pub fn reset_url(&self) -> &'static str {
+        match self.range {
+            Range::Hours => "/",
+            Range::Days => "/?range=90d",
+        }
     }
 }
 
@@ -395,6 +407,8 @@ pub struct IndexTemplate {
     pub grouped: bool,
     pub filter: DashboardFilter,
     pub chips: Vec<StatusChip>,
+    /// The chosen group when no monitor is in it.
+    pub missing_group: Option<String>,
     /// Whether the filter leaves any row: without, the list says so and offers to reset.
     pub matches: bool,
     pub range: Range,
@@ -438,12 +452,11 @@ impl IndexTemplate {
         };
         let rows: Vec<MonitorRow> = monitors
             .into_iter()
-            .map(|monitor| MonitorRow {
-                heartbeat: heartbeats
+            .map(|monitor| {
+                let heartbeat = heartbeats
                     .remove(&monitor.id)
-                    .unwrap_or_else(|| Heartbeat::empty(&tz, now)),
-                monitor,
-                hidden: false,
+                    .unwrap_or_else(|| Heartbeat::empty(&tz, now));
+                MonitorRow::new(monitor, heartbeat)
             })
             .collect();
 
@@ -482,13 +495,18 @@ impl IndexTemplate {
         let grouped = rows.iter().any(|r| r.monitor.group_name.is_some());
         let mut groups = MonitorGroup::split(rows);
         for group in &mut groups {
-            let label = group.label().to_string();
+            let in_group = filter.group.is_none() || filter.is_group(group.label());
             for row in &mut group.rows {
-                row.hidden = !filter.matches(row, &label);
+                row.hidden = !filter.matches(row, in_group);
             }
             group.hidden = group.rows.iter().all(|r| r.hidden);
         }
         let matches = groups.iter().any(|g| !g.hidden);
+        // A chosen group no monitor has any more (an old link) stays in the menu, matching nothing.
+        let missing_group = filter
+            .group
+            .clone()
+            .filter(|_| groups.iter().all(|g| !filter.is_group(g.label())));
 
         Ok(Self {
             headline,
@@ -496,6 +514,7 @@ impl IndexTemplate {
             grouped,
             filter,
             chips,
+            missing_group,
             matches,
             range,
             axis,

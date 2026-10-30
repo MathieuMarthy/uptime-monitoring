@@ -720,6 +720,16 @@ async fn dashboard_filters_rows_from_the_url() {
     // Unknown values filter nothing.
     let body = get(&app, "/?status=bogus&group=").await.body;
     assert!(visible(&body, "Shop") && visible(&body, "Café"));
+
+    // A group that no longer exists stays chosen in the menu, matching nothing.
+    let body = get(&app, "/?group=Gone").await.body;
+    assert!(body.contains(r#"<option value="Gone" selected>"#), "{body}");
+    assert!(!visible(&body, "Shop"));
+
+    // A repeated key keeps its first value and the other parameters.
+    let body = get(&app, "/?range=90d&status=down&status=paused").await.body;
+    assert_eq!(body.matches(r#"class="tick tick-"#).count(), 3 * 90);
+    assert!(visible(&body, "Gateway") && !visible(&body, "Café"));
 }
 
 #[tokio::test]

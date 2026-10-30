@@ -6,18 +6,20 @@ const form = document.getElementById("filter-form");
 
 if (form) {
     const input = document.getElementById("search-monitors");
-    const select = document.getElementById("filter-group");
     const noMatch = document.querySelector("[data-no-match]");
-    const range = new URLSearchParams(location.search).get("range") === "90d" ? "90d" : "";
-    const fold = (text) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-    let status = new URLSearchParams(location.search).get("status") ?? "";
-    if (!["down", "paused"].includes(status)) {
-        status = "";
-    }
+    const params = new URLSearchParams(location.search);
+    const range = params.get("range") === "90d" ? "90d" : "";
+    // As the server: without combining marks, and group names compared like `name_key`.
+    const fold = (text) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+    const key = (name) => name.toLowerCase().normalize("NFC");
+    let status = ["down", "paused"].includes(params.get("status")) ? params.get("status") : "";
+    // Read from the URL, not the menu: the menu is missing when no monitor has a group.
+    let group = params.get("group")?.trim() ?? "";
+    const groupOf = (item) => item.closest("details[data-group]")?.dataset.group ?? "Ungrouped";
 
     // The dashboard URL with the current filter, some values replaced.
     const url = (next = {}) => {
-        const values = { range, q: input.value.trim(), status, group: select?.value ?? "", ...next };
+        const values = { range, q: input.value.trim(), status, group, ...next };
         const params = new URLSearchParams();
         for (const [name, value] of Object.entries(values)) {
             if (value) {
@@ -29,23 +31,19 @@ if (form) {
 
     const filter = () => {
         const query = fold(input.value.trim());
-        const group = select?.value ?? "";
         for (const item of document.querySelectorAll("li[data-search]")) {
             item.hidden =
-                !fold(item.dataset.search).includes(query) || (status !== "" && item.dataset.status !== status);
+                !fold(item.dataset.search).includes(query) ||
+                (status !== "" && item.dataset.status !== status) ||
+                (group !== "" && key(groupOf(item)) !== key(group));
         }
         for (const details of document.querySelectorAll("details[data-group]")) {
-            details.hidden =
-                (group !== "" && details.dataset.group !== group) ||
-                !details.querySelector("li[data-search]:not([hidden])");
+            details.hidden = !details.querySelector("li[data-search]:not([hidden])");
             if (query && !details.hidden) {
                 details.open = true; // a folded group would hide its matches
             }
         }
-        const matches = [...document.querySelectorAll("li[data-search]:not([hidden])")].some(
-            (item) => !item.closest("details[hidden]"),
-        );
-        noMatch.hidden = matches;
+        noMatch.hidden = !document.querySelector("li[data-search]:not([hidden])");
 
         for (const chip of document.querySelectorAll("#status-filter a")) {
             chip.href = url({ status: chip.dataset.status });
@@ -68,7 +66,13 @@ if (form) {
         filter();
     });
     input.addEventListener("input", filter);
-    select?.addEventListener("change", filter);
+    // The group menu is swapped by the live refresh: listen above it.
+    document.addEventListener("change", (event) => {
+        if (event.target.id === "filter-group") {
+            group = event.target.value;
+            filter();
+        }
+    });
     input.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && input.value) {
             input.value = "";
@@ -87,7 +91,8 @@ if (form) {
     document.addEventListener("click", (event) => {
         const chip = event.target.closest("#status-filter a");
         const reset = event.target.closest("[data-reset]");
-        if (!chip && !reset) {
+        const newTab = event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey;
+        if ((!chip && !reset) || newTab) {
             return;
         }
         event.preventDefault();
@@ -95,7 +100,9 @@ if (form) {
             status = chip.dataset.status;
         } else {
             status = "";
+            group = "";
             input.value = "";
+            const select = document.getElementById("filter-group");
             if (select) {
                 select.value = "";
             }
