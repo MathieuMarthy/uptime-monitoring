@@ -41,7 +41,8 @@ const USER_AGENT: &str = concat!("uptime-monitoring/", env!("CARGO_PKG_VERSION")
 pub struct MonitorRef {
     pub id: i64,
     pub name: String,
-    pub url: String,
+    /// `None` for a push monitor, which has no target.
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

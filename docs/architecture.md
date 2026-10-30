@@ -171,10 +171,12 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Push monitors.** `kind = 'push'`: no request goes out. `GET|HEAD|POST /push/{token}` looks up the active monitor
   (unknown token → 404, paused → 200 and ignored) and hands a success, or with `?status=down&msg=…` a `reported`
   failure, to `EngineHandle::ping`. Pings go through a bounded queue (256) to the supervisor, then to the monitor's
-  task (4); beyond, they are dropped. The task (`Scheduler::run_push`) records a ping at most once per second. With no
-  ping `interval_s + grace_s` after the last one, it records a `missed` failure; misses then repeat at the normal pace
-  below. The first deadline counts from the last check or the task's start, whichever is later, so a restart is not a
-  miss. Recording, incidents and alerts are shared with HTTP checks.
+  task (4); beyond, they are dropped, as are those queued when a reload restarts the task. The task
+  (`Scheduler::run_push`) records a ping at most once per second; a ping ready at a deadline wins over it. With no
+  ping `interval_s + grace_s` after the last check, it records a `missed` failure, then one more per `interval_s` (a
+  push monitor stores `retry_interval_s = interval_s`: `failure_threshold` counts missed runs). Deadlines count from
+  the last recorded check, so a restart or an edit does not postpone them; an overdue monitor gets `grace_s` after the
+  task starts. Recording, incidents and alerts are shared with HTTP checks; alerts carry no URL (`null` in webhooks).
 - **Pace.** The next check starts `interval_s` after the start of the previous one, or `retry_interval_s` while a
   failure series has not reached `failure_threshold`.
 - **Check.** One shared client per `(follow_redirects, ignore_tls_errors)` pair, no proxy, no connection reuse (each

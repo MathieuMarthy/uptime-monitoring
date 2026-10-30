@@ -1,6 +1,6 @@
 //! What a notification says, whatever the channel. Pure: the clock and timezone are passed in.
 
-use crate::notify::{Event, Notification};
+use crate::notify::{Event, MonitorRef, Notification};
 use crate::time::{day_of, days_left, format_datetime, format_duration};
 use jiff::tz::TimeZone;
 
@@ -66,8 +66,7 @@ impl Message {
             ),
         };
         let text = match &notification.monitor {
-            // A push monitor has no URL.
-            Some(monitor) if !monitor.url.is_empty() => format!("{text}\n{}", monitor.url),
+            Some(MonitorRef { url: Some(url), .. }) => format!("{text}\n{url}"),
             _ => text,
         };
         let link = public_url
@@ -93,7 +92,7 @@ mod tests {
             monitor: Some(MonitorRef {
                 id: 1,
                 name: "API".to_string(),
-                url: "https://api.example.com".to_string(),
+                url: Some("https://api.example.com".to_string()),
             }),
             event,
             at: 10 * DAY_MS,
@@ -129,7 +128,7 @@ mod tests {
             since: 10 * DAY_MS,
             cause: "no ping for 120 s".to_string(),
         });
-        down.monitor.as_mut().unwrap().url = String::new();
+        down.monitor.as_mut().unwrap().url = None;
         let m = Message::new(&down, &TimeZone::UTC, None);
         assert_eq!(m.text, "no ping for 120 s\nDown since 1970-01-11 00:00.");
     }

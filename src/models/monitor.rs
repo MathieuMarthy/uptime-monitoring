@@ -56,7 +56,8 @@ impl Monitor {
         self.kind == PUSH
     }
 
-    /// The active push monitor behind a ping URL; `None` for an unknown token.
+    /// The push monitor behind a ping URL, and whether it is paused; `None` for an unknown
+    /// token.
     pub async fn find_push(
         pool: &SqlitePool,
         token: &str,

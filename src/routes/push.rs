@@ -41,7 +41,8 @@ async fn push(
         .await?
         .ok_or(AppError::NotFound)?;
     if !paused {
-        let query = query.map(|Query(q)| q).unwrap_or_default();
+        // Refused rather than read as a success: it may have been a failure report.
+        let Query(query) = query.map_err(|r| AppError::InvalidRequest(r.status()))?;
         state.engine.ping(id, outcome(&query));
     }
     Ok(([(header::CACHE_CONTROL, "no-store")], "ok"))

@@ -35,7 +35,7 @@
             <p class="detail-config">
                 {% if m.is_push() %}
                 Push, a ping expected every {{ m.interval_s }} s with {{ m.grace_s }} s of grace, down after
-                {{ m.failure_threshold }} {% if m.failure_threshold == 1 %}miss{% else %}misses in a row{% endif %}.
+                {{ m.failure_threshold }} missed {% if m.failure_threshold == 1 %}run{% else %}runs in a row{% endif %}.
                 {% else %}
                 <a href="{{ m.url }}" target="_blank" rel="noopener noreferrer">{{ m.url }}</a>,
                 {{ m.method }} every {{ m.interval_s }} s, down after {{ m.failure_threshold }}
@@ -71,7 +71,7 @@
         <p class="form-hint">Set <code>PUBLIC_URL</code> to show the full address.</p>
         {% endif %}
         <p class="form-hint">To report a failure, add <code>?status=down&amp;msg=…</code>. For example, in a crontab:</p>
-        <pre class="code-block"><code>backup.sh &amp;&amp; curl -fsS -m 10 {{ push_url }} || curl -fsS -m 10 "{{ push_url }}?status=down&amp;msg=backup%20failed"</code></pre>
+        <pre class="code-block"><code>if backup.sh; then curl -fsS -m 10 {{ push_url }}; else curl -fsS -m 10 "{{ push_url }}?status=down&amp;msg=backup%20failed"; fi</code></pre>
         <form action="/monitors/{{ m.id }}/push-token" method="POST" class="inline-form"
               data-confirm="The current URL will stop working at once. Generate a new one?">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

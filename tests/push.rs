@@ -212,3 +212,40 @@ async fn edit_keeps_the_token_and_switching_to_http_drops_it() {
     assert_eq!(post_form(&app, &edit, http).await.status, 303);
     assert_eq!(token(&pool, id).await, None);
 }
+
+#[tokio::test]
+async fn failure_with_an_undecodable_message_is_still_a_failure() {
+    let (app, pool) = common::test_app_with_engine().await;
+    let id = create(&app, PUSH).await;
+    let token = token(&pool, id).await.unwrap();
+    let path = format!("/push/{token}?status=down&msg=%FF%FE");
+    assert_eq!(ping(&app, &path).await, 200);
+    wait_for_checks(&pool, id, 1, 5).await;
+    assert_eq!(checks(&pool, id).await[0].1.as_deref(), Some("reported"));
+}
+
+#[tokio::test]
+async fn overdue_monitor_misses_soon_after_a_restart() {
+    let (app, pool) = common::test_app().await;
+    let form = PUSH
+        .replace("interval_s=60", "interval_s=3600")
+        .replace("grace_s=60", "grace_s=1");
+    let id = create(&app, &form).await;
+    // Last ping two hours ago, recorded before the engine (re)starts.
+    let two_hours_ago = uptime_monitoring::time::now_ms() - 7_200_000;
+    sqlx::query("UPDATE monitor_state SET status = 'up', last_check_at = ? WHERE monitor_id = ?")
+        .bind(two_hours_ago)
+        .bind(id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let _engine = uptime_monitoring::engine::start(
+        pool.clone(),
+        uptime_monitoring::engine::guard::Guard::new(false),
+        uptime_monitoring::notify::Notifier::default(),
+    )
+    .await
+    .unwrap();
+    wait_for_checks(&pool, id, 1, 4).await;
+    assert_eq!(checks(&pool, id).await[0].1.as_deref(), Some("missed"));
+}

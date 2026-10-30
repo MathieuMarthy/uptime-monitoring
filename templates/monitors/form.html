@@ -96,7 +96,7 @@
                         {% call field_error("interval_s") %}{% endcall %}
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                         <label class="form-label" for="retry_interval_s">Retry Interval (seconds)</label>
                         <input class="form-input" id="retry_interval_s" name="retry_interval_s" type="number"
                                min="5" max="86400" step="1" value="{{ form.retry_interval_s }}"/>

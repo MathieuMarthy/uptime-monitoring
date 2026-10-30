@@ -206,9 +206,14 @@ impl MonitorForm {
             .map_err(|m| errors.insert("interval_s", m))
             .ok();
 
-        let retry_interval_s = parse_bounded(&self.retry_interval_s, 5, 86_400)
-            .map_err(|m| errors.insert("retry_interval_s", m))
-            .ok();
+        // A push job runs once per interval: each miss is one missed run.
+        let retry_interval_s = if kind == PUSH {
+            interval_s
+        } else {
+            parse_bounded(&self.retry_interval_s, 5, 86_400)
+                .map_err(|m| errors.insert("retry_interval_s", m))
+                .ok()
+        };
         if let (Some(interval), Some(retry)) = (interval_s, retry_interval_s)
             && retry > interval
         {
@@ -1026,6 +1031,18 @@ mod tests {
         assert_eq!(i.keyword, None);
         assert_eq!(i.tls_expiry_warn_days, None);
         assert_eq!(i.grace_s, 60);
+    }
+
+    #[test]
+    fn push_misses_repeat_at_the_interval() {
+        let i = MonitorForm {
+            interval_s: "3600".into(),
+            retry_interval_s: "".into(),
+            ..push()
+        }
+        .validate()
+        .unwrap();
+        assert_eq!(i.retry_interval_s, 3600);
     }
 
     #[test]

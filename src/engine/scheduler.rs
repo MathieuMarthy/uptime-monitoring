@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::time::Instant;
 
-/// Pings of one push monitor closer than this to the last recorded check are dropped.
+/// Pings of one push monitor closer than this to the last recorded ping are dropped.
 const PING_SPACING_MS: i64 = 1000;
 
 pub struct Scheduler {
@@ -63,10 +63,11 @@ impl Scheduler {
         }
     }
 
-    /// Waits for the pings of a push monitor, routed here by the supervisor. A ping later than
-    /// `interval_s + grace_s` is a missed check; misses then repeat like failed HTTP checks, at
-    /// `retry_interval_s` below the threshold and `interval_s` after. The first deadline counts
-    /// from the last check or from now, whichever is later: an instance restart is not a miss.
+    /// Waits for the pings of a push monitor, routed here by the supervisor. No ping within
+    /// `interval_s + grace_s` of the last check is a missed check, and each further `interval_s`
+    /// without one is another (a push monitor stores `retry_interval_s = interval_s`: one miss
+    /// per missed run). Deadlines count from the last recorded check, so a restart or an edit
+    /// does not postpone them; an overdue monitor still gets `grace_s` after the task starts.
     pub async fn run_push(
         self: Arc<Self>,
         monitor: Monitor,
@@ -81,33 +82,38 @@ impl Scheduler {
             }
         };
         let mut health = state.health();
+        let window_ms = (monitor.interval_s + monitor.grace_s) * 1000;
         let mut last_recorded = state.last_check_at.unwrap_or(0);
-        let mut last_ping = last_recorded.max(now_ms());
-        let mut due = last_ping + (monitor.interval_s + monitor.grace_s) * 1000;
+        let mut last_ping = i64::MIN;
+        let mut due = state
+            .last_check_at
+            .map_or(now_ms() + window_ms, |last| last + window_ms)
+            .max(now_ms() + monitor.grace_s * 1000);
 
         loop {
             let wait = Duration::from_millis((due - now_ms()).max(0).unsigned_abs());
-            let outcome = tokio::select! {
+            let mut outcome = tokio::select! {
+                // A ping already queued wins over a deadline reached at the same time.
+                biased;
                 ping = pings.recv() => match ping {
-                    // A burst records once per second, and never twice at the same instant.
-                    Some(outcome) if outcome.checked_at < last_recorded + PING_SPACING_MS => continue,
+                    // A burst records once per second.
+                    Some(outcome) if outcome.checked_at < last_ping.saturating_add(PING_SPACING_MS) => continue,
                     Some(outcome) => outcome,
                     None => return,
                 },
-                () = tokio::time::sleep(wait) => {
-                    let checked_at = now_ms();
-                    CheckOutcome {
-                        checked_at,
-                        latency_ms: None,
-                        status_code: None,
-                        failure: Some(Failure {
-                            kind: ErrorKind::Missed,
-                            message: format!("no ping for {} s", (checked_at - last_ping) / 1000),
-                        }),
-                        tls_expires_at: None,
-                    }
-                }
+                () = tokio::time::sleep(wait) => CheckOutcome {
+                    checked_at: now_ms(),
+                    latency_ms: None,
+                    status_code: None,
+                    failure: Some(Failure {
+                        kind: ErrorKind::Missed,
+                        message: format!("no ping within {} s", window_ms / 1000),
+                    }),
+                    tls_expires_at: None,
+                },
             };
+            // Two checks of a monitor never share an instant (the primary key).
+            outcome.checked_at = outcome.checked_at.max(last_recorded + 1);
 
             match self.record(&monitor, &outcome, health).await {
                 Some(next) => health = next,
@@ -128,7 +134,7 @@ impl Scheduler {
                 outcome.checked_at + delay * 1000
             } else {
                 last_ping = outcome.checked_at;
-                last_ping + (monitor.interval_s + monitor.grace_s) * 1000
+                last_ping + window_ms
             };
         }
     }
@@ -158,7 +164,7 @@ impl Scheduler {
                         monitor: Some(MonitorRef {
                             id: monitor.id,
                             name: monitor.name.clone(),
-                            url: monitor.url.clone(),
+                            url: (!monitor.is_push()).then(|| monitor.url.clone()),
                         }),
                         event,
                         at: outcome.checked_at,

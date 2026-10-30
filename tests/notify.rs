@@ -58,7 +58,7 @@ async fn monitor_of(pool: &SqlitePool, url: &str) -> MonitorRef {
     MonitorRef {
         id,
         name: input.name,
-        url: input.url,
+        url: Some(input.url),
     }
 }
 
