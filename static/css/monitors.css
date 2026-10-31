@@ -253,6 +253,13 @@
         padding-inline: 16px;
     }
 
+    /* Each block may start a line: no rule on its left. */
+    .bulk-group,
+    .bulk-channel {
+        padding-left: 0;
+        border-left: none;
+    }
+
     .monitor-row .trace {
         grid-column: 1 / -1;
         grid-row: 2;

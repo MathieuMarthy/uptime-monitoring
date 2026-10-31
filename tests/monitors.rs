@@ -946,7 +946,7 @@ async fn bulk_bar_sits_above_the_time_axis_with_visible_labels() {
     let axis = body.find(r#"class="monitor-head""#).expect("time axis");
     assert!(rows < bar && bar < axis, "{body}");
     assert!(
-        body.contains(r#"<label class="bulk-label" for="bulk-group">Group</label>"#),
+        body.contains(r#"<label class="bulk-label" for="bulk-group">Move to group</label>"#),
         "{body}"
     );
     assert!(

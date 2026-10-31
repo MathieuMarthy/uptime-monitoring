@@ -3,8 +3,10 @@
 // left open or closed (matched by id), and reads out a changed `data-announce` text (the status
 // sentence) in a polite live region. A redirect means the session expired, a 404 that the monitor
 // was deleted: reload to show it.
-// A form being edited (a field focused, or changed and not saved yet) is carried over into the
-// swapped block, matched by id: the rest of the block still refreshes and the typing is kept.
+// A form being typed in (a text field focused, or changed and not saved yet) is carried over into
+// the swapped block, matched by id: the rest of the block still refreshes and the typing is kept.
+// Boxes ticked or unticked elsewhere are set again on their twins, matched by name and value, so a
+// selection does not stop the rows from refreshing.
 const PERIOD_MS = 30_000;
 
 const announcer = document.createElement("p");
@@ -16,12 +18,18 @@ document.body.append(announcer);
 setTimeout(() => document.documentElement.classList.add("settled"), 1000);
 
 const editing = (form) =>
-    [...form.querySelectorAll("textarea, input:not([type=hidden])")].some(
-        (field) =>
-            field === document.activeElement ||
-            field.value !== field.defaultValue ||
-            field.checked !== field.defaultChecked,
+    [...form.querySelectorAll("textarea, input:not([type=hidden], [type=checkbox], [type=radio])")].some(
+        (field) => field === document.activeElement || field.value !== field.defaultValue,
     );
+
+// The boxes changed since load, outside the kept forms.
+const ticks = (root, kept) =>
+    [...root.querySelectorAll("input[type=checkbox][name], input[type=radio][name]")].filter(
+        (box) => box.checked !== box.defaultChecked && !kept.some((form) => form.contains(box)),
+    );
+
+const twinBox = (root, box) =>
+    root.querySelector(`input[name="${CSS.escape(box.name)}"][value="${CSS.escape(box.value)}"]`);
 
 const announced = (root) => root.querySelector("[data-announce]")?.textContent.trim() ?? "";
 
@@ -61,11 +69,18 @@ async function refresh() {
         if (next.outerHTML === element.outerHTML) {
             continue;
         }
+        const changed = ticks(element, kept);
         const field = kept.some((form) => form.contains(active)) ? active : null;
         const selection = field ? [field.selectionStart, field.selectionEnd] : null;
         for (const form of kept) {
             // Not `form.id`: a field named "id" (the dashboard's row boxes) shadows it.
             next.querySelector(`#${CSS.escape(form.getAttribute("id"))}`)?.replaceWith(form);
+        }
+        for (const box of changed) {
+            const match = twinBox(next, box);
+            if (match) {
+                match.checked = box.checked;
+            }
         }
         const refocus = element.contains(active);
         const before = announced(element);
@@ -79,6 +94,8 @@ async function refresh() {
             if (selection[0] !== null) {
                 field.setSelectionRange(...selection);
             }
+        } else if (refocus && changed.includes(active)) {
+            twinBox(next, active)?.focus();
         } else if (refocus && focusedDetails) {
             next.querySelector(`#${CSS.escape(focusedDetails)} > summary`)?.focus();
         } else if (refocus && focusedHref) {
