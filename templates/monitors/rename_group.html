@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+
+{% block title %}Rename Group - Uptime Monitoring{% endblock %}
+{% block nav_monitors %}aria-current="page"{% endblock %}
+
+{% block styles %}
+<link href="/static/css/forms.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-header">
+        <h1 class="form-title">Rename Group</h1>
+        <p class="form-subtitle">{{ name }} holds {{ self.monitors() }}. They all move to the new name; an existing
+            group's name merges them into it.</p>
+    </div>
+
+    <div class="form-card">
+        <form action="/groups/rename" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="name" value="{{ name }}">
+            <div class="form-section">
+                <div class="form-group">
+                    <label class="form-label" for="new_name">New name *</label>
+                    <input class="form-input" id="new_name" name="new_name" type="text" maxlength="{{ GROUP_MAX_CHARS }}"
+                           required autofocus value="{{ new_name }}"/>
+                    {% if let Some(message) = error %}<p class="field-error">{{ message }}</p>{% endif %}
+                </div>
+            </div>
+            <div class="form-actions">
+                <div class="form-actions-left">
+                    <button class="button-primary" type="submit">Rename</button>
+                    <a class="button-secondary" href="/">Cancel</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

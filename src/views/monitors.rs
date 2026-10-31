@@ -164,6 +164,11 @@ impl MonitorGroup {
         self.name.as_deref().unwrap_or(UNGROUPED)
     }
 
+    /// The rename form of a named group.
+    pub fn rename_url(&self) -> Option<String> {
+        self.name.as_deref().map(rename_group_url)
+    }
+
     /// Groups the rows, given in name order: by group name ignoring case (spelled as on its first
     /// monitor), then ungrouped. Rows keep the dashboard order within a group.
     fn split(rows: Vec<MonitorRow>) -> Vec<Self> {
@@ -362,6 +367,7 @@ pub enum BulkDone {
     Resumed(u64),
     Deleted(u64),
     Moved(u64),
+    Renamed(u64),
     Linked(u64),
     Unlinked(u64),
     NoneSelected,
@@ -376,6 +382,7 @@ impl BulkDone {
             "resumed" => Self::Resumed(count),
             "deleted" => Self::Deleted(count),
             "moved" => Self::Moved(count),
+            "renamed" => Self::Renamed(count),
             "linked" => Self::Linked(count),
             "unlinked" => Self::Unlinked(count),
             "none" => Self::NoneSelected,
@@ -391,6 +398,7 @@ impl BulkDone {
             Self::Resumed(n) => ("resumed", n),
             Self::Deleted(n) => ("deleted", n),
             Self::Moved(n) => ("moved", n),
+            Self::Renamed(n) => ("renamed", n),
             Self::Linked(n) => ("linked", n),
             Self::Unlinked(n) => ("unlinked", n),
             Self::NoneSelected => return "done=none".to_string(),
@@ -417,12 +425,14 @@ impl BulkDone {
             | Self::Resumed(0)
             | Self::Deleted(0)
             | Self::Moved(0)
+            | Self::Renamed(0)
             | Self::Linked(0)
             | Self::Unlinked(0) => "No monitor changed.".to_string(),
             Self::Paused(n) => format!("{} paused.", monitors(n)),
             Self::Resumed(n) => format!("{} resumed.", monitors(n)),
             Self::Deleted(n) => format!("{} deleted.", monitors(n)),
             Self::Moved(n) => format!("{} moved.", monitors(n)),
+            Self::Renamed(n) => format!("Group renamed: {}.", monitors(n)),
             Self::Linked(n) => format!("Channel linked to {}.", monitors(n)),
             Self::Unlinked(n) => format!("Channel unlinked from {}.", monitors(n)),
         }
@@ -1083,5 +1093,33 @@ mod tests {
         let h = Headline::new(0, 0, 0, 0, vec![]);
         assert_eq!(h.text, "No monitors yet");
         assert_eq!(h.others, "Add a monitor to start checking a site.");
+    }
+}
+
+pub fn rename_group_url(group: &str) -> String {
+    let query = form_urlencoded::Serializer::new(String::new())
+        .append_pair("name", group)
+        .finish();
+    format!("/groups/rename?{query}")
+}
+
+/// The form that renames a group: every monitor in it moves to the new name.
+#[derive(Template, WebTemplate)]
+#[template(path = "monitors/rename_group.html")]
+pub struct RenameGroupTemplate {
+    /// The group, spelled as on the dashboard.
+    pub name: String,
+    pub new_name: String,
+    pub count: usize,
+    pub error: Option<String>,
+    pub csrf_token: String,
+}
+
+impl RenameGroupTemplate {
+    pub fn monitors(&self) -> String {
+        match self.count {
+            1 => "1 monitor".to_string(),
+            n => format!("{n} monitors"),
+        }
     }
 }

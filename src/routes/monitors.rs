@@ -1,13 +1,14 @@
 use crate::error::AppError;
 use crate::forms::monitor::{FieldErrors, MonitorForm, PUSH, clean_group};
-use crate::models::{Channel, Monitor, Session, is_unique_violation};
+use crate::models::{Channel, Monitor, Session, is_unique_violation, name_key};
 use crate::routes::{PathId, form_or_invalid, parse_id};
 use crate::state::AppState;
 use crate::views::monitors::{
-    BulkDone, DashboardFilter, DetailTemplate, FormTemplate, IndexTemplate, Range, test_summary,
+    BulkDone, DashboardFilter, DetailTemplate, FormTemplate, IndexTemplate, Range,
+    RenameGroupTemplate, test_summary,
 };
 use axum::extract::rejection::FormRejection;
-use axum::extract::{RawQuery, State};
+use axum::extract::{Query, RawQuery, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
@@ -23,6 +24,7 @@ pub fn router() -> Router<AppState> {
         .route("/", get(index))
         .route("/monitors/new", get(new_form).post(create))
         .route("/monitors/bulk", post(bulk))
+        .route("/groups/rename", get(rename_group_form).post(rename_group))
         .route("/monitors/new/test", post(test_new))
         .route("/monitors/{id}", get(detail))
         .route("/monitors/{id}/edit", get(edit_form).post(update))
@@ -124,6 +126,70 @@ async fn bulk(State(state): State<AppState>, body: String) -> Result<Redirect, A
         .unwrap_or_else(|| "/".to_string());
     let separator = if back.contains('?') { '&' } else { '?' };
     Ok(Redirect::to(&format!("{back}{separator}{}", done.query())))
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct RenameGroupForm {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    new_name: String,
+}
+
+/// The group's spelling on the dashboard and its monitors; a 404 when no monitor is in it.
+async fn find_group(state: &AppState, name: &str) -> Result<(String, Vec<i64>), AppError> {
+    let ids = Monitor::group_members(&state.db, name).await?;
+    let spelling = Monitor::group_names(&state.db)
+        .await?
+        .into_iter()
+        .find(|g| name_key(g) == name_key(name));
+    match spelling {
+        Some(spelling) if !ids.is_empty() => Ok((spelling, ids)),
+        _ => Err(AppError::NotFound),
+    }
+}
+
+async fn rename_group_form(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    Query(form): Query<RenameGroupForm>,
+) -> Result<RenameGroupTemplate, AppError> {
+    let (name, ids) = find_group(&state, &form.name).await?;
+    Ok(RenameGroupTemplate {
+        new_name: name.clone(),
+        name,
+        count: ids.len(),
+        error: None,
+        csrf_token: session.csrf_token,
+    })
+}
+
+/// Moves every monitor of the group to the new name: another case, or an existing group to merge
+/// into. A blank name is refused: taking monitors out of a group is the bulk Move.
+async fn rename_group(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    form: Result<Form<RenameGroupForm>, FormRejection>,
+) -> Result<Response, AppError> {
+    let form = form_or_invalid(form)?;
+    let (name, ids) = find_group(&state, &form.name).await?;
+    let error = match clean_group(&form.new_name) {
+        Ok(Some(new_name)) => {
+            let changed = Monitor::set_group(&state.db, &ids, Some(&new_name)).await?;
+            let done = BulkDone::Renamed(changed);
+            return Ok(Redirect::to(&format!("/?{}", done.query())).into_response());
+        }
+        Ok(None) => "Enter a group name.".to_string(),
+        Err(error) => error.to_string(),
+    };
+    Ok(RenameGroupTemplate {
+        name,
+        new_name: form.new_name,
+        count: ids.len(),
+        error: Some(error),
+        csrf_token: session.csrf_token,
+    }
+    .into_response())
 }
 
 async fn detail(

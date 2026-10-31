@@ -97,7 +97,7 @@ uptime-monitoring/
 │       ├── health.rs             # GET /health
 │       ├── incidents.rs          # /incidents/{id}/note
 │       ├── maintenances.rs       # /maintenances/*, /monitors/{id}/maintenance
-│       ├── monitors.rs           # /, /monitors/*
+│       ├── monitors.rs           # /, /monitors/*, /groups/rename
 │       ├── settings.rs           # /settings/*
 │       └── status_pages.rs       # /public-pages/* (admin), /status/{slug} (public)
 ├── templates/                    # Askama templates: base.html → layout.html (admin) | public.html;

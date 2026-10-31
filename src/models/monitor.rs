@@ -361,6 +361,21 @@ impl Monitor {
         Ok(result.rows_affected())
     }
 
+    /// The monitors of this group, whatever its spelling on each, by name.
+    pub async fn group_members(pool: &SqlitePool, group: &str) -> Result<Vec<i64>, sqlx::Error> {
+        let rows: Vec<(i64, String)> = sqlx::query_as(
+            "SELECT id, group_name FROM monitors WHERE group_name IS NOT NULL ORDER BY name_key",
+        )
+        .fetch_all(pool)
+        .await?;
+        let key = name_key(group);
+        Ok(rows
+            .into_iter()
+            .filter(|(_, name)| name_key(name) == key)
+            .map(|(id, _)| id)
+            .collect())
+    }
+
     /// Returns `false` when no monitor has this id. Pausing resolves the open incident and resets
     /// the state to `pending`.
     pub async fn toggle_pause(pool: &SqlitePool, id: i64) -> Result<bool, sqlx::Error> {

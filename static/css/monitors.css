@@ -72,6 +72,30 @@
     color: var(--go);
 }
 
+/* Shown on hover or focus; always on touch screens, which have no hover. */
+.monitor-group-rename {
+    display: inline-flex;
+    padding: 4px;
+    border-radius: 4px;
+    color: var(--muted);
+    opacity: 0;
+}
+
+.monitor-group-head:hover .monitor-group-rename,
+.monitor-group-rename:focus-visible {
+    opacity: 1;
+}
+
+.monitor-group-rename:hover {
+    color: var(--go);
+}
+
+@media (hover: none) {
+    .monitor-group-rename {
+        opacity: 1;
+    }
+}
+
 .monitor-group-counts {
     margin-left: auto;
     font-size: 13px;

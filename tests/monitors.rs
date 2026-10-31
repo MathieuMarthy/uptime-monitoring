@@ -1012,3 +1012,102 @@ async fn dashboard_offers_bulk_actions_and_shows_their_outcome() {
     let body = get(&app, "/?done=bogus&count=2").await.body;
     assert!(!body.contains(r#"role="status""#));
 }
+
+async fn groups(pool: &SqlitePool) -> Vec<Option<String>> {
+    sqlx::query_as::<_, (Option<String>,)>("SELECT group_name FROM monitors ORDER BY id")
+        .fetch_all(pool)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|(g,)| g)
+        .collect()
+}
+
+#[tokio::test]
+async fn group_header_links_to_its_rename_form() {
+    let (app, _) = common::test_app().await;
+    create_in(&app, "a", "Web+%26+API").await;
+    create_in(&app, "b", "").await;
+    let body = get(&app, "/").await.body;
+    assert!(
+        body.contains(r#"href="/groups/rename?name=Web+%26+API""#),
+        "{body}"
+    );
+    assert_eq!(
+        body.matches("/groups/rename?").count(),
+        1,
+        "none for Ungrouped"
+    );
+    let r = get(&app, "/groups/rename?name=web+%26+api").await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(r.body.contains(r#"name="new_name""#), "{}", r.body);
+    assert!(r.body.contains(r#"value="Web &#38; API""#), "{}", r.body);
+    assert!(r.body.contains("1 monitor"), "{}", r.body);
+}
+
+#[tokio::test]
+async fn unknown_group_rename_is_404() {
+    let (app, _) = common::test_app().await;
+    create_in(&app, "a", "Web").await;
+    assert_eq!(get(&app, "/groups/rename?name=Nope").await.status, 404);
+    assert_eq!(get(&app, "/groups/rename").await.status, 404);
+    let r = post_form(&app, "/groups/rename", "name=Nope&new_name=X").await;
+    assert_eq!(r.status, 404);
+}
+
+#[tokio::test]
+async fn rename_moves_every_spelling_of_the_group() {
+    let (app, pool) = common::test_app().await;
+    create_in(&app, "a", "web").await;
+    create_in(&app, "b", "Web").await;
+    create_in(&app, "c", "Other").await;
+    let r = post_form(&app, "/groups/rename", "name=WEB&new_name=+Front++end+").await;
+    assert_redirect(&r, "/?done=renamed&count=2");
+    assert_eq!(
+        groups(&pool).await,
+        [
+            Some("Front end".into()),
+            Some("Front end".into()),
+            Some("Other".into())
+        ]
+    );
+    let body = get(&app, "/?done=renamed&count=2").await.body;
+    assert!(body.contains("Group renamed: 2 monitors."), "{body}");
+}
+
+#[tokio::test]
+async fn rename_can_fix_the_case_or_merge_into_another_group() {
+    let (app, pool) = common::test_app().await;
+    create_in(&app, "a", "web").await;
+    create_in(&app, "b", "Other").await;
+    let r = post_form(&app, "/groups/rename", "name=web&new_name=Web").await;
+    assert_redirect(&r, "/?done=renamed&count=1");
+    let r = post_form(&app, "/groups/rename", "name=Web&new_name=other").await;
+    assert_redirect(&r, "/?done=renamed&count=1");
+    assert_eq!(
+        groups(&pool).await,
+        [Some("other".into()), Some("Other".into())]
+    );
+}
+
+#[tokio::test]
+async fn invalid_new_group_name_shows_the_form_again() {
+    let (app, pool) = common::test_app().await;
+    create_in(&app, "a", "Web").await;
+    for (new_name, message) in [
+        ("+", "Enter a group name."),
+        ("ungrouped", "kept for the monitors without a group"),
+        (&"x".repeat(65), "at most 64 characters"),
+    ] {
+        let r = post_form(
+            &app,
+            "/groups/rename",
+            &format!("name=Web&new_name={new_name}"),
+        )
+        .await;
+        assert_eq!(r.status, 200, "{new_name}: {}", r.body);
+        assert!(r.body.contains(message), "{new_name}: {}", r.body);
+        assert!(r.body.contains(r#"name="name" value="Web""#), "{}", r.body);
+    }
+    assert_eq!(groups(&pool).await, [Some("Web".into())]);
+}
