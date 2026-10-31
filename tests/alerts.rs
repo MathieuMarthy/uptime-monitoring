@@ -30,6 +30,13 @@ fn ntfy_at(name: &str, server: &str, token: &str) -> String {
     )
 }
 
+fn telegram(name: &str, token: &str) -> String {
+    format!(
+        "name={name}&kind=telegram&telegram_token={}&telegram_chat_id=-1001&enabled=on",
+        encode(token)
+    )
+}
+
 async fn channels(pool: &SqlitePool) -> Vec<Channel> {
     Channel::all(pool).await.unwrap()
 }
@@ -100,6 +107,28 @@ async fn edit_never_shows_the_ntfy_token_and_keeps_it() {
     let stored = &channels(&pool).await[0];
     assert_eq!(stored.name, "Phone2");
     assert!(stored.config.contains("tk_secret"));
+}
+
+#[tokio::test]
+async fn edit_never_shows_the_telegram_token_and_keeps_it() {
+    let (app, pool) = common::test_app().await;
+    let r = post_form(&app, "/alerts/new", &telegram("Phone", "")).await;
+    assert_eq!(r.status, 200, "a new channel needs its token");
+    assert!(channels(&pool).await.is_empty());
+
+    post_form(&app, "/alerts/new", &telegram("Phone", "123:tk_secret")).await;
+    let stored = &channels(&pool).await[0];
+    assert_eq!(stored.kind, "telegram");
+    let id = stored.id;
+
+    let r = get(&app, &format!("/alerts/{id}/edit")).await;
+    assert_eq!(r.status, 200);
+    assert!(r.body.contains("-1001"), "chat id prefilled");
+    assert!(!r.body.contains("tk_secret"));
+
+    let r = post_form(&app, &format!("/alerts/{id}/edit"), &telegram("Phone2", "")).await;
+    assert_redirect(&r, "/alerts");
+    assert!(channels(&pool).await[0].config.contains("tk_secret"));
 }
 
 #[tokio::test]

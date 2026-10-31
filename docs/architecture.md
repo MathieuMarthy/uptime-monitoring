@@ -55,7 +55,7 @@ uptime-monitoring/
 │   ├── notify/                   # Alerts
 │   │   ├── mod.rs                # Notifier: queue, dispatcher, retries, delivery log
 │   │   ├── message.rs            # Title and text of an event, whatever the channel
-│   │   └── channel.rs            # Webhook / Discord / ntfy config and request
+│   │   └── channel.rs            # Webhook / Discord / ntfy / Telegram config and request
 │   ├── models/                   # Entities and their SQL queries
 │   │   ├── admin.rs              # The single admin account
 │   │   ├── channel.rs            # Notification channels + monitor links
@@ -265,11 +265,14 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `block_private_targets`, private destinations are refused like check targets). Webhook: JSON
   `{event, monitor: {id, name, url, link} | null, title, message, at}`. Discord: one embed coloured by severity. ntfy:
   JSON publishing to the server root (`topic`, `title`, `message`, `priority` 4 for down, `tags`), bearer token if
-  set. With `PUBLIC_URL`, the detail page's address is `monitor.link`, the embed's `url` and ntfy's `click`
-  (`link` is `null` without it).
+  set. Telegram: `sendMessage` of the Bot API (`{server}/bot{token}/sendMessage`, the guard checks only the
+  server) with `chat_id` and a plain-text `text` (severity emoji, title, message, link), so nothing needs escaping;
+  link previews are off. With `PUBLIC_URL`, the detail page's address is `monitor.link`, the embed's `url`, ntfy's
+  `click` and the last line of the Telegram text (`link` is `null` without it).
 - **UI.** `/alerts` lists channels (monitor count, last delivery) and the last 50 deliveries. The channel form's
   *Send Test* button (`…/new/test`, `…/{id}/edit/test`) sends the channel as typed, once, without saving or logging
-  it, and shows the form again with the result; a typed ntfy token is kept in the field. The ntfy token is never sent back to the browser: left blank, the stored one is kept, unless the server changed. Monitors pick their
+  it, and shows the form again with the result; a typed ntfy token is kept in the field. The ntfy token and the Telegram bot token are never sent back to the browser: left
+  blank, the stored one is kept (for ntfy, unless the server changed; a Telegram channel always needs one). Monitors pick their
   channels in their form (checkboxes `channel_<id>`, gathered by `MonitorForm::other`); a new monitor starts with
   every enabled channel checked.
 

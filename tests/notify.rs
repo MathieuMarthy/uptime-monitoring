@@ -1,7 +1,7 @@
 mod common;
 
 use axum::Router;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, Uri};
 use axum::routing::{get, post};
 use sqlx::SqlitePool;
 use std::sync::Arc;
@@ -15,6 +15,7 @@ use uptime_monitoring::notify::channel::{ChannelConfig, WebhookConfig};
 use uptime_monitoring::notify::{Event, MonitorRef, Notification, Notifier};
 
 struct Received {
+    path: String,
     headers: HeaderMap,
     body: serde_json::Value,
 }
@@ -24,10 +25,11 @@ async fn receiver(statuses: Vec<u16>) -> (String, mpsc::UnboundedReceiver<Receiv
     let (tx, rx) = mpsc::unbounded_channel();
     let calls = Arc::new(AtomicUsize::new(0));
     let app = Router::new().route(
-        "/hook",
-        post(move |headers: HeaderMap, body: String| {
+        "/hook/{*rest}",
+        post(move |uri: Uri, headers: HeaderMap, body: String| {
             let n = calls.fetch_add(1, Ordering::SeqCst);
             let _ = tx.send(Received {
+                path: uri.path().to_string(),
                 headers,
                 body: serde_json::from_str(&body).unwrap(),
             });
@@ -38,7 +40,7 @@ async fn receiver(statuses: Vec<u16>) -> (String, mpsc::UnboundedReceiver<Receiv
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    (format!("http://{addr}/hook"), rx)
+    (format!("http://{addr}/hook/x"), rx)
 }
 
 async fn monitor(pool: &SqlitePool) -> MonitorRef {
@@ -181,6 +183,33 @@ async fn ntfy_and_discord_get_their_own_format() {
     assert_eq!(request.body["embeds"][0]["title"], "API is down");
     assert_eq!(request.body["embeds"][0]["color"], 0xE5484D);
     assert!(request.body["embeds"][0].get("url").is_none());
+}
+
+#[tokio::test]
+async fn telegram_sends_a_text_message_to_its_chat() {
+    let pool = common::test_app().await.1;
+    let (url, mut rx) = receiver(vec![]).await;
+    let m = monitor(&pool).await;
+    let telegram = serde_json::json!({ "server": url, "token": "123:ABC", "chat_id": "-1001" });
+    link(
+        &pool,
+        m.id,
+        channel(&pool, "telegram", telegram, true).await,
+    )
+    .await;
+
+    notifier_with_public_url(&pool, Some("https://up.example.com")).notify(down(&m));
+    let request = next(&mut rx).await;
+    assert_eq!(request.path, "/hook/x/bot123:ABC/sendMessage");
+    assert_eq!(request.body["chat_id"], "-1001");
+    let text = request.body["text"].as_str().unwrap();
+    assert!(text.contains("API is down"), "{text}");
+    assert!(text.contains("HTTP 503"), "{text}");
+    assert!(
+        text.ends_with(&format!("https://up.example.com/monitors/{}", m.id)),
+        "{text}"
+    );
+    assert_eq!(wait_for_log(&pool, 1).await[0].error, None);
 }
 
 #[tokio::test]

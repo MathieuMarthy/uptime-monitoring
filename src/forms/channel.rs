@@ -1,6 +1,8 @@
 use crate::forms::monitor::{FieldErrors, validate_url};
 use crate::forms::{has_visible_char, text_len};
-use crate::notify::channel::{ChannelConfig, KINDS, NtfyConfig, WebhookConfig};
+use crate::notify::channel::{
+    ChannelConfig, KINDS, NtfyConfig, TELEGRAM_API, TelegramConfig, WebhookConfig,
+};
 use serde::Deserialize;
 
 const NAME_MAX_CHARS: usize = 100;
@@ -26,6 +28,9 @@ pub struct ChannelForm {
     /// Blank keeps the stored token; it is never sent back to the browser.
     pub ntfy_token: String,
     pub ntfy_clear_token: Option<String>,
+    /// Blank keeps the stored bot token; it is never sent back to the browser.
+    pub telegram_token: String,
+    pub telegram_chat_id: String,
     pub enabled: Option<String>,
 }
 
@@ -47,7 +52,7 @@ impl ChannelForm {
         }
     }
 
-    /// The form of a stored channel. The ntfy token is left out.
+    /// The form of a stored channel. The ntfy and Telegram tokens are left out.
     pub fn from_config(name: &str, config: &ChannelConfig, enabled: bool) -> Self {
         let mut form = Self {
             name: name.to_string(),
@@ -61,6 +66,7 @@ impl ChannelForm {
                 form.ntfy_server = c.server.clone();
                 form.ntfy_topic = c.topic.clone();
             }
+            ChannelConfig::Telegram(c) => form.telegram_chat_id = c.chat_id.clone(),
         }
         form
     }
@@ -84,6 +90,9 @@ impl ChannelForm {
             "webhook" => self.webhook_url(&mut errors).map(ChannelConfig::Webhook),
             "discord" => self.discord_url(&mut errors).map(ChannelConfig::Discord),
             "ntfy" => self.ntfy(existing, &mut errors).map(ChannelConfig::Ntfy),
+            "telegram" => self
+                .telegram(existing, &mut errors)
+                .map(ChannelConfig::Telegram),
             _ => {
                 errors.insert("kind", format!("Choose one of: {}.", KINDS.join(", ")));
                 None
@@ -181,6 +190,75 @@ impl ChannelForm {
             token,
         })
     }
+
+    fn telegram(
+        &self,
+        existing: Option<&ChannelConfig>,
+        errors: &mut FieldErrors,
+    ) -> Option<TelegramConfig> {
+        let typed = self.telegram_token.trim();
+        let token = if !typed.is_empty() {
+            if !is_bot_token(typed) {
+                errors.insert(
+                    "telegram_token",
+                    "A bot token looks like 123456:ABC-DEF…, as given by @BotFather.".to_string(),
+                );
+            }
+            Some(typed.to_string())
+        } else {
+            match existing {
+                Some(ChannelConfig::Telegram(c)) => Some(c.token.clone()),
+                _ => {
+                    errors.insert("telegram_token", "Bot token is required.".to_string());
+                    None
+                }
+            }
+        };
+
+        let chat_id = self.telegram_chat_id.trim();
+        if !is_chat_id(chat_id) {
+            errors.insert(
+                "telegram_chat_id",
+                "Chat ID is a number, e.g. -1001234567890, or a channel's @username.".to_string(),
+            );
+        }
+
+        match token {
+            Some(token) if errors.is_empty() => Some(TelegramConfig {
+                server: TELEGRAM_API.to_string(),
+                token,
+                chat_id: chat_id.to_string(),
+            }),
+            _ => None,
+        }
+    }
+}
+
+/// `<bot id>:<secret>`. The token goes into the request path, so nothing else is allowed.
+fn is_bot_token(token: &str) -> bool {
+    match token.split_once(':') {
+        Some((id, secret)) => {
+            !id.is_empty()
+                && id.len() <= 20
+                && id.bytes().all(|b| b.is_ascii_digit())
+                && !secret.is_empty()
+                && secret.len() <= 100
+                && secret
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        }
+        None => false,
+    }
+}
+
+/// A numeric id (negative for groups and channels) or a public `@username` (5 to 32 characters).
+fn is_chat_id(chat_id: &str) -> bool {
+    if let Some(name) = chat_id.strip_prefix('@') {
+        return (5..=32).contains(&name.len())
+            && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+    }
+    let digits = chat_id.strip_prefix('-').unwrap_or(chat_id);
+    !digits.is_empty() && digits.len() <= 20 && digits.bytes().all(|b| b.is_ascii_digit())
 }
 
 #[cfg(test)]
@@ -283,6 +361,70 @@ mod tests {
         assert!(f.validate(None).unwrap_err().contains_key("ntfy_token"));
     }
 
+    fn telegram_config(token: &str) -> ChannelConfig {
+        ChannelConfig::Telegram(TelegramConfig {
+            server: TELEGRAM_API.to_string(),
+            token: token.to_string(),
+            chat_id: "-1001".to_string(),
+        })
+    }
+
+    #[test]
+    fn telegram_checks_token_and_chat_id() {
+        let mut f = form("telegram");
+        f.telegram_token = "not a token".to_string();
+        f.telegram_chat_id = "ops".to_string();
+        let errors = f.validate(None).unwrap_err();
+        assert!(errors.contains_key("telegram_token"));
+        assert!(errors.contains_key("telegram_chat_id"));
+
+        for chat_id in ["-1001234", "42", "@ops_channel"] {
+            f.telegram_token = " 123:AA-b_c ".to_string();
+            f.telegram_chat_id = format!(" {chat_id} ");
+            let input = f.validate(None).unwrap();
+            assert_eq!(
+                input.config,
+                ChannelConfig::Telegram(TelegramConfig {
+                    server: TELEGRAM_API.to_string(),
+                    token: "123:AA-b_c".to_string(),
+                    chat_id: chat_id.to_string(),
+                })
+            );
+        }
+        for chat_id in ["", "-", "1-2", "@ab", "@has space"] {
+            f.telegram_chat_id = chat_id.to_string();
+            assert!(
+                f.validate(None)
+                    .unwrap_err()
+                    .contains_key("telegram_chat_id"),
+                "{chat_id:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn blank_telegram_token_keeps_the_stored_one() {
+        let mut f = form("telegram");
+        f.telegram_chat_id = "-1001".to_string();
+        assert!(
+            f.validate(None).unwrap_err().contains_key("telegram_token"),
+            "required without a stored one"
+        );
+        assert!(
+            f.validate(Some(&ntfy_config(Some("tk"))))
+                .unwrap_err()
+                .contains_key("telegram_token"),
+            "an ntfy token is not a bot token"
+        );
+        let stored = telegram_config("1:old");
+        assert_eq!(f.validate(Some(&stored)).unwrap().config, stored);
+        f.telegram_token = "2:new".to_string();
+        assert_eq!(
+            f.validate(Some(&stored)).unwrap().config,
+            telegram_config("2:new")
+        );
+    }
+
     #[test]
     fn name_and_kind_are_required() {
         let mut f = form("email");
@@ -298,5 +440,9 @@ mod tests {
         assert_eq!(f.ntfy_token, "");
         assert_eq!(f.ntfy_topic, "alerts");
         assert_eq!(f.enabled, None);
+
+        let f = ChannelForm::from_config("Ops", &telegram_config("1:tk"), true);
+        assert_eq!(f.telegram_token, "");
+        assert_eq!(f.telegram_chat_id, "-1001");
     }
 }

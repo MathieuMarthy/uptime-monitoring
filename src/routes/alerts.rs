@@ -127,7 +127,8 @@ async fn test_new(
     Ok(test_page(&state, None, form, session.csrf_token, None).await)
 }
 
-/// The "Send Test" button of the edit form; a blank ntfy token tests the stored one.
+/// The "Send Test" button of the edit form; a blank ntfy or Telegram token tests the
+/// stored one.
 async fn test_edit(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
@@ -186,6 +187,7 @@ fn page(
         },
         channel_id: id,
         has_token,
+        has_bot_token: matches!(existing, Some(ChannelConfig::Telegram(_))),
         test_result: None,
     }
 }
