@@ -571,3 +571,34 @@ async fn a_retried_alert_holds_up_only_its_own_monitor() {
     assert_eq!(second["monitor"]["name"], "Web", "sent before API's retry");
     assert_eq!(next(&mut rx).await.body["monitor"]["name"], "API");
 }
+
+#[tokio::test]
+async fn channels_without_grouping_send_at_once() {
+    let pool = common::test_app().await.1;
+    let (url, mut rx) = receiver(vec![]).await;
+    let api = monitor(&pool).await;
+    let web = named(&pool, "Web", "https://web.example.com").await;
+    let c = channel(&pool, "discord", serde_json::json!({ "url": url }), true).await;
+    sqlx::query("UPDATE notification_channels SET group_alerts = 0")
+        .execute(&pool)
+        .await
+        .unwrap();
+    link(&pool, api.id, c).await;
+    link(&pool, web.id, c).await;
+    // A window longer than `next` waits: only a channel that does not group answers in time.
+    let notifier = Notifier::start_with(
+        pool.clone(),
+        Guard::new(false),
+        None,
+        vec![Duration::ZERO],
+        Duration::from_secs(60),
+    );
+    notifier.notify(down(&api));
+    notifier.notify(down(&web));
+    let mut titles = vec![
+        next(&mut rx).await.body["embeds"][0]["title"].clone(),
+        next(&mut rx).await.body["embeds"][0]["title"].clone(),
+    ];
+    titles.sort_by_key(|t| t.to_string());
+    assert_eq!(titles, ["API is down", "Web is down"]);
+}

@@ -298,9 +298,9 @@ async fn telegram_description(mut response: reqwest::Response) -> Option<String>
     json["description"].as_str().map(str::to_string)
 }
 
-/// Sends notifications as they come, except that a `down` or `up` opens a window of
-/// `group_window`: everything received until it closes is sent together, so that each channel
-/// gets one message for several monitors down (or up) at once.
+/// Sends notifications as they come, except that, for the channels that group alerts, a `down`
+/// or `up` opens a window of `group_window`: everything those channels receive until it closes
+/// is sent together, so that each gets one message for several monitors down (or up) at once.
 async fn dispatch(
     pool: SqlitePool,
     sender: Arc<Sender>,
@@ -320,17 +320,24 @@ async fn dispatch(
         tokio::select! {
             received = receiver.recv() => {
                 let Some(notification) = received else { break };
-                if notification.monitor.is_none() {
+                // Read on arrival, so that the window's end runs no query.
+                let Some(channels) = router.channels(&notification).await else { continue };
+                let (grouping, direct): (Vec<_>, Vec<_>) =
+                    channels.into_iter().partition(Channel::groups);
+                if !direct.is_empty() {
+                    router.route(vec![(Arc::new(notification.clone()), direct)]).await;
+                }
+                if grouping.is_empty() {
                     continue;
                 }
                 if deadline.is_none() {
                     if !notification.event.groups() {
-                        router.route(vec![notification]).await;
+                        router.route(vec![(Arc::new(notification), grouping)]).await;
                         continue;
                     }
                     deadline = Some(Instant::now() + group_window);
                 }
-                batch.push(notification);
+                batch.push((Arc::new(notification), grouping));
             }
             _ = tokio::time::sleep_until(flush_at.unwrap_or_else(Instant::now)), if flush_at.is_some() => {
                 deadline = None;
@@ -351,31 +358,33 @@ struct Router {
 }
 
 impl Router {
-    async fn route(&mut self, notifications: Vec<Notification>) {
+    /// The enabled channels of the notification's monitor; `None` when there are none.
+    async fn channels(&self, notification: &Notification) -> Option<Vec<Channel>> {
+        let monitor_id = notification.monitor.as_ref()?.id;
+        match Channel::enabled_for_monitor(&self.pool, monitor_id).await {
+            Ok(channels) if channels.is_empty() => None,
+            Ok(channels) => Some(channels),
+            Err(e) => {
+                tracing::error!(monitor_id, error = %e, "cannot read notification channels");
+                None
+            }
+        }
+    }
+
+    /// Each notification goes to the channels it comes with.
+    async fn route(&mut self, notifications: Vec<(Arc<Notification>, Vec<Channel>)>) {
         if notifications.is_empty() {
             return;
         }
         // Channels in the order they first appear, each with its notifications in order.
         let mut per_channel: Vec<(Channel, Vec<Arc<Notification>>)> = Vec::new();
-        for notification in notifications {
-            let monitor_id = notification.monitor.as_ref().map_or(0, |m| m.id);
-            let channels = match Channel::enabled_for_monitor(&self.pool, monitor_id).await {
-                Ok(channels) => channels,
-                Err(e) => {
-                    tracing::error!(monitor_id, error = %e, "cannot read notification channels");
-                    continue;
-                }
-            };
-            let notification = Arc::new(notification);
+        for (notification, channels) in notifications {
             for channel in channels {
                 match per_channel.iter_mut().find(|(c, _)| c.id == channel.id) {
                     Some((_, list)) => list.push(notification.clone()),
                     None => per_channel.push((channel, vec![notification.clone()])),
                 }
             }
-        }
-        if per_channel.is_empty() {
-            return;
         }
         let tz = match Settings::load(&self.pool).await {
             Ok(settings) => settings.tz(),
@@ -385,11 +394,10 @@ impl Router {
         let public_url = sender.public_url.as_deref();
         self.last.retain(|_, done| done.has_changed().is_ok());
         for (channel, list) in per_channel {
-            // Webhooks are read by programs, which expect one event per monitor.
-            let groups = if channel.kind == "webhook" {
-                (0..list.len()).map(|i| vec![i]).collect()
-            } else {
+            let groups = if channel.groups() {
                 group(&list)
+            } else {
+                (0..list.len()).map(|i| vec![i]).collect()
             };
             for indexes in groups {
                 let notifications: Vec<_> = indexes.iter().map(|&i| list[i].clone()).collect();

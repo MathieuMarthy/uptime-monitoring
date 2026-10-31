@@ -134,6 +134,14 @@
             </div>
 
             <div class="form-section">
+                <label class="checkbox-group" for="group_alerts" data-kinds="discord ntfy telegram">
+                    <input type="checkbox" id="group_alerts" name="group_alerts" {% if form.group_alerts.is_some() %}checked{% endif %}/>
+                    <div class="checkbox-label-group">
+                        <span class="form-label">Group simultaneous alerts</span>
+                        <span class="form-hint">Monitors going down (or back up) within 15 s share one message, sent at the end of those 15 s.</span>
+                    </div>
+                </label>
+
                 <label class="checkbox-group" for="enabled">
                     <input type="checkbox" id="enabled" name="enabled" {% if form.enabled.is_some() %}checked{% endif %}/>
                     <div class="checkbox-label-group">

@@ -55,7 +55,8 @@
     padding-bottom: 4px;
 }
 
-.form-section[hidden] {
+.form-section[hidden],
+.checkbox-group[hidden] {
     display: none;
 }
 

@@ -4,7 +4,7 @@ use crate::notify::channel::ChannelConfig;
 use crate::time::now_ms;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
-const COLUMNS: &str = "id, name, kind, config, enabled";
+const COLUMNS: &str = "id, name, kind, config, enabled, group_alerts";
 
 /// A notification channel: where alerts of the monitors linked to it are sent.
 #[derive(Debug, Clone, FromRow)]
@@ -14,6 +14,8 @@ pub struct Channel {
     pub kind: String,
     pub config: String,
     pub enabled: bool,
+    /// Gathers simultaneous downs (and ups) into one message, if its kind allows it.
+    pub group_alerts: bool,
 }
 
 /// A row of the alerts page.
@@ -32,6 +34,11 @@ impl Channel {
     /// Fails only if the stored JSON was edited by hand.
     pub fn parsed_config(&self) -> Result<ChannelConfig, serde_json::Error> {
         ChannelConfig::parse(&self.kind, &self.config)
+    }
+
+    /// Its downs and ups wait for others to send with them.
+    pub fn groups(&self) -> bool {
+        self.group_alerts && self.parsed_config().is_ok_and(|c| c.can_group())
     }
 
     pub async fn find(pool: &SqlitePool, id: i64) -> Result<Option<Self>, sqlx::Error> {
@@ -58,7 +65,7 @@ impl Channel {
         monitor_id: i64,
     ) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as(
-            "SELECT c.id, c.name, c.kind, c.config, c.enabled
+            "SELECT c.id, c.name, c.kind, c.config, c.enabled, c.group_alerts
              FROM notification_channels c JOIN monitor_channels mc ON mc.channel_id = c.id
              WHERE mc.monitor_id = ? AND c.enabled = 1",
         )
@@ -84,13 +91,14 @@ impl Channel {
 
     pub async fn create(pool: &SqlitePool, input: &ChannelInput) -> Result<i64, sqlx::Error> {
         let id = sqlx::query(
-            "INSERT INTO notification_channels (name, kind, config, enabled, created_at)
-             VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO notification_channels (name, kind, config, enabled, group_alerts, created_at)
+             VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(&input.name)
         .bind(input.config.kind())
         .bind(input.config.to_json())
         .bind(input.enabled)
+        .bind(input.group_alerts)
         .bind(now_ms())
         .execute(pool)
         .await?
@@ -105,13 +113,15 @@ impl Channel {
         input: &ChannelInput,
     ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query(
-            "UPDATE notification_channels SET name = ?, kind = ?, config = ?, enabled = ?
+            "UPDATE notification_channels
+             SET name = ?, kind = ?, config = ?, enabled = ?, group_alerts = ?
              WHERE id = ?",
         )
         .bind(&input.name)
         .bind(input.config.kind())
         .bind(input.config.to_json())
         .bind(input.enabled)
+        .bind(input.group_alerts)
         .bind(id)
         .execute(pool)
         .await?;

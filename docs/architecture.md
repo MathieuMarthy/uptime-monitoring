@@ -263,9 +263,11 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   (downtime) and `tls_expiring` events, plus `degraded` (latency, threshold, start) when the monitor's `latency_alerts`
   is on, and `latency_normal` (length) when the slowdown's start was alerted (`slowdowns.alerted`), so the two
   always come in pairs whatever the setting does meanwhile. Only transitions alert: nothing on startup, pause or deletion.
-- **Dispatch** (`notify/mod.rs`). A bounded queue (1 000; beyond, alerts are dropped and logged) feeds one task.
-  A `down` or `up` opens a 15 s window (fixed, not sliding); every alert received until it closes is sent with it,
-  others go at once. For each channel, the downs of a window become one message (`N monitors are down`, one line
+- **Dispatch** (`notify/mod.rs`). A bounded queue (1 000; beyond, alerts are dropped and logged) feeds one task,
+  which reads the monitor's enabled channels as each alert arrives. Channels with `group_alerts` (any kind but
+  webhook, `Channel::groups`) share a window: a `down` or `up` opens it for 15 s (fixed, not sliding), and every
+  alert for those channels received until it closes is sent with it; other alerts, and every alert for the other
+  channels, go at once. For each grouping channel, the downs of a window become one message (`N monitors are down`, one line
   per monitor with its cause, at most 20 lines and 3,500 bytes, linked to the dashboard), the ups another, anything
   else stays alone; an alert never joins a message sent before one already holding its monitor (`group`). Webhooks
   always get one request per alert, in the usual format. Each message is its own task, which first waits for the
@@ -289,7 +291,8 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `click` and the last line of the Telegram text (`link` is `null` without it).
 - **UI.** `/alerts` lists channels (monitor count, last delivery) and the last 50 deliveries. The channel form's
   *Send Test* button (`…/new/test`, `…/{id}/edit/test`) sends the channel as typed, once, without saving or logging
-  it, and shows the form again with the result; a typed ntfy token is kept in the field. The ntfy token and the Telegram bot token are never sent back to the browser: left
+  it, and shows the form again with the result; *Group simultaneous alerts* (`group_alerts`, on by default) is
+  hidden for webhooks; a typed ntfy token is kept in the field. The ntfy token and the Telegram bot token are never sent back to the browser: left
   blank, the stored one is kept (for ntfy, unless the server changed; a Telegram channel always needs one). Monitors pick their
   channels in their form (checkboxes `channel_<id>`, gathered by `MonitorForm::other`); a new monitor starts with
   every enabled channel checked.

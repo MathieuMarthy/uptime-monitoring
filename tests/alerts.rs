@@ -237,3 +237,32 @@ async fn alerts_need_a_session() {
     let r = get(&app.logged_out(), "/alerts").await;
     assert_eq!(r.status, 303);
 }
+
+#[tokio::test]
+async fn grouping_is_a_channel_setting() {
+    let (app, pool) = common::test_app().await;
+    let r = get(&app, "/alerts/new").await;
+    assert!(
+        r.body
+            .contains(r#"id="group_alerts" name="group_alerts" checked"#),
+        "on by default"
+    );
+
+    post_form(&app, "/alerts/new", &ntfy("Phone", "")).await;
+    let stored = &channels(&pool).await[0];
+    assert!(!stored.group_alerts, "left unchecked");
+
+    let r = post_form(
+        &app,
+        &format!("/alerts/{}/edit", stored.id),
+        &format!("{}&group_alerts=on", ntfy("Phone", "")),
+    )
+    .await;
+    assert_redirect(&r, "/alerts");
+    assert!(channels(&pool).await[0].group_alerts);
+    let r = get(&app, &format!("/alerts/{}/edit", stored.id)).await;
+    assert!(
+        r.body
+            .contains(r#"id="group_alerts" name="group_alerts" checked"#)
+    );
+}

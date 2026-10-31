@@ -68,7 +68,12 @@ async fn edit_form(
     PathId(id): PathId,
 ) -> Result<FormTemplate, AppError> {
     let (channel, config) = load(&state, id).await?;
-    let form = ChannelForm::from_config(&channel.name, &config, channel.enabled);
+    let form = ChannelForm::from_config(
+        &channel.name,
+        &config,
+        channel.enabled,
+        channel.group_alerts,
+    );
     Ok(page(
         Some(id),
         form,

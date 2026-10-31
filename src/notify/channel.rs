@@ -80,6 +80,11 @@ impl ChannelConfig {
         }
     }
 
+    /// Webhooks are read by programs, which expect one event per monitor.
+    pub fn can_group(&self) -> bool {
+        !matches!(self, Self::Webhook(_))
+    }
+
     pub fn to_json(&self) -> String {
         match self {
             Self::Webhook(c) | Self::Discord(c) => json!(c),

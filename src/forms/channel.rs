@@ -32,6 +32,7 @@ pub struct ChannelForm {
     pub telegram_token: String,
     pub telegram_chat_id: String,
     pub enabled: Option<String>,
+    pub group_alerts: Option<String>,
 }
 
 /// A validated channel, ready to be stored.
@@ -40,6 +41,7 @@ pub struct ChannelInput {
     pub name: String,
     pub config: ChannelConfig,
     pub enabled: bool,
+    pub group_alerts: bool,
 }
 
 impl ChannelForm {
@@ -48,16 +50,23 @@ impl ChannelForm {
             kind: "webhook".to_string(),
             ntfy_server: NTFY_DEFAULT_SERVER.to_string(),
             enabled: Some("on".to_string()),
+            group_alerts: Some("on".to_string()),
             ..Self::default()
         }
     }
 
     /// The form of a stored channel. The ntfy and Telegram tokens are left out.
-    pub fn from_config(name: &str, config: &ChannelConfig, enabled: bool) -> Self {
+    pub fn from_config(
+        name: &str,
+        config: &ChannelConfig,
+        enabled: bool,
+        group_alerts: bool,
+    ) -> Self {
         let mut form = Self {
             name: name.to_string(),
             kind: config.kind().to_string(),
             enabled: enabled.then(|| "on".to_string()),
+            group_alerts: group_alerts.then(|| "on".to_string()),
             ..Self::new_defaults()
         };
         match config {
@@ -104,6 +113,7 @@ impl ChannelForm {
                 name: name.to_string(),
                 config,
                 enabled: self.enabled.is_some(),
+                group_alerts: self.group_alerts.is_some(),
             }),
             _ => Err(errors),
         }
@@ -453,12 +463,12 @@ mod tests {
 
     #[test]
     fn stored_form_omits_the_token() {
-        let f = ChannelForm::from_config("Ops", &ntfy_config(Some("tk")), false);
+        let f = ChannelForm::from_config("Ops", &ntfy_config(Some("tk")), false, true);
         assert_eq!(f.ntfy_token, "");
         assert_eq!(f.ntfy_topic, "alerts");
         assert_eq!(f.enabled, None);
 
-        let f = ChannelForm::from_config("Ops", &telegram_config("1:tk"), true);
+        let f = ChannelForm::from_config("Ops", &telegram_config("1:tk"), true, true);
         assert_eq!(f.telegram_token, "");
         assert_eq!(f.telegram_chat_id, "-1001");
     }
