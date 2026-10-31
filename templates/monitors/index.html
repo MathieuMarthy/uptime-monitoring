@@ -30,6 +30,7 @@
                 <a href="{{ filter.range_url(Range::Hours) }}" data-range="" {% if range == Range::Hours %}aria-current="true"{% endif %}>24 hours</a>
                 <a href="{{ filter.range_url(Range::Days) }}" data-range="90d" {% if range == Range::Days %}aria-current="true"{% endif %}>90 days</a>
             </nav>
+            <a class="button-secondary" href="/monitors/new/bulk">Add several</a>
             <a class="button-primary" href="/monitors/new">Add monitor</a>
         </div>
     </div>

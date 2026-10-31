@@ -1,5 +1,6 @@
 use crate::engine::verdict::CheckOutcome;
 use crate::error::AppError;
+use crate::forms::bulk_monitor::{BULK_MAX_URLS, BulkErrors, BulkMonitorForm};
 use crate::forms::monitor::{
     FieldErrors, GROUP_MAX_CHARS, GroupError, METHODS, MonitorForm, PUSH, UNGROUPED,
 };
@@ -375,6 +376,7 @@ pub enum BulkDone {
     Renamed(u64),
     Linked(u64),
     Unlinked(u64),
+    Added(u64),
     NoneSelected,
     InvalidGroup(GroupError),
 }
@@ -390,6 +392,7 @@ impl BulkDone {
             "renamed" => Self::Renamed(count),
             "linked" => Self::Linked(count),
             "unlinked" => Self::Unlinked(count),
+            "added" => Self::Added(count),
             "none" => Self::NoneSelected,
             "group-too-long" => Self::InvalidGroup(GroupError::TooLong),
             "group-reserved" => Self::InvalidGroup(GroupError::Reserved),
@@ -406,6 +409,7 @@ impl BulkDone {
             Self::Renamed(n) => ("renamed", n),
             Self::Linked(n) => ("linked", n),
             Self::Unlinked(n) => ("unlinked", n),
+            Self::Added(n) => ("added", n),
             Self::NoneSelected => return "done=none".to_string(),
             Self::InvalidGroup(GroupError::TooLong) => return "done=group-too-long".to_string(),
             Self::InvalidGroup(GroupError::Reserved) => return "done=group-reserved".to_string(),
@@ -432,7 +436,8 @@ impl BulkDone {
             | Self::Moved(0)
             | Self::Renamed(0)
             | Self::Linked(0)
-            | Self::Unlinked(0) => "No monitor changed.".to_string(),
+            | Self::Unlinked(0)
+            | Self::Added(0) => "No monitor changed.".to_string(),
             Self::Paused(n) => format!("{} paused.", monitors(n)),
             Self::Resumed(n) => format!("{} resumed.", monitors(n)),
             Self::Deleted(n) => format!("{} deleted.", monitors(n)),
@@ -440,6 +445,7 @@ impl BulkDone {
             Self::Renamed(n) => format!("Group renamed: {}.", monitors(n)),
             Self::Linked(n) => format!("Channel linked to {}.", monitors(n)),
             Self::Unlinked(n) => format!("Channel unlinked from {}.", monitors(n)),
+            Self::Added(n) => format!("{} added.", monitors(n)),
         }
     }
 }
@@ -950,6 +956,18 @@ impl FormTemplate {
     pub fn is_push(&self) -> bool {
         self.form.kind == PUSH
     }
+}
+
+/// The form that adds a monitor per pasted URL.
+#[derive(Template, WebTemplate)]
+#[template(path = "monitors/bulk_add.html")]
+pub struct BulkAddTemplate {
+    pub form: BulkMonitorForm,
+    pub errors: BulkErrors,
+    /// Every channel, sorted by name, for the alert checkboxes.
+    pub channels: Vec<Channel>,
+    pub groups: Vec<String>,
+    pub csrf_token: String,
 }
 
 /// The form that renames a group: every monitor in it moves to the new name.

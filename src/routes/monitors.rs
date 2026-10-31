@@ -1,10 +1,11 @@
 use crate::error::AppError;
+use crate::forms::bulk_monitor::{BulkErrors, BulkMonitorForm};
 use crate::forms::monitor::{FieldErrors, MonitorForm, PUSH, clean_group};
 use crate::models::{Channel, Monitor, Session, is_unique_violation};
 use crate::routes::{PathId, form_or_invalid, parse_id};
 use crate::state::AppState;
 use crate::views::monitors::{
-    BulkDone, DashboardFilter, DetailTemplate, FormTemplate, IndexTemplate, Range,
+    BulkAddTemplate, BulkDone, DashboardFilter, DetailTemplate, FormTemplate, IndexTemplate, Range,
     RenameGroupTemplate, test_summary,
 };
 use axum::extract::rejection::FormRejection;
@@ -24,6 +25,7 @@ pub fn router() -> Router<AppState> {
         .route("/", get(index))
         .route("/monitors/new", get(new_form).post(create))
         .route("/monitors/bulk", post(bulk))
+        .route("/monitors/new/bulk", get(bulk_add_form).post(bulk_add))
         .route("/groups/rename", get(rename_group_form).post(rename_group))
         .route("/monitors/new/test", post(test_new))
         .route("/monitors/{id}", get(detail))
@@ -126,6 +128,78 @@ async fn bulk(State(state): State<AppState>, body: String) -> Result<Redirect, A
         .unwrap_or_else(|| "/".to_string());
     let separator = if back.contains('?') { '&' } else { '?' };
     Ok(Redirect::to(&format!("{back}{separator}{}", done.query())))
+}
+
+/// The paste form, with the enabled channels ticked as on the add form.
+async fn bulk_add_form(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+) -> Result<BulkAddTemplate, AppError> {
+    let mut page = bulk_add_page(
+        &state,
+        BulkMonitorForm::default(),
+        BulkErrors::default(),
+        session.csrf_token,
+    )
+    .await?;
+    let enabled: Vec<i64> = page
+        .channels
+        .iter()
+        .filter(|c| c.enabled)
+        .map(|c| c.id)
+        .collect();
+    page.form.set_channels(&enabled);
+    Ok(page)
+}
+
+/// Every pasted URL becomes a monitor, or none does: the form comes back with the faulty lines.
+async fn bulk_add(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    form: Result<Form<BulkMonitorForm>, FormRejection>,
+) -> Result<Response, AppError> {
+    let form = form_or_invalid(form)?;
+    let inputs = match form.validate(&Monitor::name_keys(&state.db).await?) {
+        Ok(inputs) => inputs,
+        Err(errors) => {
+            return Ok(bulk_add_page(&state, form, errors, session.csrf_token)
+                .await?
+                .into_response());
+        }
+    };
+    match Monitor::create_many(&state.db, &inputs).await {
+        Ok(ids) => {
+            ids.iter().for_each(|&id| state.engine.reload(id));
+            let done = BulkDone::Added(ids.len() as u64);
+            Ok(Redirect::to(&format!("/?{}", done.query())).into_response())
+        }
+        // A monitor saved meanwhile took a name: the next try numbers around it.
+        Err(e) if is_unique_violation(&e) => {
+            let errors = BulkErrors {
+                urls: Some("A name was taken meanwhile: submit again.".to_string()),
+                ..BulkErrors::default()
+            };
+            Ok(bulk_add_page(&state, form, errors, session.csrf_token)
+                .await?
+                .into_response())
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+async fn bulk_add_page(
+    state: &AppState,
+    form: BulkMonitorForm,
+    errors: BulkErrors,
+    csrf_token: String,
+) -> Result<BulkAddTemplate, AppError> {
+    Ok(BulkAddTemplate {
+        form,
+        errors,
+        channels: Channel::all(&state.db).await?,
+        groups: Monitor::group_names(&state.db).await?,
+        csrf_token,
+    })
 }
 
 #[derive(Debug, Default, serde::Deserialize)]

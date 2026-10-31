@@ -3,6 +3,7 @@ use crate::forms::monitor::{MonitorInput, PUSH};
 use crate::models::{Channel, MonitorState, MonitorStatus, id_list};
 use crate::time::now_ms;
 use sqlx::{FromRow, SqlitePool};
+use std::collections::HashSet;
 use unicode_normalization::UnicodeNormalization;
 
 const COLUMNS: &str = "id, name, group_name, kind, url, method, headers, body, keyword, accepted_statuses, \
@@ -142,6 +143,14 @@ impl Monitor {
         .await
     }
 
+    /// Every stored name's key, to pick names that are free.
+    pub async fn name_keys(pool: &SqlitePool) -> Result<HashSet<String>, sqlx::Error> {
+        let keys: Vec<String> = sqlx::query_scalar("SELECT name_key FROM monitors")
+            .fetch_all(pool)
+            .await?;
+        Ok(keys.into_iter().collect())
+    }
+
     /// The group names in use, sorted, each spelled as on its first monitor by name, like on the
     /// dashboard: the form's suggestions.
     pub async fn group_names(pool: &SqlitePool) -> Result<Vec<String>, sqlx::Error> {
@@ -186,9 +195,31 @@ impl Monitor {
 
     /// Inserts the monitor and its initial `pending` state in one transaction.
     pub async fn create(pool: &SqlitePool, input: &MonitorInput) -> Result<i64, sqlx::Error> {
-        let now = now_ms();
         let mut tx = pool.begin().await?;
+        let id = Self::insert(&mut tx, input).await?;
+        tx.commit().await?;
+        Ok(id)
+    }
 
+    /// All the monitors or none, in the order given.
+    pub async fn create_many(
+        pool: &SqlitePool,
+        inputs: &[MonitorInput],
+    ) -> Result<Vec<i64>, sqlx::Error> {
+        let mut tx = pool.begin().await?;
+        let mut ids = Vec::with_capacity(inputs.len());
+        for input in inputs {
+            ids.push(Self::insert(&mut tx, input).await?);
+        }
+        tx.commit().await?;
+        Ok(ids)
+    }
+
+    async fn insert(
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        input: &MonitorInput,
+    ) -> Result<i64, sqlx::Error> {
+        let now = now_ms();
         let id = sqlx::query(
             r#"
             INSERT INTO monitors (
@@ -221,17 +252,15 @@ impl Monitor {
         .bind(&input.kind)
         .bind(input.grace_s)
         .bind((input.kind == PUSH).then(random_token))
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?
         .last_insert_rowid();
 
         sqlx::query("INSERT INTO monitor_state (monitor_id) VALUES (?)")
             .bind(id)
-            .execute(&mut *tx)
+            .execute(&mut **tx)
             .await?;
-        Channel::set_for_monitor(&mut tx, id, &input.channel_ids).await?;
-
-        tx.commit().await?;
+        Channel::set_for_monitor(tx, id, &input.channel_ids).await?;
         Ok(id)
     }
 

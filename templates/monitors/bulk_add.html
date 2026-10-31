@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+
+{% block title %}Add Several Monitors - Uptime Monitoring{% endblock %}
+{% block nav_monitors %}aria-current="page"{% endblock %}
+
+{% block styles %}
+<link href="/static/css/forms.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-header">
+        <h1 class="form-title">Add Several Monitors</h1>
+        <p class="form-subtitle">One HTTP monitor per URL, named after its host, with the usual defaults: GET every
+            60 s, 2xx expected, down after 3 failures. Edit any of them afterwards.</p>
+    </div>
+
+    {% if !errors.lines.is_empty() %}
+    <div class="error-banner" role="alert">
+        <span>Nothing added: fix these lines first.</span>
+        <ul>
+            {%- for error in errors.lines %}
+            <li>Line {{ error.line }} ({{ error.url }}): {{ error.message }}</li>
+            {%- endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <div class="form-card">
+        <form action="/monitors/new/bulk" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-section">
+                <div class="form-group">
+                    <label class="form-label" for="urls">URLs *</label>
+                    <textarea class="form-textarea" id="urls" name="urls" rows="10" required autofocus
+                              placeholder="https://example.com/health&#10;api.example.org">{{ form.urls }}</textarea>
+                    <p class="form-hint">One per line, at most {{ BULK_MAX_URLS }}. Without a scheme, https:// is used.</p>
+                    {% if let Some(message) = errors.urls %}<p class="field-error">{{ message }}</p>{% endif %}
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="group">Group</label>
+                    <input class="form-input" id="group" name="group" type="text" maxlength="{{ GROUP_MAX_CHARS }}"
+                           list="group-names" value="{{ form.group }}"/>
+                    <datalist id="group-names">
+                        {%- for group in groups %}
+                        <option value="{{ group }}">
+                        {%- endfor %}
+                    </datalist>
+                    {% if let Some(message) = errors.group %}<p class="field-error">{{ message }}</p>{% endif %}
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2 class="section-title">Alerts</h2>
+                {% if channels.is_empty() %}
+                <p class="form-hint">No notification channel yet. <a href="/alerts/new">Add one</a> to be alerted when a monitor goes down.</p>
+                {% else %}
+                <div class="form-row">
+                    {% for channel in channels %}
+                    <div class="form-group">
+                        <label class="checkbox-group" for="channel_{{ channel.id }}">
+                            <input type="checkbox" id="channel_{{ channel.id }}" name="channel_{{ channel.id }}"
+                                   {%- if form.has_channel(*channel.id) %} checked{% endif %}/>
+                            <div class="checkbox-label-group">
+                                <span class="form-label">{{ channel.name }}</span>
+                                <span class="form-hint">{{ channel.kind }}{% if !channel.enabled %} (disabled){% endif %}</span>
+                            </div>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="form-actions">
+                <div class="form-actions-left">
+                    <button class="button-primary" type="submit">Add monitors</button>
+                    <a class="button-secondary" href="/">Cancel</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
