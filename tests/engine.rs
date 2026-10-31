@@ -155,3 +155,16 @@ async fn monitor_routes_drive_the_engine() {
     post_form(&app, "/monitors/1/toggle-pause", "").await;
     wait_for_checks(&pool, 1, 3).await;
 }
+
+#[tokio::test]
+async fn staggered_start_spreads_first_checks_over_the_interval() {
+    let pool = common::test_app().await.1;
+    let handle = start(&pool).await;
+    let first = create(&pool, &target().await).await;
+    let second = create(&pool, &target().await).await;
+    handle.reload_staggered(&[first, second]);
+    wait_for_checks(&pool, first, 1).await;
+    // Second of two, 60 s interval: its first check waits 30 s.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(checks(&pool, second).await, 0);
+}

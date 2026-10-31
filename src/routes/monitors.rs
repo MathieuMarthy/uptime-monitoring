@@ -142,13 +142,7 @@ async fn bulk_add_form(
         session.csrf_token,
     )
     .await?;
-    let enabled: Vec<i64> = page
-        .channels
-        .iter()
-        .filter(|c| c.enabled)
-        .map(|c| c.id)
-        .collect();
-    page.form.set_channels(&enabled);
+    page.form.set_channels(&enabled_channel_ids(&page.channels));
     Ok(page)
 }
 
@@ -159,32 +153,33 @@ async fn bulk_add(
     form: Result<Form<BulkMonitorForm>, FormRejection>,
 ) -> Result<Response, AppError> {
     let form = form_or_invalid(form)?;
-    let inputs = match form.validate(&Monitor::name_keys(&state.db).await?) {
-        Ok(inputs) => inputs,
-        Err(errors) => {
-            return Ok(bulk_add_page(&state, form, errors, session.csrf_token)
-                .await?
-                .into_response());
+    // A monitor saved meanwhile may take a name: the second try numbers around it.
+    for _ in 0..2 {
+        let inputs = match form.validate(&Monitor::name_keys(&state.db).await?) {
+            Ok(inputs) => inputs,
+            Err(errors) => {
+                return Ok(bulk_add_page(&state, form, errors, session.csrf_token)
+                    .await?
+                    .into_response());
+            }
+        };
+        match Monitor::create_many(&state.db, &inputs).await {
+            Ok(ids) => {
+                state.engine.reload_staggered(&ids);
+                let done = BulkDone::Added(ids.len() as u64);
+                return Ok(Redirect::to(&format!("/?{}", done.query())).into_response());
+            }
+            Err(e) if is_unique_violation(&e) => continue,
+            Err(e) => return Err(e.into()),
         }
-    };
-    match Monitor::create_many(&state.db, &inputs).await {
-        Ok(ids) => {
-            ids.iter().for_each(|&id| state.engine.reload(id));
-            let done = BulkDone::Added(ids.len() as u64);
-            Ok(Redirect::to(&format!("/?{}", done.query())).into_response())
-        }
-        // A monitor saved meanwhile took a name: the next try numbers around it.
-        Err(e) if is_unique_violation(&e) => {
-            let errors = BulkErrors {
-                urls: Some("A name was taken meanwhile: submit again.".to_string()),
-                ..BulkErrors::default()
-            };
-            Ok(bulk_add_page(&state, form, errors, session.csrf_token)
-                .await?
-                .into_response())
-        }
-        Err(e) => Err(e.into()),
     }
+    let errors = BulkErrors {
+        urls: Some("Names were taken meanwhile: submit again.".to_string()),
+        ..BulkErrors::default()
+    };
+    Ok(bulk_add_page(&state, form, errors, session.csrf_token)
+        .await?
+        .into_response())
 }
 
 async fn bulk_add_page(
@@ -299,13 +294,7 @@ async fn new_form(
         session.csrf_token,
     )
     .await?;
-    let enabled: Vec<i64> = page
-        .channels
-        .iter()
-        .filter(|c| c.enabled)
-        .map(|c| c.id)
-        .collect();
-    page.form.set_channels(&enabled);
+    page.form.set_channels(&enabled_channel_ids(&page.channels));
     Ok(page)
 }
 
@@ -542,6 +531,15 @@ async fn page(
         groups: Monitor::group_names(&state.db).await?,
         test_result: None,
     })
+}
+
+/// A new monitor's alerts go to every enabled channel until unticked.
+fn enabled_channel_ids(channels: &[Channel]) -> Vec<i64> {
+    channels
+        .iter()
+        .filter(|c| c.enabled)
+        .map(|c| c.id)
+        .collect()
 }
 
 fn name_taken() -> FieldErrors {

@@ -1,6 +1,8 @@
 //! Many HTTP monitors from a pasted list of URLs, one per line, with the add form's defaults.
 
-use crate::forms::monitor::{MonitorForm, MonitorInput, clean_group};
+use crate::forms::monitor::{
+    MonitorForm, MonitorInput, channel_ids_in, clean_group, has_channel_in, set_channels_in,
+};
 use crate::models::name_key;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashSet};
@@ -38,20 +40,11 @@ pub struct BulkErrors {
 
 impl BulkMonitorForm {
     pub fn has_channel(&self, id: i64) -> bool {
-        self.channel_form().has_channel(id)
+        has_channel_in(&self.other, id)
     }
 
     pub fn set_channels(&mut self, ids: &[i64]) {
-        let mut form = self.channel_form();
-        form.set_channels(ids);
-        self.other = form.other;
-    }
-
-    fn channel_form(&self) -> MonitorForm {
-        MonitorForm {
-            other: self.other.clone(),
-            ..MonitorForm::default()
-        }
+        set_channels_in(&mut self.other, ids);
     }
 
     /// One monitor per non-blank line, named after its host (without `www.`), numbered when the
@@ -59,9 +52,10 @@ impl BulkMonitorForm {
     /// `https://`. Every line is checked; any error and nothing is returned.
     pub fn validate(&self, taken: &HashSet<String>) -> Result<Vec<MonitorInput>, BulkErrors> {
         let mut errors = BulkErrors::default();
-        let group_name = clean_group(&self.group)
-            .map_err(|e| errors.group = Some(e.to_string()))
-            .unwrap_or(None);
+        // Checked again with each line; reported once.
+        if let Err(error) = clean_group(&self.group) {
+            errors.group = Some(error.to_string());
+        }
 
         let lines: Vec<(usize, &str)> = self
             .urls
@@ -79,10 +73,16 @@ impl BulkMonitorForm {
             return Err(errors);
         }
 
+        // Only the channel boxes: the other fields (CSRF token…) are not copied per line.
+        let mut template = MonitorForm {
+            group: self.group.clone(),
+            ..MonitorForm::new_defaults()
+        };
+        set_channels_in(&mut template.other, &channel_ids_in(&self.other));
         let mut used = taken.clone();
         let mut inputs = Vec::with_capacity(lines.len());
         for (line, raw) in lines {
-            let url = if raw.contains("://") {
+            let url = if has_scheme(raw) {
                 raw.to_string()
             } else {
                 format!("https://{raw}")
@@ -90,21 +90,22 @@ impl BulkMonitorForm {
             let name = free_name(&base_name(&url), &used);
             let form = MonitorForm {
                 name: name.clone(),
-                url: url.clone(),
-                other: self.other.clone(),
-                ..MonitorForm::new_defaults()
+                url,
+                ..template.clone()
             };
             match form.validate() {
-                Ok(mut input) => {
+                Ok(input) => {
                     used.insert(name_key(&name));
-                    input.group_name = group_name.clone();
                     inputs.push(input);
                 }
                 Err(mut field_errors) => {
-                    let message = field_errors
+                    field_errors.remove("group");
+                    let Some(message) = field_errors
                         .remove("url")
                         .or_else(|| field_errors.into_values().next())
-                        .unwrap_or_default();
+                    else {
+                        continue;
+                    };
                     errors.lines.push(LineError {
                         line,
                         url: raw.to_string(),
@@ -121,12 +122,22 @@ impl BulkMonitorForm {
     }
 }
 
-/// The URL's host without `www.`; a URL that does not parse gets a placeholder, as its line is
-/// refused anyway.
+/// Whether the line starts with `scheme://`; a `://` further on (`?next=https://…`) does not count.
+fn has_scheme(line: &str) -> bool {
+    line.split_once("://").is_some_and(|(scheme, _)| {
+        scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    })
+}
+
+/// The URL's host without `www.`, international letters shown (`café.fr`, not punycode); a URL
+/// that does not parse gets a placeholder, as its line is refused anyway.
 fn base_name(url: &str) -> String {
     let host = url::Url::parse(url)
         .ok()
-        .and_then(|u| u.host_str().map(str::to_string))
+        .and_then(|u| u.host_str().map(|h| idna::domain_to_unicode(h).0))
         .unwrap_or_default();
     let host = host
         .strip_prefix("www.")
@@ -172,6 +183,23 @@ mod tests {
             base_name(&format!("https://{}.com", "a".repeat(120))).len(),
             90
         );
+    }
+
+    #[test]
+    fn scheme_is_added_unless_the_line_starts_with_one() {
+        let inputs = form("example.com/login?next=https://example.com/\nHTTP://a.example")
+            .validate(&HashSet::new())
+            .unwrap();
+        assert_eq!(
+            inputs[0].url,
+            "https://example.com/login?next=https://example.com/"
+        );
+        assert_eq!(inputs[1].url, "HTTP://a.example");
+    }
+
+    #[test]
+    fn international_hosts_keep_their_letters() {
+        assert_eq!(base_name("https://www.café.fr/"), "café.fr");
     }
 
     #[test]

@@ -85,6 +85,27 @@ pub struct MonitorForm {
 
 const CHANNEL_PREFIX: &str = "channel_";
 
+/// The channels ticked among a form's fields.
+pub fn channel_ids_in(fields: &BTreeMap<String, String>) -> Vec<i64> {
+    fields
+        .keys()
+        .filter_map(|key| key.strip_prefix(CHANNEL_PREFIX)?.parse().ok())
+        .filter(|id| *id > 0)
+        .collect()
+}
+
+pub fn has_channel_in(fields: &BTreeMap<String, String>, id: i64) -> bool {
+    fields.contains_key(&format!("{CHANNEL_PREFIX}{id}"))
+}
+
+/// Ticks exactly these channels among a form's fields.
+pub fn set_channels_in(fields: &mut BTreeMap<String, String>, ids: &[i64]) {
+    fields.retain(|key, _| !key.starts_with(CHANNEL_PREFIX));
+    for id in ids {
+        fields.insert(format!("{CHANNEL_PREFIX}{id}"), "on".to_string());
+    }
+}
+
 /// A validated monitor configuration, ready to be stored.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MonitorInput {
@@ -177,24 +198,16 @@ impl MonitorForm {
 
     /// Ids of the checked channels.
     pub fn channel_ids(&self) -> Vec<i64> {
-        self.other
-            .keys()
-            .filter_map(|key| key.strip_prefix(CHANNEL_PREFIX)?.parse().ok())
-            .filter(|id| *id > 0)
-            .collect()
+        channel_ids_in(&self.other)
     }
 
     pub fn has_channel(&self, id: i64) -> bool {
-        self.other.contains_key(&format!("{CHANNEL_PREFIX}{id}"))
+        has_channel_in(&self.other, id)
     }
 
     /// Checks exactly these channels.
     pub fn set_channels(&mut self, ids: &[i64]) {
-        self.other.retain(|key, _| !key.starts_with(CHANNEL_PREFIX));
-        for id in ids {
-            self.other
-                .insert(format!("{CHANNEL_PREFIX}{id}"), "on".to_string());
-        }
+        set_channels_in(&mut self.other, ids);
     }
 
     pub fn validate(&self) -> Result<MonitorInput, FieldErrors> {

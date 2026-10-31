@@ -36,16 +36,38 @@ const MAX_STARTUP_SPREAD: Duration = Duration::from_secs(60);
 /// which is what tests of the web layer use.
 #[derive(Clone, Default)]
 pub struct EngineHandle {
-    commands: Option<mpsc::UnboundedSender<i64>>,
+    commands: Option<mpsc::UnboundedSender<Reload>>,
     pings: Option<mpsc::Sender<(i64, CheckOutcome)>>,
 }
 
 impl EngineHandle {
     /// Re-reads the monitor and restarts its checks, or stops them if it is paused or deleted.
     pub fn reload(&self, monitor_id: i64) {
+        self.send(Reload {
+            monitor_id,
+            slot: 0,
+            slots: 1,
+        });
+    }
+
+    /// Starts monitors added together with their first checks spread evenly over the interval
+    /// (at most a minute), the first at once: they do not all check in the same instant, again
+    /// and again.
+    pub fn reload_staggered(&self, monitor_ids: &[i64]) {
+        let slots = u32::try_from(monitor_ids.len()).unwrap_or(u32::MAX);
+        for (slot, &monitor_id) in (0..slots).zip(monitor_ids) {
+            self.send(Reload {
+                monitor_id,
+                slot,
+                slots,
+            });
+        }
+    }
+
+    fn send(&self, reload: Reload) {
         if let Some(commands) = &self.commands {
             // Fails only once the engine has stopped, during shutdown.
-            let _ = commands.send(monitor_id);
+            let _ = commands.send(reload);
         }
     }
 
@@ -56,6 +78,13 @@ impl EngineHandle {
             let _ = pings.try_send((monitor_id, outcome));
         }
     }
+}
+
+/// Restart `monitor_id`, its first check delayed by `slot / slots` of its spread.
+struct Reload {
+    monitor_id: i64,
+    slot: u32,
+    slots: u32,
 }
 
 /// Starts the engine: one task per active monitor, first checks spread at random. Alerts go to
@@ -81,8 +110,7 @@ pub async fn start(
 
     for monitor in Monitor::find_all(&supervisor.pool).await? {
         if !monitor.paused {
-            let spread =
-                Duration::from_secs(monitor.interval_s.unsigned_abs()).min(MAX_STARTUP_SPREAD);
+            let spread = startup_spread(&monitor);
             supervisor.spawn(monitor, random_below(spread));
         }
     }
@@ -111,13 +139,13 @@ struct Task {
 impl Supervisor {
     async fn run(
         mut self,
-        mut commands: mpsc::UnboundedReceiver<i64>,
+        mut commands: mpsc::UnboundedReceiver<Reload>,
         mut pings: mpsc::Receiver<(i64, CheckOutcome)>,
     ) {
         loop {
             tokio::select! {
                 command = commands.recv() => match command {
-                    Some(monitor_id) => self.reload(monitor_id).await,
+                    Some(reload) => self.reload(reload).await,
                     None => return,
                 },
                 Some((monitor_id, outcome)) = pings.recv() => {
@@ -129,7 +157,14 @@ impl Supervisor {
         }
     }
 
-    async fn reload(&mut self, monitor_id: i64) {
+    async fn reload(
+        &mut self,
+        Reload {
+            monitor_id,
+            slot,
+            slots,
+        }: Reload,
+    ) {
         if let Some(task) = self.tasks.remove(&monitor_id) {
             task.handle.abort();
             // Waits for the task to stop, so it cannot record a check after the new one reads
@@ -137,7 +172,10 @@ impl Supervisor {
             let _ = task.handle.await;
         }
         match Monitor::find(&self.pool, monitor_id).await {
-            Ok(Some(monitor)) if !monitor.paused => self.spawn(monitor, Duration::ZERO),
+            Ok(Some(monitor)) if !monitor.paused => {
+                let delay = startup_spread(&monitor) * slot / slots.max(1);
+                self.spawn(monitor, delay);
+            }
             Ok(_) => {}
             Err(e) => tracing::error!(monitor_id, error = %e, "cannot reload monitor"),
         }
@@ -160,6 +198,10 @@ impl Supervisor {
         };
         self.tasks.insert(id, task);
     }
+}
+
+fn startup_spread(monitor: &Monitor) -> Duration {
+    Duration::from_secs(monitor.interval_s.unsigned_abs()).min(MAX_STARTUP_SPREAD)
 }
 
 fn random_below(limit: Duration) -> Duration {

@@ -40,36 +40,20 @@
                 <div class="form-group">
                     <label class="form-label" for="group">Group</label>
                     <input class="form-input" id="group" name="group" type="text" maxlength="{{ GROUP_MAX_CHARS }}"
-                           list="group-names" value="{{ form.group }}"/>
+                           list="group-names" placeholder="e.g. Production, Customers" value="{{ form.group }}"/>
                     <datalist id="group-names">
                         {%- for group in groups %}
                         <option value="{{ group }}">
                         {%- endfor %}
                     </datalist>
+                    <span class="form-hint">Every new monitor joins it. Leave blank for none.</span>
                     {% if let Some(message) = errors.group %}<p class="field-error">{{ message }}</p>{% endif %}
                 </div>
             </div>
 
             <div class="form-section">
                 <h2 class="section-title">Alerts</h2>
-                {% if channels.is_empty() %}
-                <p class="form-hint">No notification channel yet. <a href="/alerts/new">Add one</a> to be alerted when a monitor goes down.</p>
-                {% else %}
-                <div class="form-row">
-                    {% for channel in channels %}
-                    <div class="form-group">
-                        <label class="checkbox-group" for="channel_{{ channel.id }}">
-                            <input type="checkbox" id="channel_{{ channel.id }}" name="channel_{{ channel.id }}"
-                                   {%- if form.has_channel(*channel.id) %} checked{% endif %}/>
-                            <div class="checkbox-label-group">
-                                <span class="form-label">{{ channel.name }}</span>
-                                <span class="form-hint">{{ channel.kind }}{% if !channel.enabled %} (disabled){% endif %}</span>
-                            </div>
-                        </label>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
+                {% include "partials/channel-boxes.html" %}
             </div>
 
             <div class="form-actions">

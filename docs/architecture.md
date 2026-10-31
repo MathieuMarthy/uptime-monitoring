@@ -335,11 +335,13 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   rows on screen on "Select all", and unticks a row the filter hides or a folded group covers. The form is in the live block, so `live.js` keeps it, rows frozen,
   while a box is ticked. The Move button comes first in the form so Enter in the group field moves.
 - **Add several.** `GET|POST /monitors/new/bulk` (`forms/bulk_monitor.rs`) takes pasted URLs, one per line (blank
-  lines skipped, at most 200, `https://` added when no scheme), a group and the channel boxes. Each line is an HTTP
-  monitor with the add form's defaults, named after its host without `www.`, numbered `host (2)` when the name is
+  lines skipped, at most 200, `https://` added unless the line starts with a scheme), a group and the channel boxes
+  (`partials/channel-boxes.html`, shared with the monitor form). Each line is an HTTP monitor with the add form's
+  defaults, named after its host without `www.` (in Unicode, not punycode), numbered `host (2)` when the name is
   taken. Every line goes through `MonitorForm::validate`; one faulty line and nothing is saved, the form comes back
-  with the paste and the line numbers. `Monitor::create_many` stores all in one transaction, then
-  `/?done=added&count=N`.
+  with the paste and the line numbers. `Monitor::create_many` stores all in one transaction (retried once if a name
+  was taken meanwhile), then `/?done=added&count=N`. `EngineHandle::reload_staggered` starts them with first checks
+  spread evenly over the interval (at most a minute), so a paste does not check in lockstep.
 
 ## Activity
 
