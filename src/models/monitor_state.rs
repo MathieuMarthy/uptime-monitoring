@@ -104,6 +104,10 @@ impl MonitorState {
     /// `None`, recording nothing, when the monitor is paused or deleted, or when its state no
     /// longer matches `health` (a pause reset it meanwhile): the caller must stop and let a
     /// fresh task take over.
+    ///
+    /// During a maintenance window (`in_maintenance`) the check is kept but covers no time, and
+    /// the state machine is frozen: no transition, no certificate warning, and a failure series
+    /// below the threshold starts again after the window.
     pub async fn record(
         pool: &SqlitePool,
         monitor_id: i64,
@@ -111,9 +115,14 @@ impl MonitorState {
         health: Health,
         failure_threshold: i64,
         tls_warn_days: Option<i64>,
+        in_maintenance: bool,
     ) -> Result<Option<Recorded>, sqlx::Error> {
-        let (next, transition) =
-            verdict::apply(health, outcome.ok(), outcome.checked_at, failure_threshold);
+        let (next, transition) = if in_maintenance {
+            (verdict::frozen(health), None)
+        } else {
+            verdict::apply(health, outcome.ok(), outcome.checked_at, failure_threshold)
+        };
+        let tls_warn_days = tls_warn_days.filter(|_| !in_maintenance);
         let mut tx = pool.begin().await?;
 
         // Written first so the transaction takes the write lock at once.
@@ -145,7 +154,7 @@ impl MonitorState {
             return Ok(None);
         }
 
-        Check::insert(&mut tx, monitor_id, outcome).await?;
+        Check::insert(&mut tx, monitor_id, outcome, in_maintenance).await?;
         match transition {
             Some(Transition::WentDown { since }) => {
                 let latest = outcome.failure.as_ref().expect("only a failure goes down");

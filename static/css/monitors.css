@@ -131,6 +131,7 @@
 .state-down { color: var(--stop-ink); }
 .state-pending { color: var(--caution-ink); }
 .state-paused { color: var(--muted); }
+.state-maintenance { color: var(--maint-ink); }
 
 .row-paused .monitor-name-text {
     color: var(--muted);

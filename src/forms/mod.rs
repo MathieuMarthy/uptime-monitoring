@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod channel;
 pub mod incident;
+pub mod maintenance;
 pub mod monitor;
 pub mod settings;
 pub mod status_page;

@@ -141,7 +141,7 @@ async fn preview(
 ) -> Result<Html<String>, AppError> {
     let stored = load(&state, id).await?;
     Ok(Html(
-        PublicTemplate::load(&state.db, &stored)
+        PublicTemplate::load(&state.db, &state.maintenances, &stored)
             .await?
             .render_html()?,
     ))
@@ -166,7 +166,7 @@ async fn public_page(
                 .await?
                 .filter(|p| p.published)
                 .ok_or(AppError::NotFound)?;
-            PublicTemplate::load(&state.db, &stored)
+            PublicTemplate::load(&state.db, &state.maintenances, &stored)
                 .await?
                 .render_html()
         })

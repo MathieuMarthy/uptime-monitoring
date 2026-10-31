@@ -330,9 +330,14 @@ async fn engine_alerts_on_down_then_up() {
     )
     .await;
     let notifier = notifier(&pool);
-    let engine = uptime_monitoring::engine::start(pool.clone(), Guard::new(false), notifier)
-        .await
-        .unwrap();
+    let engine = uptime_monitoring::engine::start(
+        pool.clone(),
+        Guard::new(false),
+        notifier,
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
     engine.reload(m.id);
     let request = next(&mut rx).await;

@@ -9,6 +9,7 @@
         <nav class="site-nav" aria-label="Main navigation">
             <a href="/" {% block nav_monitors %}{% endblock %}>Monitors</a>
             <a href="/activity" {% block nav_activity %}{% endblock %}>Activity</a>
+            <a href="/maintenances" {% block nav_maintenances %}{% endblock %}><span class="nav-full">Maintenance</span><span class="nav-short" aria-hidden="true">Maint.</span></a>
             <a href="/public-pages" {% block nav_public_pages %}{% endblock %}>Public pages</a>
             <a href="/alerts" {% block nav_alerts %}{% endblock %}>Alerts</a>
         </nav>

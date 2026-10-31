@@ -77,6 +77,20 @@
 .status-down { color: var(--stop-ink); }
 .status-pending { color: var(--caution-ink); }
 .status-paused { color: var(--muted); }
+.status-maintenance { color: var(--maint-ink); }
+
+.maintenance-notice {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border: 1px solid var(--maint);
+    border-left-width: 4px;
+    border-radius: 6px;
+    background: var(--maint-wash);
+}
+
+.maintenance-notice p {
+    margin: 0;
+}
 
 .status-legend {
     display: flex;

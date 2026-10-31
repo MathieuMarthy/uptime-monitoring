@@ -6,6 +6,7 @@ use crate::engine::http::HttpChecker;
 use crate::models::Admin;
 use crate::notify::Notifier;
 use crate::page_cache::PageCache;
+use crate::windows::Maintenances;
 use sqlx::SqlitePool;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
@@ -36,6 +37,8 @@ pub struct AppState {
     pub monitor_tests: Arc<Semaphore>,
     /// Runs those checks; its clients are built once. Rebuilt by `with_guard`.
     pub form_checker: Arc<HttpChecker>,
+    /// Maintenance windows, shared with the engine; reloaded after every change to them.
+    pub maintenances: Maintenances,
 }
 
 impl AppState {
@@ -53,6 +56,7 @@ impl AppState {
             public_pages: PageCache::default(),
             monitor_tests: Arc::new(Semaphore::new(MONITOR_TESTS)),
             form_checker: Arc::new(HttpChecker::new(Guard::default())),
+            maintenances: Maintenances::default(),
         }
     }
 
@@ -74,6 +78,11 @@ impl AppState {
     pub fn with_guard(mut self, guard: Guard) -> Self {
         self.form_checker = Arc::new(HttpChecker::new(guard.clone()));
         self.guard = guard;
+        self
+    }
+
+    pub fn with_maintenances(mut self, maintenances: Maintenances) -> Self {
+        self.maintenances = maintenances;
         self
     }
 

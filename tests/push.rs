@@ -243,6 +243,7 @@ async fn overdue_monitor_misses_soon_after_a_restart() {
         pool.clone(),
         uptime_monitoring::engine::guard::Guard::new(false),
         uptime_monitoring::notify::Notifier::default(),
+        Default::default(),
     )
     .await
     .unwrap();

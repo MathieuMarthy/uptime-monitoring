@@ -121,6 +121,29 @@
                     <a class="button-secondary button-small event-link" href="/monitors/{{ cert.monitor_id }}">Open {{ cert.monitor_name }}</a>
                 </div>
             </details>
+            {% when Event::Maintenance with (m) %}
+            <details class="event event-maintenance">
+                <summary class="event-summary">
+                    <span class="event-time">{{ m.time }}</span>
+                    <span class="lamp lamp-maintenance" aria-hidden="true"></span>
+                    <span class="event-text">
+                        <span class="event-title">Maintenance {% if m.started %}started{% else %}ended{% endif %}</span>
+                        <span class="event-subtitle">{{ m.title }}</span>
+                    </span>
+                    <svg class="event-chevron" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
+                        <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </summary>
+                <div class="event-body">
+                    <dl class="facts">
+                        {% for fact in m.facts %}
+                        <div><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+                        {% endfor %}
+                    </dl>
+                    <a class="button-secondary button-small event-link" href="/maintenances/{{ m.id }}/edit">Open the window</a>
+                </div>
+            </details>
             {% endmatch %}
             {% endfor %}
         </div>

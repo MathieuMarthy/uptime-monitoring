@@ -148,6 +148,7 @@ async fn foreign_keys_are_indexed() {
         "SELECT 1 FROM notification_log WHERE channel_id = 1",
         "SELECT 1 FROM notification_log WHERE monitor_id = 1",
         "SELECT 1 FROM status_page_monitors WHERE monitor_id = 1",
+        "SELECT 1 FROM maintenance_monitors WHERE monitor_id = 1",
     ];
     for lookup in lookups {
         let plan: Vec<(i64, i64, i64, String)> =
@@ -206,5 +207,53 @@ async fn push_monitor_needs_a_token_and_no_url() {
             .execute(&pool)
             .await
             .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn a_maintenance_is_either_one_off_or_weekly() {
+    let (_, pool) = common::test_app().await;
+    let insert = |cols: &str, values: &str| {
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "INSERT INTO maintenances (title, {cols}, created_at, updated_at) VALUES ('m', {values}, 0, 0)"
+        )))
+    };
+    assert!(
+        insert("starts_at, ends_at", "10, 20")
+            .execute(&pool)
+            .await
+            .is_ok()
+    );
+    assert!(
+        insert("starts_at, ends_at", "20, 20")
+            .execute(&pool)
+            .await
+            .is_err()
+    );
+    assert!(
+        insert("weekdays, local_start, duration_min", "1, 0, 60")
+            .execute(&pool)
+            .await
+            .is_ok()
+    );
+    assert!(
+        insert("weekdays, local_start, duration_min", "0, 0, 60")
+            .execute(&pool)
+            .await
+            .is_err(),
+        "no day"
+    );
+    assert!(
+        insert("weekdays, local_start, duration_min", "1, 1440, 60")
+            .execute(&pool)
+            .await
+            .is_err()
+    );
+    assert!(
+        insert("starts_at, ends_at, weekdays", "10, 20, 1")
+            .execute(&pool)
+            .await
+            .is_err(),
+        "both kinds"
     );
 }

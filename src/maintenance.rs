@@ -1,7 +1,7 @@
 //! Hourly upkeep: rolls completed days up into `daily_stats`, then purges what outlived its
 //! retention.
 
-use crate::models::{Check, DailyStat, Incident, Monitor, Session, Settings};
+use crate::models::{Check, DailyStat, Incident, Maintenance, Monitor, Session, Settings};
 use crate::time::{self, DAY_MS, day_from_key, day_key, day_of, day_start, now_ms};
 use jiff::tz::TimeZone;
 use sqlx::SqlitePool;
@@ -75,6 +75,7 @@ async fn purge(
     if let Some(days) = settings.history_retention_days {
         let cutoff = now - days * DAY_MS;
         Incident::purge_resolved_before(pool, cutoff).await?;
+        Maintenance::purge_ended_before(pool, cutoff).await?;
         DailyStat::purge_before(pool, time::day_key(day_of(tz, cutoff))).await?;
     }
     Session::purge_expired(pool, now).await

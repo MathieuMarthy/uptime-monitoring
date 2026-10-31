@@ -55,6 +55,20 @@
                 <button class="button-secondary" type="submit">Pause</button>
                 {% endif %}
             </form>
+            {% if !m.paused %}
+            <form action="/monitors/{{ m.id }}/maintenance" method="POST" class="inline-form maintenance-now">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <label class="visually-hidden" for="maintenance-minutes">Maintenance length</label>
+                <select class="form-select" id="maintenance-minutes" name="minutes">
+                    <option value="15">15 min</option>
+                    <option value="30" selected>30 min</option>
+                    <option value="60">1 h</option>
+                    <option value="120">2 h</option>
+                    <option value="240">4 h</option>
+                </select>
+                <button class="button-secondary" type="submit">Maintenance now</button>
+            </form>
+            {% endif %}
             <a class="button-secondary" href="/monitors/{{ m.id }}/duplicate">Duplicate</a>
             <a class="button-primary" href="/monitors/{{ m.id }}/edit">Edit monitor</a>
         </div>

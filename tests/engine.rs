@@ -20,9 +20,14 @@ async fn target() -> String {
 }
 
 async fn start(pool: &SqlitePool) -> engine::EngineHandle {
-    engine::start(pool.clone(), Guard::new(false), Notifier::default())
-        .await
-        .unwrap()
+    engine::start(
+        pool.clone(),
+        Guard::new(false),
+        Notifier::default(),
+        Default::default(),
+    )
+    .await
+    .unwrap()
 }
 
 async fn create(pool: &SqlitePool, url: &str) -> i64 {

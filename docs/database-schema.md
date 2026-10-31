@@ -29,6 +29,8 @@ erDiagram
     NOTIFICATION_CHANNELS ||--o{ NOTIFICATION_LOG : "deliveries"
     STATUS_PAGES ||--o{ STATUS_PAGE_MONITORS : ""
     MONITORS ||--o{ STATUS_PAGE_MONITORS : ""
+    MAINTENANCES ||--o{ MAINTENANCE_MONITORS : ""
+    MONITORS ||--o{ MAINTENANCE_MONITORS : ""
 ```
 
 `admin`, `sessions` and `settings` stand alone.
@@ -114,6 +116,16 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
 - `status_pages`: `id`, `slug` (UNIQUE), `title`, `description`, `published`, `created_at`, `updated_at`.
 - `status_page_monitors`: `(page_id, monitor_id)` PK, both FK cascade, index on `monitor_id`, `display_name` (NULL = monitor name),
   `position` (display order, from 0). Written as a whole with its page, in one transaction.
+
+### Maintenance windows
+
+- `maintenances`: `id`, `title`, `all_monitors` (every monitor, present and future; the links are then ignored),
+  `show_on_status_pages`, `created_at`, `updated_at`, and either `starts_at` + `ends_at` (one-off, `ends_at >
+  starts_at`) or `weekdays` (1–127, bit 0 = Monday) + `local_start` (0–1439 minutes after local midnight) +
+  `duration_min` (1–10 080), enforced by a CHECK. One-off windows ended before the history cutoff are purged.
+- `maintenance_monitors`: `(maintenance_id, monitor_id)` PK, both FK cascade, index on `monitor_id`. Written as a
+  whole with its window.
+- During a window, checks are stored with `covered_ms = 0` and `down = 0`.
 
 ### Authentication
 

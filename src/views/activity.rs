@@ -1,16 +1,17 @@
-//! The Activity page: outages, failed checks and certificate warnings across monitors, latest
-//! first, grouped by local day.
+//! The Activity page: outages, failed checks, certificate warnings and maintenance windows
+//! across monitors, latest first, grouped by local day.
 
 use crate::error::AppError;
 use crate::models::{
-    CertificateWarning, Check, FailedCheck, Incident, Monitor, MonitorState, MonitorSummary,
-    NamedIncident, NotificationLog, Settings,
+    CertificateWarning, Check, FailedCheck, Incident, Maintenance, Monitor, MonitorState,
+    MonitorSummary, NamedIncident, NotificationLog, Settings,
 };
 use crate::time::{DAY_MS, day_of, days_left, format_datetime, format_time, now_ms};
 use crate::views::incidents::{
     ALERT_DELAY_MS, AlertRow, Context, Fact, FailureRow, Following, IncidentDetail,
     error_kind_label,
 };
+use crate::views::maintenances::describe;
 use askama::Template;
 use askama_web::WebTemplate;
 use jiff::ToSpan;
@@ -27,16 +28,24 @@ pub enum Kind {
     Outages,
     Checks,
     Certificates,
+    Maintenance,
 }
 
 impl Kind {
-    pub const ALL: [Self; 4] = [Self::All, Self::Outages, Self::Checks, Self::Certificates];
+    pub const ALL: [Self; 5] = [
+        Self::All,
+        Self::Outages,
+        Self::Checks,
+        Self::Certificates,
+        Self::Maintenance,
+    ];
 
     fn parse(value: Option<&str>) -> Self {
         match value {
             Some("outages") => Self::Outages,
             Some("checks") => Self::Checks,
             Some("certificates") => Self::Certificates,
+            Some("maintenance") => Self::Maintenance,
             _ => Self::All,
         }
     }
@@ -47,6 +56,7 @@ impl Kind {
             Self::Outages => Some("outages"),
             Self::Checks => Some("checks"),
             Self::Certificates => Some("certificates"),
+            Self::Maintenance => Some("maintenance"),
         }
     }
 
@@ -56,6 +66,7 @@ impl Kind {
             Self::Outages => "Outages",
             Self::Checks => "Failed checks",
             Self::Certificates => "Certificates",
+            Self::Maintenance => "Maintenance",
         }
     }
 
@@ -75,12 +86,14 @@ pub struct Filter {
 }
 
 /// The source of an event, which orders events logged at the same millisecond.
+const MAINTENANCE_START: u8 = 4;
+const MAINTENANCE_END: u8 = 3;
 const OUTAGE: u8 = 2;
 const FAILURE: u8 = 1;
 const CERTIFICATE: u8 = 0;
 
-/// Where a page ends. Events sort by time, then source, then id (the incident's, or the
-/// monitor's for the other sources), latest first, so two events never tie.
+/// Where a page ends. Events sort by time, then source, then id (the incident's, the
+/// maintenance's, or the monitor's for the other sources), latest first, so two events never tie.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Cursor {
     pub at: i64,
@@ -184,10 +197,19 @@ pub struct CertificateEvent {
     pub alerts: Vec<AlertRow>,
 }
 
+pub struct MaintenanceEvent {
+    pub id: i64,
+    pub time: String,
+    pub title: String,
+    pub started: bool,
+    pub facts: Vec<Fact>,
+}
+
 pub enum Event {
     Outage(IncidentDetail),
     Failure(FailureEvent),
     Certificate(CertificateEvent),
+    Maintenance(MaintenanceEvent),
 }
 
 pub struct Day {
@@ -219,6 +241,18 @@ enum Raw {
     Outage(NamedIncident),
     Failure(FailedCheck),
     Certificate(CertificateWarning),
+    Maintenance(MaintenanceEdge),
+}
+
+/// The start or the end of one occurrence of a maintenance window.
+struct MaintenanceEdge {
+    id: i64,
+    at: i64,
+    started: bool,
+    title: String,
+    /// When the occurrence is on, in words.
+    window: String,
+    monitors: String,
 }
 
 impl Raw {
@@ -227,6 +261,15 @@ impl Raw {
             Self::Outage(i) => (i.incident.started_at, OUTAGE, i.incident.id),
             Self::Failure(f) => (f.checked_at, FAILURE, f.monitor_id),
             Self::Certificate(w) => (w.warned_at, CERTIFICATE, w.monitor_id),
+            Self::Maintenance(m) => (
+                m.at,
+                if m.started {
+                    MAINTENANCE_START
+                } else {
+                    MAINTENANCE_END
+                },
+                m.id,
+            ),
         };
         Cursor { at, source, id }
     }
@@ -265,6 +308,19 @@ impl IndexTemplate {
                 raw.push(Raw::Certificate(w));
             }
         }
+        if filter.kind.shows(Kind::Maintenance) {
+            let names: Vec<(i64, String)> = Monitor::summaries(pool)
+                .await?
+                .into_iter()
+                .map(|m| (m.id, m.name))
+                .collect();
+            for edge in maintenance_edges(pool, &tz, monitor, from, now, &names).await? {
+                let edge = Raw::Maintenance(edge);
+                if after.is_none_or(|c| edge.cursor() < c) {
+                    raw.push(edge);
+                }
+            }
+        }
         raw.sort_by_key(|r| std::cmp::Reverse(r.cursor()));
         let older_url =
             (raw.len() > PAGE).then(|| filter.url(filter.kind, Some(raw[PAGE - 1].cursor())));
@@ -296,6 +352,22 @@ impl IndexTemplate {
                 Raw::Certificate(w) => {
                     Event::Certificate(certificate_event(pool, &tz, w, now).await?)
                 }
+                Raw::Maintenance(m) => Event::Maintenance(MaintenanceEvent {
+                    id: m.id,
+                    time: format_time(&tz, m.at),
+                    title: m.title,
+                    started: m.started,
+                    facts: vec![
+                        Fact {
+                            label: "Window",
+                            value: m.window,
+                        },
+                        Fact {
+                            label: "Monitors",
+                            value: m.monitors,
+                        },
+                    ],
+                }),
             };
             match days.last_mut() {
                 Some(day) if day.label == label => day.events.push(event),
@@ -334,12 +406,64 @@ impl IndexTemplate {
     /// What the page lists, for its lede and empty state.
     pub fn scope(&self) -> &'static str {
         match self.filter.kind {
-            Kind::All => "Outages, failed checks and certificate warnings",
+            Kind::All => "Outages, failed checks, certificate warnings and maintenance",
             Kind::Outages => "Outages",
             Kind::Checks => "Failed checks that did not make a monitor down",
             Kind::Certificates => "Certificate warnings",
+            Kind::Maintenance => "Maintenance windows",
         }
     }
+}
+
+/// The starts and ends of maintenance windows from `from` to `now`, of the windows covering
+/// `monitor` (any window without one). Computed from the schedules: few windows, a few
+/// occurrences each.
+async fn maintenance_edges(
+    pool: &SqlitePool,
+    tz: &TimeZone,
+    monitor: Option<i64>,
+    from: i64,
+    now: i64,
+    names: &[(i64, String)],
+) -> Result<Vec<MaintenanceEdge>, AppError> {
+    let mut edges = Vec::new();
+    for (m, ids) in Maintenance::all(pool).await? {
+        if monitor.is_some_and(|id| !m.all_monitors && !ids.contains(&id)) {
+            continue;
+        }
+        let monitors = if m.all_monitors {
+            "All monitors".to_string()
+        } else {
+            names
+                .iter()
+                .filter(|(id, _)| ids.contains(id))
+                .map(|(_, name)| name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        for (start, end) in m.schedule().occurrences_between(tz, from, now + 1) {
+            let window = describe(
+                &crate::windows::Schedule::Once {
+                    starts_at: start,
+                    ends_at: end,
+                },
+                tz,
+            );
+            for (at, started) in [(start, true), (end, false)] {
+                if (from..=now).contains(&at) {
+                    edges.push(MaintenanceEdge {
+                        id: m.id,
+                        at,
+                        started,
+                        title: m.title.clone(),
+                        window: window.clone(),
+                        monitors: monitors.clone(),
+                    });
+                }
+            }
+        }
+    }
+    Ok(edges)
 }
 
 fn failure_event(tz: &TimeZone, f: FailedCheck) -> FailureEvent {

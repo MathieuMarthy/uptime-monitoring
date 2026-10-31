@@ -15,6 +15,7 @@ use crate::engine::scheduler::Scheduler;
 use crate::engine::verdict::CheckOutcome;
 use crate::models::Monitor;
 use crate::notify::Notifier;
+use crate::windows::Maintenances;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -58,17 +59,19 @@ impl EngineHandle {
 }
 
 /// Starts the engine: one task per active monitor, first checks spread at random. Alerts go to
-/// `notifier`.
+/// `notifier`; checks made during a window of `maintenances` neither count nor alert.
 pub async fn start(
     pool: SqlitePool,
     guard: Guard,
     notifier: Notifier,
+    maintenances: Maintenances,
 ) -> Result<EngineHandle, sqlx::Error> {
     let scheduler = Arc::new(Scheduler {
         pool: pool.clone(),
         checker: HttpChecker::new(guard),
         permits: Semaphore::new(MAX_CONCURRENT_CHECKS),
         notifier,
+        maintenances,
     });
     let mut supervisor = Supervisor {
         pool,

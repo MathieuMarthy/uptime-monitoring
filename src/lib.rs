@@ -20,6 +20,7 @@ pub mod routes;
 pub mod state;
 pub mod time;
 pub mod views;
+pub mod windows;
 
 use crate::error::AppError;
 use crate::state::AppState;

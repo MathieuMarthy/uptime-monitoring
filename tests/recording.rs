@@ -61,7 +61,7 @@ async fn record_all(
         .health();
     let mut transitions = Vec::new();
     for outcome in outcomes {
-        let recorded = MonitorState::record(pool, id, outcome, health, threshold, None)
+        let recorded = MonitorState::record(pool, id, outcome, health, threshold, None, false)
             .await
             .unwrap()
             .expect("monitor is active");
@@ -171,14 +171,14 @@ async fn recovery_resolves_incident() {
 async fn paused_or_deleted_monitor_is_not_recorded() {
     let (pool, id) = monitor("1").await;
     Monitor::toggle_pause(&pool, id).await.unwrap();
-    let recorded = MonitorState::record(&pool, id, &ok_at(1_000), Health::PENDING, 1, None)
+    let recorded = MonitorState::record(&pool, id, &ok_at(1_000), Health::PENDING, 1, None, false)
         .await
         .unwrap();
     assert_eq!(recorded, None);
     assert_eq!(count(&pool, "checks").await, 0);
 
     Monitor::delete(&pool, id).await.unwrap();
-    let recorded = MonitorState::record(&pool, id, &ok_at(2_000), Health::PENDING, 1, None)
+    let recorded = MonitorState::record(&pool, id, &ok_at(2_000), Health::PENDING, 1, None, false)
         .await
         .unwrap();
     assert_eq!(recorded, None);
@@ -270,12 +270,13 @@ async fn stale_health_is_not_recorded() {
         },
         1,
         None,
+        false,
     )
     .await
     .unwrap();
     assert_eq!(down, None, "the state was reset meanwhile");
     assert!(
-        MonitorState::record(&pool, id, &ok_at(3_000), stale, 1, None)
+        MonitorState::record(&pool, id, &ok_at(3_000), stale, 1, None, false)
             .await
             .unwrap()
             .is_some(),
@@ -304,6 +305,7 @@ async fn incident_opens_even_without_the_first_failed_check() {
         health,
         2,
         None,
+        false,
     )
     .await
     .unwrap();
@@ -373,7 +375,7 @@ async fn record_cert(pool: &SqlitePool, id: i64, outcome: &CheckOutcome) -> Opti
         .unwrap()
         .unwrap()
         .health();
-    MonitorState::record(pool, id, outcome, health, 1, Some(14))
+    MonitorState::record(pool, id, outcome, health, 1, Some(14), false)
         .await
         .unwrap()
         .expect("monitor is active")
@@ -431,10 +433,11 @@ async fn certificate_warning_needs_a_threshold_and_a_certificate() {
         .unwrap()
         .unwrap()
         .health();
-    let recorded = MonitorState::record(&pool, id, &ok_with_cert(0, DAY_MS), health, 1, None)
-        .await
-        .unwrap()
-        .unwrap();
+    let recorded =
+        MonitorState::record(&pool, id, &ok_with_cert(0, DAY_MS), health, 1, None, false)
+            .await
+            .unwrap()
+            .unwrap();
     assert_eq!(recorded.tls_warning, None, "warning disabled");
     assert_eq!(
         record_cert(&pool, id, &fail_at(1_000, ErrorKind::Timeout)).await,
@@ -446,4 +449,132 @@ async fn certificate_warning_needs_a_threshold_and_a_certificate() {
         ..ok_at(2_000)
     };
     assert_eq!(record_cert(&pool, id, &plain).await, None, "no TLS");
+}
+
+/// Records each outcome in turn, during a maintenance window when its flag is set.
+async fn record_maintained(
+    pool: &SqlitePool,
+    id: i64,
+    threshold: i64,
+    outcomes: &[(CheckOutcome, bool)],
+) -> Vec<Option<Transition>> {
+    let mut health = MonitorState::find(pool, id)
+        .await
+        .unwrap()
+        .unwrap()
+        .health();
+    let mut transitions = Vec::new();
+    for (outcome, maintained) in outcomes {
+        let recorded =
+            MonitorState::record(pool, id, outcome, health, threshold, Some(14), *maintained)
+                .await
+                .unwrap()
+                .expect("monitor is active");
+        health = recorded.health;
+        transitions.push(recorded.transition);
+        assert!(
+            !(*maintained && recorded.tls_warning.is_some()),
+            "no warning in a window"
+        );
+    }
+    transitions
+}
+
+async fn covered_and_down(pool: &SqlitePool, id: i64) -> Vec<(i64, i64, i64)> {
+    sqlx::query_as(
+        "SELECT checked_at, covered_ms, down FROM checks WHERE monitor_id = ? ORDER BY checked_at",
+    )
+    .bind(id)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn failures_during_maintenance_neither_go_down_nor_count() {
+    let (pool, id) = monitor("2").await;
+    let transitions = record_maintained(
+        &pool,
+        id,
+        2,
+        &[
+            (ok_at(1_000), false),
+            (fail_at(2_000, ErrorKind::Timeout), false),
+            (fail_at(3_000, ErrorKind::Timeout), true),
+            (fail_at(4_000, ErrorKind::Timeout), true),
+            // The series starts again after the window.
+            (fail_at(5_000, ErrorKind::Timeout), false),
+        ],
+    )
+    .await;
+    assert_eq!(transitions, vec![None; 5]);
+    assert!(Incident::for_monitor(&pool, id).await.unwrap().is_empty());
+    let s = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(
+        (s.status, s.consecutive_failures, s.failing_since),
+        (MonitorStatus::Up, 1, Some(5_000))
+    );
+    assert_eq!(s.last_check_at, Some(5_000), "checks are still shown");
+    assert_eq!(
+        covered_and_down(&pool, id).await,
+        vec![
+            (1_000, 0, 0),
+            (2_000, 1_000, 0),
+            (3_000, 0, 0),
+            (4_000, 0, 0),
+            (5_000, 1_000, 0),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn an_open_incident_stays_open_through_maintenance() {
+    let (pool, id) = monitor("1").await;
+    let transitions = record_maintained(
+        &pool,
+        id,
+        1,
+        &[
+            (fail_at(1_000, ErrorKind::Timeout), false),
+            // A success during the window does not resolve it.
+            (ok_at(2_000), true),
+            (fail_at(3_000, ErrorKind::Timeout), true),
+            (ok_at(4_000), false),
+        ],
+    )
+    .await;
+    assert_eq!(
+        transitions,
+        vec![
+            Some(Transition::WentDown { since: 1_000 }),
+            None,
+            None,
+            Some(Transition::Recovered),
+        ]
+    );
+    let incidents = Incident::for_monitor(&pool, id).await.unwrap();
+    assert_eq!(incidents[0].resolved_at, Some(4_000));
+    assert_eq!(
+        covered_and_down(&pool, id).await,
+        vec![
+            (1_000, 0, 0),
+            (2_000, 0, 0),
+            (3_000, 0, 0),
+            (4_000, 1_000, 1)
+        ],
+        "the window's time is not counted"
+    );
+}
+
+#[tokio::test]
+async fn no_certificate_warning_during_maintenance() {
+    let (pool, id) = monitor("1").await;
+    record_maintained(&pool, id, 1, &[(ok_with_cert(0, DAY_MS), true)]).await;
+    let s = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(s.tls_warned_for, None);
+    assert_eq!(
+        s.tls_expires_at,
+        Some(DAY_MS),
+        "the certificate is still seen"
+    );
 }

@@ -226,3 +226,25 @@
 [data-kind][hidden] {
     display: none;
 }
+
+/* A wrapping row of small checkboxes: weekdays, groups, monitors. */
+.weekday-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-top: 6px;
+}
+
+.checkbox-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+fieldset.form-group {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+}

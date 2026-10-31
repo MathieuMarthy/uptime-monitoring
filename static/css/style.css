@@ -25,6 +25,10 @@
     --caution-ink: light-dark(#7A5600, #F2B630);
     --caution-wash: light-dark(#F3E4BC, #3A3220);
     --off: light-dark(#6E776D, #7E887D);
+    /* Maintenance: a neutral blue, apart from go, stop and caution. */
+    --maint: light-dark(#2F6690, #7DB3E0);
+    --maint-ink: light-dark(#255274, #8DBFE8);
+    --maint-wash: light-dark(#D6E2EC, #1F2C36);
     /* Day lamps wear a ring, night lamps glow. */
     --halo-stop: 0 0 0 4px light-dark(rgba(196, 46, 36, 0.2), transparent),
                  0 0 10px light-dark(transparent, rgba(255, 90, 76, 0.7));
@@ -274,6 +278,10 @@ h1, h2, h3 {
         white-space: nowrap;
     }
 
+    .nav-full {
+        display: none;
+    }
+
     .header-link,
     .theme-switch,
     .logout-button {
@@ -455,6 +463,11 @@ main {
 }
 .lamp-pending { background: var(--caution); box-shadow: var(--halo-caution); }
 .lamp-paused { background: transparent; border: 2px solid var(--off); }
+/* Half filled: checked, but not counted. */
+.lamp-maintenance {
+    background: linear-gradient(90deg, var(--maint) 50%, transparent 50%);
+    border: 2px solid var(--maint);
+}
 
 /* Panel: a plate set into the enamel */
 .panel {
@@ -825,5 +838,16 @@ main {
     *, *::before, *::after {
         transition: none !important;
         animation: none !important;
+    }
+}
+
+/* A nav entry too long for the phone tabs shows its short form there. */
+.nav-short {
+    display: none;
+}
+
+@media (max-width: 719.98px) {
+    .nav-short {
+        display: inline;
     }
 }

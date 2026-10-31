@@ -257,3 +257,37 @@ async fn a_dst_day_rolls_up_its_25_hours() {
         .collect();
     assert_eq!(rows, [(20261025, 2), (20261026, 1)]);
 }
+
+#[tokio::test]
+async fn ended_maintenance_windows_follow_the_history_retention() {
+    use uptime_monitoring::models::{Maintenance, MaintenanceInput};
+    use uptime_monitoring::windows::Schedule;
+    let (pool, _) = setup().await;
+    let window = |ends_at| MaintenanceInput {
+        title: "Deploy".to_string(),
+        schedule: Schedule::Once {
+            starts_at: ends_at - HOUR,
+            ends_at,
+        },
+        all_monitors: true,
+        show_on_status_pages: false,
+        monitor_ids: vec![],
+    };
+    let old = Maintenance::create(&pool, &window(D0)).await.unwrap();
+    let recent = Maintenance::create(&pool, &window(D0 + 20 * DAY))
+        .await
+        .unwrap();
+    maintenance::run(&pool, D0 + 40 * DAY).await.unwrap();
+    assert!(
+        Maintenance::find(&pool, old).await.unwrap().is_some(),
+        "kept forever by default"
+    );
+
+    sqlx::query("UPDATE settings SET history_retention_days = 30")
+        .execute(&pool)
+        .await
+        .unwrap();
+    maintenance::run(&pool, D0 + 40 * DAY).await.unwrap();
+    assert!(Maintenance::find(&pool, old).await.unwrap().is_none());
+    assert!(Maintenance::find(&pool, recent).await.unwrap().is_some());
+}

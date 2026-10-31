@@ -19,6 +19,17 @@
 .status-down { color: var(--stop-ink); }
 .status-pending { color: var(--caution-ink); }
 .status-paused { color: var(--muted); }
+.status-maintenance { color: var(--maint-ink); }
+
+.maintenance-now {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.maintenance-now .form-select {
+    width: auto;
+}
 
 .detail-config {
     color: var(--ink-soft);

@@ -36,12 +36,14 @@ uptime-monitoring/
 │   │   └── rate_limit.rs         # In-memory limit on failed logins per IP
 │   ├── middleware.rs             # require_session (session + CSRF), security headers
 │   ├── time.rs                   # now_ms(), local days and hours, date formatting
+│   ├── windows.rs                # Maintenance windows in time (pure) + Maintenances, the shared set
 │   ├── maintenance.rs            # Hourly upkeep: daily rollups, then purges
 │   ├── page_cache.rs             # Rendered public pages, kept 60 s
 │   ├── assets.rs                 # /static/* served from embedded files
 │   ├── db.rs                     # SQLite pool (WAL, foreign keys) + migrations
 │   ├── state.rs                  # AppState: pool, setup token, login limiter, hashing semaphore, engine handle,
-│   │                             # guard, notifier, public page cache, PUBLIC_URL, form-test semaphore
+│   │                             # guard, notifier, public page cache, PUBLIC_URL, form-test semaphore,
+│   │                             # maintenance windows
 │   ├── engine/                   # Check engine
 │   │   ├── mod.rs                # start(), supervisor (one task per active monitor), EngineHandle::reload
 │   │   ├── scheduler.rs          # The loop of one monitor: check, record, sleep
@@ -58,6 +60,7 @@ uptime-monitoring/
 │   │   ├── check.rs              # Raw check results
 │   │   ├── daily_stat.rs         # Daily rollups
 │   │   ├── incident.rs           # Outage periods
+│   │   ├── maintenance.rs        # Maintenance windows + their monitors
 │   │   ├── monitor.rs            # Monitor configuration + CRUD
 │   │   ├── monitor_state.rs      # Runtime state; record() writes a check, its state, incident, cert warning
 │   │   ├── notification_log.rs   # Deliveries, final result after retries
@@ -69,6 +72,7 @@ uptime-monitoring/
 │   │   ├── auth.rs               # SetupForm, LoginForm
 │   │   ├── channel.rs            # ChannelForm → ChannelInput | FieldErrors
 │   │   ├── incident.rs           # NoteForm → NoteInput
+│   │   ├── maintenance.rs        # MaintenanceForm → MaintenanceInput | FieldErrors
 │   │   ├── monitor.rs            # MonitorForm (raw strings) → MonitorInput | FieldErrors
 │   │   ├── settings.rs           # GeneralForm, DataForm, PasswordForm
 │   │   └── status_page.rs        # StatusPageForm → StatusPageInput | FieldErrors
@@ -79,6 +83,7 @@ uptime-monitoring/
 │   │   ├── errors.rs
 │   │   ├── heartbeat.rs          # Hourly and daily bars, their axis, uptime labels
 │   │   ├── incidents.rs          # An incident unfolded: facts, failed checks, alerts sent
+│   │   ├── maintenances.rs       # Maintenance list and form
 │   │   ├── monitors.rs
 │   │   ├── settings.rs           # Settings page, disk estimates
 │   │   └── status_pages.rs       # Admin list and form, public page
@@ -89,6 +94,7 @@ uptime-monitoring/
 │       ├── auth.rs               # /setup, /login, /logout
 │       ├── health.rs             # GET /health
 │       ├── incidents.rs          # /incidents/{id}/note
+│       ├── maintenances.rs       # /maintenances/*, /monitors/{id}/maintenance
 │       ├── monitors.rs           # /, /monitors/*
 │       ├── settings.rs           # /settings/*
 │       └── status_pages.rs       # /public-pages/* (admin), /status/{slug} (public)
@@ -208,6 +214,29 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Certificates.** Verified against the system store (`rustls-platform-verifier`): the Docker image needs
   `ca-certificates`, and an internal CA added to the host store is trusted.
 
+## Maintenance windows
+
+- **Schedule** (`windows.rs`, pure). One-off (`[starts_at, ends_at)`) or weekly: days (bit 0 = Monday), a local
+  start time in the instance timezone and a duration up to a week, in real time. A start in a DST gap moves forward
+  by the gap (jiff's compatible rule); in a fold, the first is taken.
+- **Shared set.** `Maintenances` holds every window in memory (`Arc<RwLock>`), with the timezone. Saving, deleting or
+  starting a window, and changing the timezone, reload it whole, and drop the cached status pages. The engine asks it
+  at each check.
+- **Effect on a check** (`MonitorState::record`, `in_maintenance`). The check is recorded and shown, with
+  `covered_ms = 0` and `down = 0`, so it counts in no uptime figure. The state machine is frozen (`verdict::frozen`):
+  no transition, no incident opened or resolved, no alert, no certificate warning; a failure series below the
+  threshold starts again after the window. A down monitor stays down, its incident open: the first success after the
+  window resolves it and alerts *up*. The check after the window covers the gap since the last one as usual. A push
+  monitor's missed deadline in a window is a check like the others.
+- **Pages.** `/maintenances` lists windows in progress, upcoming and past, and edits them; the form's group boxes
+  pick the group's members when saved (no lasting link to the group). A monitor's page has *Maintenance now* (15 min
+  to 4 h, one-off window on that monitor). Dashboard, detail and status pages show *Maintenance* (half-filled blue
+  lamp; after *Paused*, before the state); such a monitor is not counted down in headlines. A status page shows a
+  banner per window in progress on its monitors, titled only when the window is announced
+  (`show_on_status_pages`), and announced windows starting within 7 days. The Activity page computes starts and
+  ends from the schedules (`type=maintenance`); a deleted window leaves no event.
+- **Retention.** One-off windows ended before the history cutoff are purged with the history; weekly ones stay.
+
 ## Alerts
 
 - **Events.** After recording a check, the scheduler hands the notifier `down` (cause, start of the outage), `up`
@@ -295,9 +324,10 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 ## Activity
 
 `GET /activity` lists, latest first and grouped by local day, the incidents started in the period, the failed checks
-that did not count as downtime (`ok = 0 AND NOT down`, minus the first failure of each incident) and the last
-certificate warning of each monitor (`monitor_state.tls_warned_at`). Filters are query parameters read leniently
-(anything unexpected falls back to the default): `type` (`outages`, `checks`, `certificates`), `monitor`, `days` (7,
+that did not count as downtime (`ok = 0 AND NOT down`, minus the first failure of each incident), the last
+certificate warning of each monitor (`monitor_state.tls_warned_at`) and the starts and ends of maintenance windows.
+Failed checks made during a window show too: they did not count. Filters are query parameters read leniently
+(anything unexpected falls back to the default): `type` (`outages`, `checks`, `certificates`, `maintenance`), `monitor`, `days` (7,
 30 or 90) and `before`, the cursor of the next page: `time-source-id`, since events sort by time, then source, then
 id, so two events logged in the same millisecond never fall between pages. A page holds 50 events: each source is
 read with `LIMIT 51`, then merged. An incident unfolds (`<details>`, no JS) to its facts, its last 10 failed checks
@@ -326,7 +356,7 @@ alerts follow the checks retention: older incidents only show their facts.
   always written out next to its lamp, except *Up* (visually hidden).
 - **Menu.** A page marks its menu entry by filling the matching `nav_*` block of `layout.html`. Under 720 px, CSS alone
   puts the brand and three icon buttons (theme, settings, log out; named by `aria-label`) on one line and
-  the four sections as equal tabs under them.
+  the five sections as equal tabs under them (*Maintenance* shortened to *Maint.*).
 
 ## Public pages
 

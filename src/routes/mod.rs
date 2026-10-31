@@ -10,6 +10,7 @@ mod alerts;
 mod auth;
 mod health;
 mod incidents;
+mod maintenances;
 mod monitors;
 mod push;
 mod settings;
@@ -21,6 +22,7 @@ pub fn all(state: &AppState) -> Router<AppState> {
         .merge(monitors::router())
         .merge(activity::router())
         .merge(incidents::router())
+        .merge(maintenances::router())
         .merge(alerts::router())
         .merge(status_pages::router())
         .merge(settings::router())

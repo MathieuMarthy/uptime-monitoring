@@ -12,6 +12,7 @@ use crate::time::{
 };
 use crate::views::heartbeat::{Axis, DailyHistory, Heartbeat};
 use crate::views::incidents::{Context, Following, IncidentDetail, error_kind_label};
+use crate::windows::{Current, Maintenances};
 use askama::Template;
 use askama_web::WebTemplate;
 use jiff::tz::TimeZone;
@@ -24,29 +25,53 @@ use unicode_normalization::char::is_combining_mark;
 pub struct MonitorView {
     pub monitor: Monitor,
     pub state: MonitorState,
+    /// The maintenance window on now, if any.
+    pub maintenance: Option<Current>,
 }
 
 impl MonitorView {
-    pub async fn load(pool: &SqlitePool, id: i64) -> Result<Self, AppError> {
+    pub async fn load(
+        pool: &SqlitePool,
+        maintenances: &Maintenances,
+        id: i64,
+    ) -> Result<Self, AppError> {
         let monitor = Monitor::find(pool, id).await?.ok_or(AppError::NotFound)?;
         let state = MonitorState::find(pool, id)
             .await?
             .ok_or_else(|| missing_state(id))?;
-        Ok(Self { monitor, state })
+        let maintenance = maintenances.current(id, now_ms());
+        Ok(Self {
+            monitor,
+            state,
+            maintenance,
+        })
     }
 
     pub fn status_label(&self) -> &'static str {
-        status_label(self.monitor.paused, self.state.status)
+        status_label(
+            self.monitor.paused,
+            self.maintenance.is_some(),
+            self.state.status,
+        )
     }
 
     pub fn status_key(&self) -> &'static str {
-        status_key(self.monitor.paused, self.state.status)
+        status_key(
+            self.monitor.paused,
+            self.maintenance.is_some(),
+            self.state.status,
+        )
     }
 }
 
-pub fn status_label(paused: bool, status: MonitorStatus) -> &'static str {
+/// A paused monitor shows as paused, then one in a maintenance window as such, whatever its
+/// state.
+pub fn status_label(paused: bool, maintenance: bool, status: MonitorStatus) -> &'static str {
     if paused {
         return "Paused";
+    }
+    if maintenance {
+        return "Maintenance";
     }
     match status {
         MonitorStatus::Pending => "Pending",
@@ -55,10 +80,14 @@ pub fn status_label(paused: bool, status: MonitorStatus) -> &'static str {
     }
 }
 
-/// `up`, `down`, `pending` or `paused`: the suffix of the `lamp-` and `row-` classes.
-pub fn status_key(paused: bool, status: MonitorStatus) -> &'static str {
+/// `up`, `down`, `pending`, `maintenance` or `paused`: the suffix of the `lamp-` and `row-`
+/// classes.
+pub fn status_key(paused: bool, maintenance: bool, status: MonitorStatus) -> &'static str {
     if paused {
         return "paused";
+    }
+    if maintenance {
+        return "maintenance";
     }
     match status {
         MonitorStatus::Pending => "pending",
@@ -67,13 +96,14 @@ pub fn status_key(paused: bool, status: MonitorStatus) -> &'static str {
     }
 }
 
-/// Dashboard order: down, pending, up, then paused.
-fn status_rank(paused: bool, status: MonitorStatus) -> u8 {
-    match (paused, status) {
-        (true, _) => 3,
-        (false, MonitorStatus::Down) => 0,
-        (false, MonitorStatus::Pending) => 1,
-        (false, MonitorStatus::Up) => 2,
+/// Dashboard order: down, pending, up, in maintenance, then paused.
+fn status_rank(key: &str) -> u8 {
+    match key {
+        "down" => 0,
+        "pending" => 1,
+        "up" => 2,
+        "maintenance" => 3,
+        _ => 4,
     }
 }
 
@@ -85,10 +115,12 @@ pub struct MonitorRow {
     pub search: String,
     /// Left out by the dashboard filter: rendered hidden, so `filter.js` can show it again.
     pub hidden: bool,
+    /// A maintenance window is on.
+    pub maintenance: bool,
 }
 
 impl MonitorRow {
-    fn new(monitor: MonitorSummary, heartbeat: Heartbeat) -> Self {
+    fn new(monitor: MonitorSummary, heartbeat: Heartbeat, maintenance: bool) -> Self {
         let group = monitor.group_name.as_deref().unwrap_or("");
         let search = format!("{} {} {group}", monitor.name, monitor.url)
             .trim_end()
@@ -98,15 +130,16 @@ impl MonitorRow {
             heartbeat,
             search,
             hidden: false,
+            maintenance,
         }
     }
 
     pub fn status_label(&self) -> &'static str {
-        status_label(self.monitor.paused, self.monitor.status)
+        status_label(self.monitor.paused, self.maintenance, self.monitor.status)
     }
 
     pub fn status_key(&self) -> &'static str {
-        status_key(self.monitor.paused, self.monitor.status)
+        status_key(self.monitor.paused, self.maintenance, self.monitor.status)
     }
 }
 
@@ -149,7 +182,7 @@ impl MonitorGroup {
             .into_iter()
             .map(|(key, mut rows)| {
                 let name = rows[0].monitor.group_name.clone();
-                rows.sort_by_key(|r| status_rank(r.monitor.paused, r.monitor.status));
+                rows.sort_by_key(|r| status_rank(r.status_key()));
                 let id = match key {
                     Some(key) => key.bytes().fold("group-".to_string(), |mut id, b| {
                         id.push_str(&format!("{b:02x}"));
@@ -157,10 +190,15 @@ impl MonitorGroup {
                     }),
                     None => "group-none".to_string(),
                 };
-                let counts: Vec<String> = ["down", "pending", "up", "paused"]
+                let counts: Vec<String> = ["down", "pending", "up", "maintenance", "paused"]
                     .into_iter()
                     .filter_map(|key| {
                         let count = rows.iter().filter(|r| r.status_key() == key).count();
+                        let key = if key == "maintenance" {
+                            "in maintenance"
+                        } else {
+                            key
+                        };
                         (count > 0).then(|| format!("{count} {key}"))
                     })
                     .collect();
@@ -420,7 +458,13 @@ pub struct Headline {
 
 impl Headline {
     /// `down` lists the down monitors' ids and names, in dashboard order.
-    pub fn new(up: usize, pending: usize, paused: usize, down: Vec<(i64, String)>) -> Self {
+    pub fn new(
+        up: usize,
+        pending: usize,
+        maintenance: usize,
+        paused: usize,
+        down: Vec<(i64, String)>,
+    ) -> Self {
         let (state, text) = match () {
             _ if !down.is_empty() => (
                 "down",
@@ -431,14 +475,20 @@ impl Headline {
             ),
             _ if pending > 0 => ("pending", "No monitor is down".to_string()),
             _ if up > 0 => ("up", "All monitors are up".to_string()),
+            _ if maintenance > 0 => ("maintenance", "No monitor is down".to_string()),
             _ if paused > 0 => ("paused", "Every monitor is paused".to_string()),
             _ => ("paused", "No monitors yet".to_string()),
         };
-        let others: Vec<String> = [(pending, "pending"), (up, "up"), (paused, "paused")]
-            .into_iter()
-            .filter(|&(count, _)| count > 0)
-            .map(|(count, label)| format!("{count} {label}"))
-            .collect();
+        let others: Vec<String> = [
+            (pending, "pending"),
+            (up, "up"),
+            (maintenance, "in maintenance"),
+            (paused, "paused"),
+        ]
+        .into_iter()
+        .filter(|&(count, _)| count > 0)
+        .map(|(count, label)| format!("{count} {label}"))
+        .collect();
         let others = if others.is_empty() {
             if down.is_empty() {
                 "Add a monitor to start checking a site.".to_string()
@@ -512,6 +562,7 @@ impl IndexTemplate {
 
     pub async fn load(
         pool: &SqlitePool,
+        maintenances: &Maintenances,
         filter: DashboardFilter,
         done: Option<BulkDone>,
         csrf_token: String,
@@ -539,22 +590,19 @@ impl IndexTemplate {
                 let heartbeat = heartbeats
                     .remove(&monitor.id)
                     .unwrap_or_else(|| Heartbeat::empty(&tz, now));
-                MonitorRow::new(monitor, heartbeat)
+                let maintenance = maintenances.covers(monitor.id, now);
+                MonitorRow::new(monitor, heartbeat, maintenance)
             })
             .collect();
 
-        let active_with = |status| {
-            rows.iter()
-                .filter(|r| !r.monitor.paused && r.monitor.status == status)
-                .count()
-        };
+        let with_key = |key| rows.iter().filter(|r| r.status_key() == key).count();
         // Rows are still in name order, the order of the down monitors in the headline.
         let down: Vec<_> = rows
             .iter()
-            .filter(|r| !r.monitor.paused && r.monitor.status == MonitorStatus::Down)
+            .filter(|r| r.status_key() == "down")
             .map(|r| (r.monitor.id, r.monitor.name.clone()))
             .collect();
-        let paused = rows.iter().filter(|r| r.monitor.paused).count();
+        let paused = with_key("paused");
         let chips = [
             ("All", None, rows.len()),
             ("Down", Some(StatusFilter::Down), down.len()),
@@ -570,8 +618,9 @@ impl IndexTemplate {
         })
         .collect();
         let headline = Headline::new(
-            active_with(MonitorStatus::Up),
-            active_with(MonitorStatus::Pending),
+            with_key("up"),
+            with_key("pending"),
+            with_key("maintenance"),
             paused,
             down,
         );
@@ -656,11 +705,12 @@ pub struct CheckRow {
 impl DetailTemplate {
     pub async fn load(
         pool: &SqlitePool,
+        maintenances: &Maintenances,
         id: i64,
         csrf_token: String,
         public_url: Option<&str>,
     ) -> Result<Self, AppError> {
-        let view = MonitorView::load(pool, id).await?;
+        let view = MonitorView::load(pool, maintenances, id).await?;
         let push_url = view
             .monitor
             .push_token
@@ -803,6 +853,17 @@ fn status_line(view: &MonitorView, latest: Option<&Incident>, tz: &TimeZone, now
     let state = &view.state;
     if view.monitor.paused {
         return "Paused: no checks until you resume it.".to_string();
+    }
+    if let Some(m) = &view.maintenance {
+        return format!(
+            "In maintenance until {} ({}): checks neither count nor alert.",
+            if day_of(tz, m.ends_at) == day_of(tz, now) {
+                format_time(tz, m.ends_at)
+            } else {
+                format_datetime(tz, m.ends_at)
+            },
+            m.title
+        );
     }
     match state.status {
         MonitorStatus::Down => match latest.filter(|i| i.resolved_at.is_none()) {
@@ -993,30 +1054,36 @@ mod tests {
             8,
             1,
             0,
+            0,
             vec![(1, "A".into()), (2, "B".into()), (3, "C".into())],
         );
         assert_eq!((h.state, h.text.as_str()), ("down", "3 monitors are down"));
         assert_eq!(named(&h), "A, B and C.");
         assert_eq!(h.others, "1 pending, 8 up.");
 
-        let h = Headline::new(0, 0, 0, vec![(1, "A".into())]);
+        let h = Headline::new(0, 0, 0, 0, vec![(1, "A".into())]);
         assert_eq!(h.text, "1 monitor is down");
         assert_eq!((named(&h).as_str(), h.others.as_str()), ("A.", ""));
     }
 
     #[test]
     fn headline_without_down_monitors() {
-        let h = Headline::new(3, 1, 0, vec![]);
+        let h = Headline::new(3, 1, 0, 0, vec![]);
         assert_eq!(
             (h.state, h.text.as_str()),
             ("pending", "No monitor is down")
         );
-        let h = Headline::new(3, 0, 2, vec![]);
+        let h = Headline::new(3, 0, 1, 2, vec![]);
         assert_eq!((h.state, h.text.as_str()), ("up", "All monitors are up"));
-        assert_eq!(h.others, "3 up, 2 paused.");
-        let h = Headline::new(0, 0, 2, vec![]);
+        assert_eq!(h.others, "3 up, 1 in maintenance, 2 paused.");
+        let h = Headline::new(0, 0, 0, 2, vec![]);
         assert_eq!(h.text, "Every monitor is paused");
-        let h = Headline::new(0, 0, 0, vec![]);
+        let h = Headline::new(0, 0, 2, 1, vec![]);
+        assert_eq!(
+            (h.state, h.text.as_str()),
+            ("maintenance", "No monitor is down")
+        );
+        let h = Headline::new(0, 0, 0, 0, vec![]);
         assert_eq!(h.text, "No monitors yet");
         assert_eq!(h.others, "Add a monitor to start checking a site.");
     }

@@ -52,7 +52,14 @@ async fn index(
         param("group"),
     );
     let done = BulkDone::parse(param("done"), param("count"));
-    IndexTemplate::load(&state.db, filter, done, session.csrf_token).await
+    IndexTemplate::load(
+        &state.db,
+        &state.maintenances,
+        filter,
+        done,
+        session.csrf_token,
+    )
+    .await
 }
 
 /// One action on the monitors ticked on the dashboard (`id`, repeated), then back to the dashboard
@@ -124,6 +131,7 @@ async fn detail(
 ) -> Result<DetailTemplate, AppError> {
     DetailTemplate::load(
         &state.db,
+        &state.maintenances,
         id,
         session.csrf_token,
         state.public_url.as_deref(),

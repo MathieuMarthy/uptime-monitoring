@@ -6,7 +6,9 @@ use crate::models::{
 };
 use crate::time::{DAY_MS, format_datetime, format_duration, now_ms};
 use crate::views::heartbeat::{DAYS, DailyHistory};
+use crate::views::maintenances::short_time;
 use crate::views::monitors::{status_key, status_label};
+use crate::windows::Maintenances;
 use askama::Template;
 use askama_web::WebTemplate;
 use sqlx::SqlitePool;
@@ -14,6 +16,8 @@ use std::collections::HashMap;
 
 /// Incidents listed on a public page.
 const RECENT_INCIDENTS: i64 = 10;
+/// Announced maintenance windows show this many days before they start.
+const ANNOUNCE_DAYS: i64 = 7;
 
 #[derive(Template, WebTemplate)]
 #[template(path = "status_pages/index.html")]
@@ -64,6 +68,8 @@ pub struct PublicTemplate {
     pub headline: PublicHeadline,
     pub monitors: Vec<PublicMonitor>,
     pub incidents: Vec<PublicIncident>,
+    pub maintenance_now: Vec<PublicMaintenance>,
+    pub maintenance_planned: Vec<PublicMaintenance>,
     pub timezone: String,
 }
 
@@ -100,6 +106,12 @@ impl PublicHeadline {
     }
 }
 
+/// A maintenance window on a status page: `Until 14:00`, with its title when announced.
+pub struct PublicMaintenance {
+    pub title: Option<String>,
+    pub when: String,
+}
+
 pub struct PublicMonitor {
     pub name: String,
     pub status_label: &'static str,
@@ -119,12 +131,40 @@ pub struct PublicIncident {
 
 impl PublicTemplate {
     /// Never shows a monitor's URL or errors: they can reveal internal hosts.
-    pub async fn load(pool: &SqlitePool, page: &StatusPage) -> Result<Self, AppError> {
+    pub async fn load(
+        pool: &SqlitePool,
+        maintenances: &Maintenances,
+        page: &StatusPage,
+    ) -> Result<Self, AppError> {
         let settings = Settings::load(pool).await?;
         let tz = settings.tz();
         let now = now_ms();
         let shown = StatusPage::shown_monitors(pool, page.id).await?;
         let ids: Vec<i64> = shown.iter().map(|m| m.monitor_id).collect();
+        let (current, planned) = maintenances.notices(&ids, now, ANNOUNCE_DAYS * DAY_MS);
+        let maintenance_now = current
+            .into_iter()
+            .map(|n| PublicMaintenance {
+                title: n.title,
+                when: format!("Until {}", short_time(&tz, n.ends_at, now)),
+            })
+            .collect();
+        let maintenance_planned = planned
+            .into_iter()
+            .map(|n| PublicMaintenance {
+                title: n.title,
+                when: format!(
+                    "{} → {}",
+                    format_datetime(&tz, n.starts_at),
+                    short_time(&tz, n.ends_at, n.starts_at)
+                ),
+            })
+            .collect();
+        let maintained: Vec<i64> = ids
+            .iter()
+            .copied()
+            .filter(|&id| maintenances.covers(id, now))
+            .collect();
         let mut daily = DailyHistory::load_many(pool, &ids, &tz, now).await?;
 
         let names: HashMap<i64, &str> = shown
@@ -150,7 +190,9 @@ impl PublicTemplate {
 
         let down: Vec<&ShownMonitor> = shown
             .iter()
-            .filter(|m| !m.paused && m.status == MonitorStatus::Down)
+            .filter(|m| {
+                !m.paused && !maintained.contains(&m.monitor_id) && m.status == MonitorStatus::Down
+            })
             .collect();
         let since = match down.as_slice() {
             [only] => incidents
@@ -164,8 +206,8 @@ impl PublicTemplate {
         let monitors = shown
             .into_iter()
             .map(|m| PublicMonitor {
-                status_label: status_label(m.paused, m.status),
-                status_key: status_key(m.paused, m.status),
+                status_label: status_label(m.paused, maintained.contains(&m.monitor_id), m.status),
+                status_key: status_key(m.paused, maintained.contains(&m.monitor_id), m.status),
                 daily: daily
                     .remove(&m.monitor_id)
                     .expect("one history per monitor"),
@@ -180,6 +222,8 @@ impl PublicTemplate {
             headline,
             monitors,
             incidents,
+            maintenance_now,
+            maintenance_planned,
             timezone: tz.iana_name().unwrap_or("UTC").to_string(),
         })
     }

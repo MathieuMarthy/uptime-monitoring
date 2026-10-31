@@ -4,6 +4,7 @@ pub mod auth;
 pub mod errors;
 pub mod heartbeat;
 pub mod incidents;
+pub mod maintenances;
 pub mod monitors;
 pub mod settings;
 pub mod status_pages;

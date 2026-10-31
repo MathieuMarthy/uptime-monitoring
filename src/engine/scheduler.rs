@@ -5,6 +5,7 @@ use crate::engine::verdict::{self, CheckOutcome, ErrorKind, Failure, Health, Tra
 use crate::models::{Monitor, MonitorState, Recorded};
 use crate::notify::{Event, MonitorRef, Notification, Notifier};
 use crate::time::now_ms;
+use crate::windows::Maintenances;
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,6 +21,7 @@ pub struct Scheduler {
     /// Caps checks running at the same time.
     pub permits: Semaphore,
     pub notifier: Notifier,
+    pub maintenances: Maintenances,
 }
 
 impl Scheduler {
@@ -154,6 +156,7 @@ impl Scheduler {
             health,
             monitor.failure_threshold,
             monitor.tls_expiry_warn_days,
+            self.maintenances.covers(monitor.id, outcome.checked_at),
         )
         .await
         {

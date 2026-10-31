@@ -1,0 +1,176 @@
+{% extends "layout.html" %}
+
+{% block title %}{% if self.is_edit() %}Edit Maintenance{% else %}Add Maintenance{% endif %} - Uptime Monitoring{% endblock %}
+{% block nav_maintenances %}aria-current="page"{% endblock %}
+
+{% block styles %}
+<link href="/static/css/forms.css" rel="stylesheet">
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/confirm.js" defer></script>
+<script src="/static/js/monitor-form.js" defer></script>
+{% endblock %}
+
+{% macro field_error(field) %}
+{% if let Some(message) = self.error(field) %}<p class="field-error">{{ message }}</p>{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-header">
+        <h1 class="form-title">{% if self.is_edit() %}Edit Maintenance{% else %}Add a Maintenance Window{% endif %}</h1>
+        <p class="form-subtitle">Checks keep running, but they neither count against uptime nor alert. Times are in {{ timezone }}.</p>
+    </div>
+
+    {% if !errors.is_empty() %}
+    <div class="error-banner" role="alert">
+        <span>Please fix the {{ errors.len() }} highlighted field(s).</span>
+    </div>
+    {% endif %}
+
+    <div class="form-card">
+        <form action="{{ action_url }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="form-section">
+                <div class="form-group">
+                    <label class="form-label" for="title">Title *</label>
+                    <input class="form-input" id="title" name="title" type="text" maxlength="100"
+                           placeholder="e.g. Database upgrade" required value="{{ form.title }}"/>
+                    {% call field_error("title") %}{% endcall %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="kind">Repeat</label>
+                    <select class="form-select" id="kind" name="kind">
+                        <option value="once" {% if !form.is_weekly() %}selected{% endif %}>Once</option>
+                        <option value="weekly" {% if form.is_weekly() %}selected{% endif %}>Every week</option>
+                    </select>
+                </div>
+
+                <div class="form-row" data-kind="once"{% if form.is_weekly() %} hidden{% endif %}>
+                    <div class="form-group">
+                        <label class="form-label" for="starts_at">Start *</label>
+                        <input class="form-input" id="starts_at" name="starts_at" type="datetime-local" required
+                               value="{{ form.starts_at }}"/>
+                        {% call field_error("starts_at") %}{% endcall %}
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="ends_at">End *</label>
+                        <input class="form-input" id="ends_at" name="ends_at" type="datetime-local" required
+                               value="{{ form.ends_at }}"/>
+                        {% call field_error("ends_at") %}{% endcall %}
+                    </div>
+                </div>
+
+                <div data-kind="weekly"{% if !form.is_weekly() %} hidden{% endif %}>
+                    <fieldset class="form-group">
+                        <legend class="form-label">Days *</legend>
+                        <div class="weekday-picks">
+                            {% for day in self.weekdays() %}
+                            <label class="checkbox-inline" for="day_{{ loop.index0 }}">
+                                <input type="checkbox" id="day_{{ loop.index0 }}" name="day_{{ loop.index0 }}"
+                                       {%- if form.has_day(*loop.index0) %} checked{% endif %}/>{{ day }}
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {% call field_error("days") %}{% endcall %}
+                    </fieldset>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="local_start">Start time *</label>
+                            <input class="form-input" id="local_start" name="local_start" type="time" required
+                                   value="{{ form.local_start }}"/>
+                            {% call field_error("local_start") %}{% endcall %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="duration_min">Duration (minutes) *</label>
+                            <input class="form-input" id="duration_min" name="duration_min" type="number" min="1"
+                                   max="10080" required value="{{ form.duration_min }}"/>
+                            {% call field_error("duration_min") %}{% endcall %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2 class="section-title">Monitors</h2>
+                <label class="checkbox-group" for="all_monitors">
+                    <input type="checkbox" id="all_monitors" name="all_monitors" {% if form.all_monitors.is_some() %}checked{% endif %}/>
+                    <div class="checkbox-label-group">
+                        <span class="form-label">All monitors</span>
+                        <span class="form-hint">Including those added later.</span>
+                    </div>
+                </label>
+                {% call field_error("monitors") %}{% endcall %}
+
+                {% if !groups.is_empty() %}
+                <fieldset class="form-group">
+                    <legend class="form-label">Whole groups</legend>
+                    <span class="form-hint">Picks the monitors in the group when you save; monitors added to it later are not included.</span>
+                    <div class="weekday-picks">
+                        {% for group in groups %}
+                        {% let field = self.group_field(group) %}
+                        <label class="checkbox-inline" for="{{ field }}">
+                            <input type="checkbox" id="{{ field }}" name="{{ field }}"
+                                   {%- if form.has_group(group) %} checked{% endif %}/>{{ group }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </fieldset>
+                {% endif %}
+
+                {% if monitors.is_empty() %}
+                <p class="form-hint">No monitor yet. <a href="/monitors/new">Add one</a> first.</p>
+                {% else %}
+                <fieldset class="form-group">
+                    <legend class="form-label">Monitors</legend>
+                    <div class="weekday-picks">
+                        {% for m in monitors %}
+                        <label class="checkbox-inline" for="monitor_{{ m.id }}">
+                            <input type="checkbox" id="monitor_{{ m.id }}" name="monitor_{{ m.id }}"
+                                   {%- if form.includes(*m.id) %} checked{% endif %}/>{{ m.name }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </fieldset>
+                {% endif %}
+            </div>
+
+            <div class="form-section">
+                <label class="checkbox-group" for="show_on_status_pages">
+                    <input type="checkbox" id="show_on_status_pages" name="show_on_status_pages" {% if form.show_on_status_pages.is_some() %}checked{% endif %}/>
+                    <div class="checkbox-label-group">
+                        <span class="form-label">Announce on public pages</span>
+                        <span class="form-hint">Public pages showing one of its monitors announce it up to 7 days ahead. A window in progress is always shown there.</span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <div class="form-actions-left">
+                    <button class="button-primary" type="submit">
+                        {% if self.is_edit() %}Save Changes{% else %}Add Window{% endif %}
+                    </button>
+                    <a class="button-secondary" href="/maintenances">Cancel</a>
+                </div>
+            </div>
+        </form>
+
+        {% if let Some(id) = maintenance_id %}
+        <div class="danger-zone">
+            <form action="/maintenances/{{ id }}/delete" method="POST"
+                  data-confirm="Delete this maintenance window?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="form-actions form-actions-plain">
+                    <div>
+                        <span class="danger-zone-title">Danger Zone</span>
+                        <p class="form-hint">Delete this window. Checks already made keep their effect.</p>
+                    </div>
+                    <button class="button-danger" type="submit">Delete Window</button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "layout.html" %}
+
+{% block title %}Maintenance - Uptime Monitoring{% endblock %}
+
+{% block nav_maintenances %}aria-current="page"{% endblock %}
+
+{% macro rows(list) %}
+<div class="table-scroll">
+    <table class="data-table">
+        <thead>
+        <tr><th>Title</th><th>When</th><th>Monitors</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr>
+        </thead>
+        <tbody>
+        {% for m in list %}
+        <tr>
+            <td>{{ m.title }}{% if m.public %} <span class="text-muted">(public)</span>{% endif %}</td>
+            <td>{{ m.schedule }}</td>
+            <td>{{ m.monitors }}</td>
+            <td>{{ m.status }}</td>
+            <td><div class="table-actions">
+                <a class="button-secondary button-small" href="/maintenances/{{ m.id }}/edit">Edit</a>
+            </div></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="page page-narrow">
+    <div class="page-head">
+        <div>
+            <h1 class="page-title">Maintenance</h1>
+            <p class="page-lede">While a window is on, its monitors are still checked, but nothing counts against uptime and no alert is sent. Times are in the instance timezone.</p>
+        </div>
+        <div class="toolbar">
+            <a class="button-primary" href="/maintenances/new">Add window</a>
+        </div>
+    </div>
+
+    {% if current.is_empty() && upcoming.is_empty() && past.is_empty() %}
+    <section class="section">
+        <div class="panel">
+            <p class="empty-state">No maintenance window yet. Add one before planned work, or schedule a weekly one for backups and updates.</p>
+        </div>
+    </section>
+    {% endif %}
+
+    {% if !current.is_empty() %}
+    <section class="section">
+        <h2 class="section-title">In progress</h2>
+        <div class="panel">{% call rows(current) %}{% endcall %}</div>
+    </section>
+    {% endif %}
+
+    {% if !upcoming.is_empty() %}
+    <section class="section">
+        <h2 class="section-title">Upcoming</h2>
+        <div class="panel">{% call rows(upcoming) %}{% endcall %}</div>
+    </section>
+    {% endif %}
+
+    {% if !past.is_empty() %}
+    <section class="section">
+        <h2 class="section-title">Past</h2>
+        <div class="panel">{% call rows(past) %}{% endcall %}</div>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

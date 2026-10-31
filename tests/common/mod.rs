@@ -87,14 +87,19 @@ pub async fn test_app() -> (TestApp, SqlitePool) {
 /// Like `test_app`, with the check engine running: monitor routes really trigger checks.
 pub async fn test_app_with_engine() -> (TestApp, SqlitePool) {
     let pool = pool().await;
+    let maintenances = uptime_monitoring::windows::Maintenances::default();
     let engine = uptime_monitoring::engine::start(
         pool.clone(),
         uptime_monitoring::engine::guard::Guard::new(false),
         uptime_monitoring::notify::Notifier::default(),
+        maintenances.clone(),
     )
     .await
     .expect("engine");
-    logged_in(AppState::new(pool.clone()).with_engine(engine), pool).await
+    let state = AppState::new(pool.clone())
+        .with_engine(engine)
+        .with_maintenances(maintenances);
+    logged_in(state, pool).await
 }
 
 async fn logged_in(state: AppState, pool: SqlitePool) -> (TestApp, SqlitePool) {

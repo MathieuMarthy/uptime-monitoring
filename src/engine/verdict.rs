@@ -117,6 +117,20 @@ pub fn apply(
     (next, goes_down.then_some(Transition::WentDown { since }))
 }
 
+/// The health kept through a check made during a maintenance window: a down monitor stays as
+/// it is (its incident stays open), any other drops its failure series.
+pub fn frozen(health: Health) -> Health {
+    if health.status == MonitorStatus::Down {
+        health
+    } else {
+        Health {
+            consecutive_failures: 0,
+            failing_since: None,
+            ..health
+        }
+    }
+}
+
 /// Delay between the start of a check and the start of the next one: the retry interval while a
 /// failure series has not yet reached the threshold, the normal interval otherwise.
 pub fn next_delay_s(
@@ -214,6 +228,16 @@ mod tests {
         assert_eq!(
             apply(health(Down, 3, Some(5)), false, 40, 3),
             (health(Down, 4, Some(5)), None)
+        );
+    }
+
+    #[test]
+    fn maintenance_keeps_down_and_drops_a_series() {
+        assert_eq!(frozen(health(Down, 4, Some(5))), health(Down, 4, Some(5)));
+        assert_eq!(frozen(health(Up, 2, Some(5))), health(Up, 0, None));
+        assert_eq!(
+            frozen(health(Pending, 1, Some(5))),
+            health(Pending, 0, None)
         );
     }
 

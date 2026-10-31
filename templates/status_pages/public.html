@@ -30,6 +30,21 @@
         {% endif %}
     </section>
 
+    <div id="live-maintenance" data-live>
+    {% for m in maintenance_now %}
+    <section class="maintenance-notice maintenance-notice-now" aria-label="Maintenance in progress">
+        <p><strong>Maintenance in progress</strong>{% if let Some(title) = m.title %}: {{ title }}{% endif %}</p>
+        <p class="text-muted">{{ m.when }}</p>
+    </section>
+    {% endfor %}
+    {% for m in maintenance_planned %}
+    <section class="maintenance-notice" aria-label="Maintenance planned">
+        <p><strong>Maintenance planned</strong>{% if let Some(title) = m.title %}: {{ title }}{% endif %}</p>
+        <p class="text-muted">{{ m.when }}</p>
+    </section>
+    {% endfor %}
+    </div>
+
     {% if !monitors.is_empty() %}
     <section class="section" aria-labelledby="services-title">
         <div class="section-head">

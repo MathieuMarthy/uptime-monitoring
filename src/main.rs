@@ -7,6 +7,7 @@ use uptime_monitoring::engine::guard::Guard;
 use uptime_monitoring::models::Settings;
 use uptime_monitoring::notify::Notifier;
 use uptime_monitoring::state::AppState;
+use uptime_monitoring::windows::Maintenances;
 use uptime_monitoring::{app, db, engine, healthcheck, maintenance, privileges};
 
 fn main() {
@@ -80,8 +81,20 @@ async fn serve(config: Config) {
             std::process::exit(1);
         }
     };
+    let maintenances = Maintenances::default();
+    if let Err(e) = maintenances.reload(&pool).await {
+        eprintln!("Cannot read the maintenance windows: {e}");
+        std::process::exit(1);
+    }
     let notifier = Notifier::start(pool.clone(), guard.clone(), config.public_url.clone());
-    let engine = match engine::start(pool.clone(), guard.clone(), notifier.clone()).await {
+    let engine = match engine::start(
+        pool.clone(),
+        guard.clone(),
+        notifier.clone(),
+        maintenances.clone(),
+    )
+    .await
+    {
         Ok(engine) => engine,
         Err(e) => {
             eprintln!("Cannot start the check engine: {e}");
@@ -95,6 +108,7 @@ async fn serve(config: Config) {
         .with_trust_proxy_headers(config.trust_proxy_headers)
         .with_public_url(config.public_url.clone())
         .with_engine(engine)
+        .with_maintenances(maintenances)
         .with_guard(guard)
         .with_notifier(notifier);
     match state.start_setup_if_needed().await {
