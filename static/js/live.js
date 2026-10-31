@@ -64,7 +64,8 @@ async function refresh() {
         const field = kept.some((form) => form.contains(active)) ? active : null;
         const selection = field ? [field.selectionStart, field.selectionEnd] : null;
         for (const form of kept) {
-            next.querySelector(`#${CSS.escape(form.id)}`)?.replaceWith(form);
+            // Not `form.id`: a field named "id" (the dashboard's row boxes) shadows it.
+            next.querySelector(`#${CSS.escape(form.getAttribute("id"))}`)?.replaceWith(form);
         }
         const refocus = element.contains(active);
         const before = announced(element);
