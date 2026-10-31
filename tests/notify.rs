@@ -546,3 +546,28 @@ async fn simultaneous_downs_share_one_message_except_on_webhooks() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert!(rx.try_recv().is_err(), "nothing more");
 }
+
+#[tokio::test]
+async fn a_retried_alert_holds_up_only_its_own_monitor() {
+    let pool = common::test_app().await.1;
+    let (url, mut rx) = receiver(vec![500]).await;
+    let api = monitor(&pool).await;
+    let web = named(&pool, "Web", "https://web.example.com").await;
+    let c = channel(&pool, "webhook", serde_json::json!({ "url": url }), true).await;
+    link(&pool, api.id, c).await;
+    link(&pool, web.id, c).await;
+    let notifier = Notifier::start_with(
+        pool.clone(),
+        Guard::new(false),
+        None,
+        vec![Duration::ZERO, Duration::from_millis(500)],
+        Duration::ZERO,
+    );
+    notifier.notify(down(&api));
+    let first = next(&mut rx).await.body;
+    assert_eq!(first["monitor"]["name"], "API", "answered 500");
+    notifier.notify(down(&web));
+    let second = next(&mut rx).await.body;
+    assert_eq!(second["monitor"]["name"], "Web", "sent before API's retry");
+    assert_eq!(next(&mut rx).await.body["monitor"]["name"], "API");
+}

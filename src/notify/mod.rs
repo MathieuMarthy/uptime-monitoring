@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use tokio::sync::{Semaphore, mpsc};
+use tokio::sync::{Semaphore, mpsc, watch};
 use tokio::time::Instant;
 
 /// Waits before each attempt: the first one is immediate.
@@ -261,7 +261,7 @@ impl Sender {
             .await
             .map_err(|e| SendError {
                 // Webhook and Telegram URLs carry their secret.
-                message: truncate(&error_chain(&e.without_url())),
+                message: truncate(&error_chain(&e.without_url()), ERROR_MAX_CHARS),
                 retry: true,
             })?;
         let status = response.status();
@@ -277,7 +277,7 @@ impl Sender {
         if matches!(config, ChannelConfig::Telegram(_))
             && let Some(description) = telegram_description(response).await
         {
-            message = truncate(&format!("{message}: {description}"));
+            message = truncate(&format!("{message}: {description}"), ERROR_MAX_CHARS);
         }
         Err(SendError { message, retry })
     }
@@ -311,7 +311,7 @@ async fn dispatch(
         pool,
         sender,
         permits: Arc::new(Semaphore::new(MAX_CONCURRENT_SENDS)),
-        workers: HashMap::new(),
+        last: HashMap::new(),
     };
     let mut batch = Vec::new();
     let mut deadline: Option<Instant> = None;
@@ -341,19 +341,13 @@ async fn dispatch(
     router.route(batch).await;
 }
 
-/// One message to send to a channel, about one notification or a group of them.
-struct Job {
-    channel: Channel,
-    notifications: Vec<Arc<Notification>>,
-    message: Message,
-}
-
-/// Turns notifications into jobs for each channel's worker, started on the channel's first job.
+/// Turns notifications into messages, each sent by its own task.
 struct Router {
     pool: SqlitePool,
     sender: Arc<Sender>,
     permits: Arc<Semaphore>,
-    workers: HashMap<i64, mpsc::UnboundedSender<Job>>,
+    /// Per channel and monitor, the last message sent; closed once it is done.
+    last: HashMap<(i64, i64), watch::Receiver<()>>,
 }
 
 impl Router {
@@ -389,6 +383,7 @@ impl Router {
         };
         let sender = self.sender.clone();
         let public_url = sender.public_url.as_deref();
+        self.last.retain(|_, done| done.has_changed().is_ok());
         for (channel, list) in per_channel {
             // Webhooks are read by programs, which expect one event per monitor.
             let groups = if channel.kind == "webhook" {
@@ -400,32 +395,56 @@ impl Router {
                 let notifications: Vec<_> = indexes.iter().map(|&i| list[i].clone()).collect();
                 let message = match notifications.as_slice() {
                     [one] => Message::new(one, &tz, public_url),
-                    many => {
-                        Message::group(&many.iter().map(|n| &**n).collect::<Vec<_>>(), public_url)
-                    }
+                    many => Message::group(many, public_url),
                 };
-                let job = Job {
-                    channel: channel.clone(),
-                    notifications,
-                    message,
-                };
-                // The worker never stops while its sender lives.
-                let _ = self.worker(channel.id).send(job);
+                self.send(channel.id, notifications, message);
             }
         }
     }
 
-    fn worker(&mut self, channel_id: i64) -> &mpsc::UnboundedSender<Job> {
-        self.workers.entry(channel_id).or_insert_with(|| {
-            let (tx, rx) = mpsc::unbounded_channel();
-            tokio::spawn(channel_worker(
-                self.pool.clone(),
-                self.sender.clone(),
-                self.permits.clone(),
-                rx,
-            ));
-            tx
-        })
+    /// Sends once the previous messages of the same monitors on this channel are done, so that
+    /// a retried `down` never arrives after the `up` that followed it. Everything else is sent
+    /// in parallel, so a failing channel or monitor holds up nothing else.
+    fn send(&mut self, channel_id: i64, notifications: Vec<Arc<Notification>>, message: Message) {
+        let (done, receiver) = watch::channel(());
+        let mut before = Vec::new();
+        for n in &notifications {
+            let monitor_id = n.monitor.as_ref().map_or(0, |m| m.id);
+            if let Some(previous) = self.last.insert((channel_id, monitor_id), receiver.clone()) {
+                before.push(previous);
+            }
+        }
+        let (pool, sender, permits) =
+            (self.pool.clone(), self.sender.clone(), self.permits.clone());
+        tokio::spawn(async move {
+            for mut previous in before {
+                // Fails once the previous task has dropped its sender, which is when it is done.
+                let _ = previous.changed().await;
+            }
+            // Read now: the channel may have been edited, disabled or deleted while waiting.
+            let channel = match Channel::find(&pool, channel_id).await {
+                Ok(Some(channel)) if channel.enabled => channel,
+                Ok(_) => return,
+                Err(e) => {
+                    tracing::error!(channel_id, error = %e, "cannot read the notification channel");
+                    return;
+                }
+            };
+            let result = sender
+                .deliver(&permits, &channel, &notifications[0], &message)
+                .await;
+            if let Err(e) = &result {
+                tracing::warn!(channel = %channel.name, error = %e, "alert not delivered");
+            }
+            for notification in &notifications {
+                if let Err(e) =
+                    log_delivery(&pool, &channel, notification, result.clone().err()).await
+                {
+                    tracing::error!(error = %e, "cannot log the delivery");
+                }
+            }
+            drop(done);
+        });
     }
 }
 
@@ -453,31 +472,6 @@ fn group(notifications: &[Arc<Notification>]) -> Vec<Vec<usize>> {
         }
     }
     groups
-}
-
-/// Sends one channel's messages one after the other, so that a retried `down` never arrives
-/// after the `up` that followed it. Channels are served in parallel.
-async fn channel_worker(
-    pool: SqlitePool,
-    sender: Arc<Sender>,
-    permits: Arc<Semaphore>,
-    mut receiver: mpsc::UnboundedReceiver<Job>,
-) {
-    while let Some(job) = receiver.recv().await {
-        let result = sender
-            .deliver(&permits, &job.channel, &job.notifications[0], &job.message)
-            .await;
-        if let Err(e) = &result {
-            tracing::warn!(channel = %job.channel.name, error = %e, "alert not delivered");
-        }
-        for notification in &job.notifications {
-            if let Err(e) =
-                log_delivery(&pool, &job.channel, notification, result.clone().err()).await
-            {
-                tracing::error!(error = %e, "cannot log the delivery");
-            }
-        }
-    }
 }
 
 async fn log_delivery(
@@ -511,14 +505,12 @@ fn error_chain(error: &reqwest::Error) -> String {
     text
 }
 
-fn truncate(text: &str) -> String {
-    if text.chars().count() <= ERROR_MAX_CHARS {
+/// Cuts `text` to `max` characters, the last one an ellipsis.
+pub(crate) fn truncate(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
         return text.to_string();
     }
-    text.chars()
-        .take(ERROR_MAX_CHARS - 1)
-        .chain(['…'])
-        .collect()
+    text.chars().take(max - 1).chain(['…']).collect()
 }
 
 #[cfg(test)]

@@ -265,15 +265,16 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   always come in pairs whatever the setting does meanwhile. Only transitions alert: nothing on startup, pause or deletion.
 - **Dispatch** (`notify/mod.rs`). A bounded queue (1 000; beyond, alerts are dropped and logged) feeds one task.
   A `down` or `up` opens a 15 s window (fixed, not sliding); every alert received until it closes is sent with it,
-  others go at once. For each channel, the downs of a window become one message (`N monitors are down`, a line per
-  monitor with its cause, at most 20 lines, linked to the dashboard), the ups another, anything else stays alone; an
-  alert never joins a message sent before one already holding its monitor (`group`). Webhooks always get one
-  request per alert, in the usual format. Each channel's worker (started on its first message) sends one message
-  after the other, so a retried `down` never lands after the `up` that followed it; channels are served in
-  parallel, at most 5 requests at a time overall. A grouped message logs one row per monitor. Each delivery is tried at once, then after 10 s and 60 s;
-  a 4xx other than 408/429 is not retried. The final result goes to `notification_log` (channel or monitor NULL if
-  deleted meanwhile); errors never include the URL, which holds the webhook's secret. Alerts still queued when the
-  process stops are lost.
+  others go at once. For each channel, the downs of a window become one message (`N monitors are down`, one line
+  per monitor with its cause, at most 20 lines and 3,500 bytes, linked to the dashboard), the ups another, anything
+  else stays alone; an alert never joins a message sent before one already holding its monitor (`group`). Webhooks
+  always get one request per alert, in the usual format. Each message is its own task, which first waits for the
+  previous messages of the same monitors on that channel, so a retried `down` never lands after the `up` that
+  followed it; everything else runs in parallel, at most 5 requests at a time overall. The channel is read again
+  just before sending (edited, disabled or deleted meanwhile). Each delivery is tried at once, then after 10 s and 60 s;
+  a 4xx other than 408/429 is not retried. The final result goes to `notification_log`, one row per monitor of the
+  message (channel or monitor NULL if deleted meanwhile); errors never include the URL, which holds the webhook's
+  secret. Alerts still queued or waiting in a window when the process stops are lost.
 - **Certificate warning delivery.** `tls_warned_for` is set when the warning is queued, not when it is delivered: a
   warning lost (no channel linked, every attempt failed) is not repeated. An expired certificate still fails the check
   and alerts `down`, unless the monitor ignores TLS errors.

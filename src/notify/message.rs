@@ -1,8 +1,9 @@
 //! What a notification says, whatever the channel. Pure: the clock and timezone are passed in.
 
-use crate::notify::{Event, MonitorRef, Notification};
+use crate::notify::{Event, MonitorRef, Notification, truncate};
 use crate::time::{day_of, days_left, format_datetime, format_duration};
 use jiff::tz::TimeZone;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
@@ -101,33 +102,38 @@ impl Message {
     }
 
     /// One message for several monitors going down, or several coming back up, at once: a line
-    /// per monitor, at most `GROUP_MAX_LINES`, each cut to `GROUP_LINE_MAX_CHARS` so that the
-    /// message fits Discord's and ntfy's 4,096 characters. Links to the dashboard.
-    pub fn group(notifications: &[&Notification], public_url: Option<&str>) -> Self {
+    /// per monitor, each cut to `GROUP_LINE_MAX_CHARS`, as many as fit in `GROUP_TEXT_MAX_BYTES`
+    /// (ntfy counts bytes) and at most `GROUP_MAX_LINES`. Links to the dashboard.
+    pub fn group(notifications: &[Arc<Notification>], public_url: Option<&str>) -> Self {
         let up = matches!(
             notifications.first().map(|n| &n.event),
             Some(Event::Up { .. })
         );
-        let mut lines: Vec<String> = notifications
-            .iter()
-            .take(GROUP_MAX_LINES)
-            .map(|n| {
-                let name = n.monitor.as_ref().map_or("", |m| m.name.as_str());
-                let detail = match &n.event {
-                    Event::Down { cause, .. } => cause.clone(),
-                    Event::Up { down_since } => {
-                        format!("back up after {}", format_duration(n.at - down_since))
-                    }
-                    other => other.as_str().to_string(),
-                };
-                cut(&format!("{name}: {detail}"), GROUP_LINE_MAX_CHARS)
-            })
-            .collect();
-        if notifications.len() > GROUP_MAX_LINES {
-            lines.push(format!(
-                "…and {} more.",
-                notifications.len() - GROUP_MAX_LINES
-            ));
+        let mut text = String::new();
+        let mut shown = 0;
+        for n in notifications.iter().take(GROUP_MAX_LINES) {
+            let name = n.monitor.as_ref().map_or("", |m| m.name.as_str());
+            let detail = match &n.event {
+                Event::Down { cause, .. } => cause.clone(),
+                Event::Up { down_since } => {
+                    format!("back up after {}", format_duration(n.at - down_since))
+                }
+                other => other.as_str().to_string(),
+            };
+            // One line per monitor, whatever the cause holds.
+            let line = format!("{name}: {detail}").replace(['\r', '\n'], " ");
+            let line = truncate(&line, GROUP_LINE_MAX_CHARS);
+            if text.len() + line.len() + 1 > GROUP_TEXT_MAX_BYTES {
+                break;
+            }
+            if !text.is_empty() {
+                text.push('\n');
+            }
+            text.push_str(&line);
+            shown += 1;
+        }
+        if shown < notifications.len() {
+            text.push_str(&format!("\n…and {} more.", notifications.len() - shown));
         }
         let (state, severity) = if up {
             ("up", Severity::Resolved)
@@ -136,7 +142,7 @@ impl Message {
         };
         Self {
             title: format!("{} monitors are {state}", notifications.len()),
-            text: lines.join("\n"),
+            text,
             severity,
             link: public_url.map(|base| format!("{base}/")),
         }
@@ -145,13 +151,8 @@ impl Message {
 
 const GROUP_MAX_LINES: usize = 20;
 const GROUP_LINE_MAX_CHARS: usize = 150;
-
-fn cut(text: &str, max: usize) -> String {
-    if text.chars().count() <= max {
-        return text.to_string();
-    }
-    text.chars().take(max - 1).chain(['…']).collect()
-}
+/// Leaves room under ntfy's 4,096 bytes for the "…and N more." line.
+const GROUP_TEXT_MAX_BYTES: usize = 3_500;
 
 #[cfg(test)]
 mod tests {
@@ -290,8 +291,8 @@ mod tests {
         assert_eq!(m.severity, Severity::Resolved);
     }
 
-    fn of(id: i64, name: &str, event: Event) -> Notification {
-        Notification {
+    fn of(id: i64, name: &str, event: Event) -> Arc<Notification> {
+        Arc::new(Notification {
             monitor: Some(MonitorRef {
                 id,
                 name: name.to_string(),
@@ -299,7 +300,7 @@ mod tests {
             }),
             event,
             at: 10 * DAY_MS,
-        }
+        })
     }
 
     #[test]
@@ -320,7 +321,7 @@ mod tests {
                 cause: "timeout".to_string(),
             },
         );
-        let m = Message::group(&[&a, &b], Some("https://up.example.com"));
+        let m = Message::group(&[a, b], Some("https://up.example.com"));
         assert_eq!(m.title, "2 monitors are down");
         assert_eq!(m.text, "API: HTTP 503\nWeb: timeout");
         assert_eq!(m.severity, Severity::Critical);
@@ -343,7 +344,7 @@ mod tests {
                 down_since: 10 * DAY_MS - 60_000,
             },
         );
-        let m = Message::group(&[&a, &b], None);
+        let m = Message::group(&[a, b], None);
         assert_eq!(m.title, "2 monitors are up");
         assert_eq!(m.text, "API: back up after 2 min\nWeb: back up after 1 min");
         assert_eq!(m.severity, Severity::Resolved);
@@ -364,13 +365,51 @@ mod tests {
                 )
             })
             .collect();
-        let refs: Vec<_> = downs.iter().collect();
-        let m = Message::group(&refs, None);
+        let m = Message::group(&downs, None);
         assert_eq!(m.title, "25 monitors are down");
         let lines: Vec<_> = m.text.lines().collect();
         assert_eq!(lines.len(), 21);
         assert_eq!(lines[20], "…and 5 more.");
-        assert!(m.text.chars().count() < 4_000, "{}", m.text.chars().count());
+        assert!(m.text.len() < 4_000, "{}", m.text.len());
+
+        // Three bytes a character: fewer lines fit.
+        let wide: Vec<_> = (0..20)
+            .map(|i| {
+                of(
+                    i,
+                    "監視",
+                    Event::Down {
+                        since: 0,
+                        cause: "障".repeat(200),
+                    },
+                )
+            })
+            .collect();
+        let m = Message::group(&wide, None);
+        assert!(m.text.len() < 4_096, "{}", m.text.len());
+        assert!(m.text.ends_with("more."), "{}", m.text);
+    }
+
+    #[test]
+    fn group_keeps_one_line_per_monitor() {
+        let a = of(
+            1,
+            "API",
+            Event::Down {
+                since: 0,
+                cause: "error\ncaused by: refused".to_string(),
+            },
+        );
+        let b = of(
+            2,
+            "Web",
+            Event::Down {
+                since: 0,
+                cause: "timeout".to_string(),
+            },
+        );
+        let m = Message::group(&[a, b], None);
+        assert_eq!(m.text, "API: error caused by: refused\nWeb: timeout");
     }
 
     #[test]
