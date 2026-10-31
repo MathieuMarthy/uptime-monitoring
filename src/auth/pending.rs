@@ -11,11 +11,18 @@ const TTL: Duration = Duration::from_secs(5 * 60);
 /// filling memory.
 const MAX_ENTRIES: usize = 100;
 const MAX_FAILURES: u8 = 5;
+/// Wrong codes accepted from all clients together per window: per-client limits alone let
+/// someone holding the password spread guesses over many addresses.
+const MAX_WRONG_CODES: u32 = 30;
+const WRONG_CODES_WINDOW: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Default)]
 pub struct PendingLogins {
     /// Keyed by the SHA-256 of the cookie token.
     entries: HashMap<String, Pending>,
+    /// Start of the current wrong-code window, opened by its first wrong code.
+    window_start: Option<Instant>,
+    wrong_codes: u32,
 }
 
 struct Pending {
@@ -52,8 +59,23 @@ impl PendingLogins {
             .map(|pending| pending.password_hash.as_str())
     }
 
+    /// Whether codes are still checked: `false` once too many wrong ones came in this window.
+    pub fn codes_allowed(&self, now: Instant) -> bool {
+        !self.window_open(now) || self.wrong_codes < MAX_WRONG_CODES
+    }
+
+    fn window_open(&self, now: Instant) -> bool {
+        self.window_start
+            .is_some_and(|start| now < start + WRONG_CODES_WINDOW)
+    }
+
     /// Counts a wrong code; `false` when that ended the pending login.
-    pub fn fail(&mut self, token: &str) -> bool {
+    pub fn fail(&mut self, token: &str, now: Instant) -> bool {
+        if !self.window_open(now) {
+            self.window_start = Some(now);
+            self.wrong_codes = 0;
+        }
+        self.wrong_codes += 1;
         let key = sha256_hex(token);
         let Some(pending) = self.entries.get_mut(&key) else {
             return false;
@@ -93,9 +115,9 @@ mod tests {
         assert_eq!(logins.password_hash("other", now), None);
         assert_eq!(logins.password_hash(&token, now + TTL), None);
         for _ in 0..4 {
-            assert!(logins.fail(&token));
+            assert!(logins.fail(&token, now));
         }
-        assert!(!logins.fail(&token));
+        assert!(!logins.fail(&token, now));
         assert_eq!(logins.password_hash(&token, now), None);
     }
 
@@ -109,5 +131,19 @@ mod tests {
         assert!(logins.start("hash".to_string(), now).is_none());
         assert!(logins.start("hash".to_string(), now + TTL).is_some());
         assert_eq!(logins.entries.len(), 1);
+    }
+
+    #[test]
+    fn wrong_codes_are_limited_across_all_clients() {
+        let mut logins = PendingLogins::default();
+        let now = Instant::now();
+        for _ in 0..MAX_WRONG_CODES {
+            assert!(logins.codes_allowed(now));
+            let token = logins.start("hash".to_string(), now).unwrap();
+            logins.fail(&token, now);
+        }
+        assert!(!logins.codes_allowed(now));
+        assert!(!logins.codes_allowed(now + WRONG_CODES_WINDOW - Duration::from_secs(1)));
+        assert!(logins.codes_allowed(now + WRONG_CODES_WINDOW));
     }
 }

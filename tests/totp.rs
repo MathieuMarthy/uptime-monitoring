@@ -5,7 +5,7 @@ use axum::http::{Request, header};
 use common::{PASSWORD, TestApp, TestResponse, USERNAME, get, login, post_form};
 use sqlx::SqlitePool;
 use uptime_monitoring::auth::totp::{code_at, decode_secret, step_at};
-use uptime_monitoring::models::Session;
+use uptime_monitoring::models::{Admin, Session};
 use uptime_monitoring::time::now_ms;
 
 fn assert_redirect(r: &TestResponse, location: &str) {
@@ -34,6 +34,10 @@ fn code(secret: &str, offset: i64) -> String {
     format!("{:06}", code_at(&secret, step_at(now_ms()) + offset))
 }
 
+fn password() -> String {
+    PASSWORD.replace(' ', "+")
+}
+
 fn hidden_secret(body: &str) -> String {
     let start = body.find("name=\"secret\" value=\"").expect("secret field") + 21;
     body[start..start + 32].to_string()
@@ -45,7 +49,11 @@ async fn enable(app: &TestApp) -> String {
     let r = post_form(
         app,
         "/settings/totp",
-        &format!("secret={secret}&code={}", code(&secret, 0)),
+        &format!(
+            "secret={secret}&current_password={}&code={}",
+            password(),
+            code(&secret, 0)
+        ),
     )
     .await;
     assert_redirect(&r, "/settings?saved=totp");
@@ -123,7 +131,10 @@ async fn wrong_code_does_not_enable_2fa() {
     let r = post_form(
         &app,
         "/settings/totp",
-        &format!("secret={secret}&code={wrong}"),
+        &format!(
+            "secret={secret}&current_password={}&code={wrong}",
+            password()
+        ),
     )
     .await;
     assert_eq!(r.status, 200);
@@ -136,7 +147,8 @@ async fn wrong_code_does_not_enable_2fa() {
 #[tokio::test]
 async fn malformed_secret_is_refused() {
     let (app, _) = logged_in_with_password().await;
-    let r = post_form(&app, "/settings/totp", "secret=MZXW6&code=123456").await;
+    let body = format!("secret=MZXW6&current_password={}&code=123456", password());
+    let r = post_form(&app, "/settings/totp", &body).await;
     assert_eq!(r.status, 400);
 }
 
@@ -267,4 +279,51 @@ async fn codes_count_toward_the_login_limit() {
         assert_eq!(submit_code(&app, &cookie, "000000").await.status, 200);
     }
     assert_eq!(submit_code(&app, &cookie, "000000").await.status, 429);
+}
+
+#[tokio::test]
+async fn enabling_2fa_needs_the_password() {
+    let (app, _) = logged_in_with_password().await;
+    let secret = hidden_secret(&get(&app, "/settings/totp").await.body);
+    let r = post_form(
+        &app,
+        "/settings/totp",
+        &format!(
+            "secret={secret}&current_password=wrong&code={}",
+            code(&secret, 0)
+        ),
+    )
+    .await;
+    assert_eq!(r.status, 200);
+    assert!(r.body.contains("Current password is incorrect."));
+    assert_eq!(hidden_secret(&r.body), secret);
+    assert_redirect(&login(&app, USERNAME, PASSWORD).await, "/");
+}
+
+#[tokio::test]
+async fn a_password_change_ends_the_pending_login() {
+    let (app, pool) = logged_in_with_password().await;
+    let secret = enable(&app).await;
+    let cookie = first_step(&app).await;
+    let hash = uptime_monitoring::auth::hash_password("a brand new password").unwrap();
+    sqlx::query("UPDATE admin SET password_hash = ?")
+        .bind(hash)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_redirect(
+        &submit_code(&app, &cookie, &code(&secret, 1)).await,
+        "/login",
+    );
+}
+
+#[tokio::test]
+async fn turning_2fa_off_between_the_steps_lets_the_login_finish() {
+    let (app, pool) = logged_in_with_password().await;
+    enable(&app).await;
+    let cookie = first_step(&app).await;
+    Admin::disable_totp(&pool).await.unwrap();
+    let r = submit_code(&app, &cookie, "000000").await;
+    assert_redirect(&r, "/");
+    assert!(r.session_cookie().is_some());
 }

@@ -4,7 +4,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use uptime_monitoring::config::Config;
 use uptime_monitoring::engine::guard::Guard;
-use uptime_monitoring::models::Settings;
+use uptime_monitoring::models::{Admin, Settings};
 use uptime_monitoring::notify::Notifier;
 use uptime_monitoring::state::AppState;
 use uptime_monitoring::windows::Maintenances;
@@ -12,14 +12,18 @@ use uptime_monitoring::{app, db, engine, healthcheck, maintenance, privileges};
 
 fn main() {
     let command = std::env::args().nth(1);
-    let serving = match command.as_deref() {
-        None => true,
-        Some("healthcheck") => false,
+    let command = match command.as_deref() {
+        None => Command::Serve,
+        Some("healthcheck") => Command::Healthcheck,
+        Some("disable-totp") => Command::DisableTotp,
         Some(other) => {
-            eprintln!("Unknown command {other:?}. Run without arguments, or with `healthcheck`.");
+            eprintln!(
+                "Unknown command {other:?}. Run without arguments, or with `healthcheck` or `disable-totp`."
+            );
             std::process::exit(2);
         }
     };
+    let serving = matches!(command, Command::Serve);
 
     let config = match Config::from_env() {
         Ok(config) => config,
@@ -46,11 +50,18 @@ fn main() {
         .enable_all()
         .build()
         .expect("Failed to start the async runtime");
-    if serving {
-        runtime.block_on(serve(config));
-    } else {
-        runtime.block_on(healthcheck(config));
+    match command {
+        Command::Serve => runtime.block_on(serve(config)),
+        Command::Healthcheck => runtime.block_on(healthcheck(config)),
+        Command::DisableTotp => runtime.block_on(disable_totp(config)),
     }
+}
+
+enum Command {
+    Serve,
+    Healthcheck,
+    /// Recovery when the authenticator app is lost: needs access to the server.
+    DisableTotp,
 }
 
 async fn serve(config: Config) {
@@ -144,6 +155,23 @@ async fn healthcheck(config: Config) -> ! {
         Ok(()) => std::process::exit(0),
         Err(message) => {
             eprintln!("{message}");
+            std::process::exit(1);
+        }
+    }
+}
+
+async fn disable_totp(config: Config) -> ! {
+    let result = async {
+        let pool = db::init_pool(&config.database_url).await?;
+        Admin::disable_totp(&pool).await
+    };
+    match result.await {
+        Ok(()) => {
+            eprintln!("Two-factor authentication is off; log in with the password alone.");
+            std::process::exit(0);
+        }
+        Err(e) => {
+            eprintln!("Cannot turn two-factor authentication off: {e}");
             std::process::exit(1);
         }
     }

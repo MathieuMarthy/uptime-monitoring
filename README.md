@@ -108,7 +108,8 @@ Timezone, data retention, private-address blocking, the password and two-factor 
 *Settings* page. Lost your authenticator app? Turn two-factor off on the server, then set it up again:
 
 ```bash
-sqlite3 uptime.db "UPDATE admin SET totp_secret = NULL, totp_last_step = NULL"
+docker exec uptime-monitoring /usr/local/bin/uptime-monitoring disable-totp   # Docker
+uptime-monitoring disable-totp                                                # from source, same DATABASE_URL
 ```
 
 ## Build from source

@@ -195,10 +195,12 @@ fn totp_setup_page(
 }
 
 /// The secret comes back from the setup page: it is only stored once a code proves the
-/// authenticator app has it.
+/// authenticator app has it. The password is asked too, as a session alone could otherwise lock
+/// the admin out; a wrong one counts toward the client's login limit.
 async fn enable_totp(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
+    ClientIp(ip): ClientIp,
     form: Result<Form<TotpEnableForm>, FormRejection>,
 ) -> Result<Response, AppError> {
     let form = form_or_invalid(form)?;
@@ -208,6 +210,27 @@ async fn enable_totp(
     if admin.totp_secret.is_some() {
         return Ok(Redirect::to("/settings").into_response());
     }
+    if !state
+        .login_limiter
+        .lock()
+        .unwrap()
+        .try_attempt(ip, Instant::now())
+    {
+        return Err(AppError::TooManyRequests);
+    }
+    let current = form.current_password.clone();
+    let hash = admin.password_hash.clone();
+    if !with_password_hashing(&state, move || verify_password(&current, &hash)).await? {
+        tracing::warn!(%ip, "wrong current password on turning two-factor authentication on");
+        return Ok(totp_setup_page(
+            &admin,
+            secret,
+            session.csrf_token,
+            Some("Current password is incorrect."),
+        )
+        .into_response());
+    }
+    state.login_limiter.lock().unwrap().record_success(ip);
     let Some(step) = totp::verify(&bytes, &form.code, now_ms(), None) else {
         return Ok(
             totp_setup_page(&admin, secret, session.csrf_token, Some(INVALID_CODE)).into_response(),

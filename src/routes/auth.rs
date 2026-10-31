@@ -230,6 +230,15 @@ async fn login_totp(
         return Ok(back_to_login());
     };
     if !state
+        .pending_logins
+        .lock()
+        .unwrap()
+        .codes_allowed(Instant::now())
+    {
+        tracing::error!(%ip, "too many wrong two-factor codes from all clients; codes refused for now");
+        return Err(AppError::TooManyRequests);
+    }
+    if !state
         .login_limiter
         .lock()
         .unwrap()
@@ -253,7 +262,12 @@ async fn login_totp(
     };
     if !code_ok {
         tracing::warn!(%ip, "wrong two-factor code");
-        if !state.pending_logins.lock().unwrap().fail(token) {
+        if !state
+            .pending_logins
+            .lock()
+            .unwrap()
+            .fail(token, Instant::now())
+        {
             return Ok(back_to_login());
         }
         return Ok(LoginTotpTemplate {

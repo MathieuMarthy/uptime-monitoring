@@ -40,6 +40,7 @@ pub struct PasswordForm {
 #[serde(default)]
 pub struct TotpEnableForm {
     pub secret: String,
+    pub current_password: String,
     pub code: String,
 }
 

@@ -172,8 +172,9 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Two-factor (optional).** TOTP per RFC 6238: HMAC-SHA1, 6 digits, 30 s steps, one step of drift on each side.
   When it is on, a right password creates no session: it starts a pending login (in memory, 5 minutes, at most 100,
   `__Host-login` cookie) and redirects to `/login/totp`. Each code counts toward the login rate limit; 5 wrong codes,
-  or a password change meanwhile, end the pending login. A code is used once: `admin.totp_last_step` only moves
-  forward, through a conditional `UPDATE`. No recovery codes: a lost app is fixed on the server (README).
+  or a password change meanwhile, end the pending login. Past 30 wrong codes from all clients in 15 minutes, codes are
+  refused (429, logged as an error) until the window ends. Turning it on or off asks for the password and a code. A code is used once: `admin.totp_last_step` only moves
+  forward, through a conditional `UPDATE`. No recovery codes: a lost app is fixed on the server with the `disable-totp` command.
 - **Headers.** Every response carries a strict CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and
   `Referrer-Policy: same-origin`; protected pages add `Cache-Control: no-store`. HSTS is left to the reverse proxy.
 
@@ -407,8 +408,8 @@ alerts follow the checks retention: older incidents only show their facts.
   every other session is deleted in the same transaction as the new hash.
 - **Two-factor authentication.** Off: a link to `/settings/totp`, which shows a new secret (text and QR code, drawn
   as one SVG path from the `qrcode` crate) in a hidden field. The secret is stored only when a code of it is posted
-  back; every other session then ends, in the same transaction. On: turning it off takes the current password and a
-  code, and counts toward the login limit like a password change.
+  back with the current password; every other session then ends, in the same transaction. On: turning it off takes
+  the current password and a code. Both count toward the login limit like a password change.
 
 ## Deployment
 
