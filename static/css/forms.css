@@ -37,6 +37,11 @@
     flex-direction: column;
 }
 
+/* A form inside a section spaces its fields as the section does. */
+.form-section form {
+    gap: 16px;
+}
+
 .form-section {
     display: flex;
     flex-direction: column;
