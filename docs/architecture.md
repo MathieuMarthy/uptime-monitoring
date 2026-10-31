@@ -263,10 +263,14 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   (downtime) and `tls_expiring` events, plus `degraded` (latency, threshold, start) when the monitor's `latency_alerts`
   is on, and `latency_normal` (length) when the slowdown's start was alerted (`slowdowns.alerted`), so the two
   always come in pairs whatever the setting does meanwhile. Only transitions alert: nothing on startup, pause or deletion.
-- **Dispatch** (`notify/mod.rs`). A bounded queue (1 000; beyond, alerts are dropped and logged) feeds one task,
-  which hands each alert to its monitor's worker (started on the monitor's first alert). A worker sends its alerts one
-  after the other, so a retried `down` never lands after the `up` that followed it; the channels of one alert are
-  served in parallel, at most 5 requests at a time overall. Each delivery is tried at once, then after 10 s and 60 s;
+- **Dispatch** (`notify/mod.rs`). A bounded queue (1 000; beyond, alerts are dropped and logged) feeds one task.
+  A `down` or `up` opens a 15 s window (fixed, not sliding); every alert received until it closes is sent with it,
+  others go at once. For each channel, the downs of a window become one message (`N monitors are down`, a line per
+  monitor with its cause, at most 20 lines, linked to the dashboard), the ups another, anything else stays alone; an
+  alert never joins a message sent before one already holding its monitor (`group`). Webhooks always get one
+  request per alert, in the usual format. Each channel's worker (started on its first message) sends one message
+  after the other, so a retried `down` never lands after the `up` that followed it; channels are served in
+  parallel, at most 5 requests at a time overall. A grouped message logs one row per monitor. Each delivery is tried at once, then after 10 s and 60 s;
   a 4xx other than 408/429 is not retried. The final result goes to `notification_log` (channel or monitor NULL if
   deleted meanwhile); errors never include the URL, which holds the webhook's secret. Alerts still queued when the
   process stops are lost.

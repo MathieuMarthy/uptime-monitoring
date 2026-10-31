@@ -99,6 +99,58 @@ impl Message {
             link,
         }
     }
+
+    /// One message for several monitors going down, or several coming back up, at once: a line
+    /// per monitor, at most `GROUP_MAX_LINES`, each cut to `GROUP_LINE_MAX_CHARS` so that the
+    /// message fits Discord's and ntfy's 4,096 characters. Links to the dashboard.
+    pub fn group(notifications: &[&Notification], public_url: Option<&str>) -> Self {
+        let up = matches!(
+            notifications.first().map(|n| &n.event),
+            Some(Event::Up { .. })
+        );
+        let mut lines: Vec<String> = notifications
+            .iter()
+            .take(GROUP_MAX_LINES)
+            .map(|n| {
+                let name = n.monitor.as_ref().map_or("", |m| m.name.as_str());
+                let detail = match &n.event {
+                    Event::Down { cause, .. } => cause.clone(),
+                    Event::Up { down_since } => {
+                        format!("back up after {}", format_duration(n.at - down_since))
+                    }
+                    other => other.as_str().to_string(),
+                };
+                cut(&format!("{name}: {detail}"), GROUP_LINE_MAX_CHARS)
+            })
+            .collect();
+        if notifications.len() > GROUP_MAX_LINES {
+            lines.push(format!(
+                "…and {} more.",
+                notifications.len() - GROUP_MAX_LINES
+            ));
+        }
+        let (state, severity) = if up {
+            ("up", Severity::Resolved)
+        } else {
+            ("down", Severity::Critical)
+        };
+        Self {
+            title: format!("{} monitors are {state}", notifications.len()),
+            text: lines.join("\n"),
+            severity,
+            link: public_url.map(|base| format!("{base}/")),
+        }
+    }
+}
+
+const GROUP_MAX_LINES: usize = 20;
+const GROUP_LINE_MAX_CHARS: usize = 150;
+
+fn cut(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_string();
+    }
+    text.chars().take(max - 1).chain(['…']).collect()
 }
 
 #[cfg(test)]
@@ -236,6 +288,89 @@ mod tests {
             "Response times are back to normal after 10 min.\nhttps://api.example.com"
         );
         assert_eq!(m.severity, Severity::Resolved);
+    }
+
+    fn of(id: i64, name: &str, event: Event) -> Notification {
+        Notification {
+            monitor: Some(MonitorRef {
+                id,
+                name: name.to_string(),
+                url: None,
+            }),
+            event,
+            at: 10 * DAY_MS,
+        }
+    }
+
+    #[test]
+    fn group_of_downs_lists_each_cause() {
+        let a = of(
+            1,
+            "API",
+            Event::Down {
+                since: 0,
+                cause: "HTTP 503".to_string(),
+            },
+        );
+        let b = of(
+            2,
+            "Web",
+            Event::Down {
+                since: 0,
+                cause: "timeout".to_string(),
+            },
+        );
+        let m = Message::group(&[&a, &b], Some("https://up.example.com"));
+        assert_eq!(m.title, "2 monitors are down");
+        assert_eq!(m.text, "API: HTTP 503\nWeb: timeout");
+        assert_eq!(m.severity, Severity::Critical);
+        assert_eq!(m.link.as_deref(), Some("https://up.example.com/"));
+    }
+
+    #[test]
+    fn group_of_ups_gives_each_downtime() {
+        let a = of(
+            1,
+            "API",
+            Event::Up {
+                down_since: 10 * DAY_MS - 120_000,
+            },
+        );
+        let b = of(
+            2,
+            "Web",
+            Event::Up {
+                down_since: 10 * DAY_MS - 60_000,
+            },
+        );
+        let m = Message::group(&[&a, &b], None);
+        assert_eq!(m.title, "2 monitors are up");
+        assert_eq!(m.text, "API: back up after 2 min\nWeb: back up after 1 min");
+        assert_eq!(m.severity, Severity::Resolved);
+        assert_eq!(m.link, None);
+    }
+
+    #[test]
+    fn large_group_stays_short() {
+        let downs: Vec<_> = (0..25)
+            .map(|i| {
+                of(
+                    i,
+                    "API",
+                    Event::Down {
+                        since: 0,
+                        cause: "x".repeat(500),
+                    },
+                )
+            })
+            .collect();
+        let refs: Vec<_> = downs.iter().collect();
+        let m = Message::group(&refs, None);
+        assert_eq!(m.title, "25 monitors are down");
+        let lines: Vec<_> = m.text.lines().collect();
+        assert_eq!(lines.len(), 21);
+        assert_eq!(lines[20], "…and 5 more.");
+        assert!(m.text.chars().count() < 4_000, "{}", m.text.chars().count());
     }
 
     #[test]

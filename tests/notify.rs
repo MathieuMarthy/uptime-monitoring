@@ -48,8 +48,12 @@ async fn monitor(pool: &SqlitePool) -> MonitorRef {
 }
 
 async fn monitor_of(pool: &SqlitePool, url: &str) -> MonitorRef {
+    named(pool, "API", url).await
+}
+
+async fn named(pool: &SqlitePool, name: &str, url: &str) -> MonitorRef {
     let input = MonitorForm {
-        name: "API".to_string(),
+        name: name.to_string(),
         url: url.to_string(),
         failure_threshold: "1".to_string(),
         ..MonitorForm::new_defaults()
@@ -102,8 +106,12 @@ fn notifier_with_public_url(pool: &SqlitePool, public_url: Option<&str>) -> Noti
             Duration::from_millis(10),
             Duration::from_millis(10),
         ],
+        GROUP_WINDOW,
     )
 }
+
+/// Short, so that tests stay fast.
+const GROUP_WINDOW: Duration = Duration::from_millis(100);
 
 fn down(monitor: &MonitorRef) -> Notification {
     Notification {
@@ -486,6 +494,7 @@ async fn channel_deleted_during_retries_still_logs() {
         Guard::new(false),
         None,
         vec![Duration::ZERO, Duration::from_millis(300)],
+        GROUP_WINDOW,
     );
     notifier.notify(down(&m));
     next(&mut rx).await;
@@ -495,4 +504,45 @@ async fn channel_deleted_during_retries_still_logs() {
         .unwrap();
     let log = wait_for_log(&pool, 1).await;
     assert_eq!((log[0].ok, log[0].channel_name.as_deref()), (false, None));
+}
+
+#[tokio::test]
+async fn simultaneous_downs_share_one_message_except_on_webhooks() {
+    let pool = common::test_app().await.1;
+    let (url, mut rx) = receiver(vec![]).await;
+    let api = monitor(&pool).await;
+    let web = named(&pool, "Web", "https://web.example.com").await;
+    let discord = channel(&pool, "discord", serde_json::json!({ "url": url }), true).await;
+    let webhook = channel(&pool, "webhook", serde_json::json!({ "url": url }), true).await;
+    for m in [&api, &web] {
+        link(&pool, m.id, discord).await;
+        link(&pool, m.id, webhook).await;
+    }
+
+    let notifier = notifier(&pool);
+    notifier.notify(down(&api));
+    notifier.notify(down(&web));
+    let mut embeds = Vec::new();
+    let mut webhook_monitors = Vec::new();
+    for _ in 0..3 {
+        let body = next(&mut rx).await.body;
+        match body.get("embeds") {
+            Some(embeds_of) => embeds.push(embeds_of[0].clone()),
+            None => webhook_monitors.push(body["monitor"]["name"].as_str().unwrap().to_string()),
+        }
+    }
+    assert_eq!(embeds.len(), 1, "one Discord message for both");
+    assert_eq!(embeds[0]["title"], "2 monitors are down");
+    assert_eq!(embeds[0]["description"], "API: HTTP 503\nWeb: HTTP 503");
+    webhook_monitors.sort();
+    assert_eq!(
+        webhook_monitors,
+        ["API", "Web"],
+        "webhooks get one request each"
+    );
+
+    let log = wait_for_log(&pool, 4).await;
+    assert!(log.iter().all(|l| l.ok && l.event == "down"));
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(rx.try_recv().is_err(), "nothing more");
 }

@@ -1,8 +1,9 @@
 //! Alerts: turns engine events into messages sent to the monitor's notification channels.
 //!
-//! The engine pushes notifications into a bounded queue. One dispatcher task reads the channels
-//! of the monitor and sends to each of them, retrying failures, a few requests at a time. Each
-//! delivery's final result goes to `notification_log`.
+//! The engine pushes notifications into a bounded queue. One dispatcher task gathers the downs
+//! and ups happening at the same time, reads the channels of each monitor and hands each channel
+//! its messages; channels send in parallel, retrying failures, a few requests at a time. Each
+//! delivery's final result goes to `notification_log`, one row per monitor.
 
 pub mod channel;
 pub mod message;
@@ -20,7 +21,7 @@ use std::error::Error;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc};
-use tokio::task::JoinSet;
+use tokio::time::Instant;
 
 /// Waits before each attempt: the first one is immediate.
 pub const RETRY_DELAYS: [Duration; 3] = [
@@ -30,6 +31,8 @@ pub const RETRY_DELAYS: [Duration; 3] = [
 ];
 /// Notifications waiting for the dispatcher; more are dropped (and logged).
 const QUEUE_SIZE: usize = 1000;
+/// How long a `down` or `up` waits for others to send with it.
+pub const GROUP_WINDOW: Duration = Duration::from_secs(15);
 /// Requests in flight at the same time, across all channels.
 const MAX_CONCURRENT_SENDS: usize = 5;
 const SEND_TIMEOUT: Duration = Duration::from_secs(10);
@@ -77,6 +80,11 @@ impl Event {
             Self::Test => "test",
         }
     }
+
+    /// Sent in one message with the same event of other monitors happening at the same time.
+    fn groups(&self) -> bool {
+        matches!(self, Self::Down { .. } | Self::Up { .. })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,15 +106,16 @@ pub struct Notifier {
 impl Notifier {
     /// Starts the dispatcher.
     pub fn start(pool: SqlitePool, guard: Guard, public_url: Option<String>) -> Self {
-        Self::start_with(pool, guard, public_url, RETRY_DELAYS.to_vec())
+        Self::start_with(pool, guard, public_url, RETRY_DELAYS.to_vec(), GROUP_WINDOW)
     }
 
-    /// Like `start`, with other waits between attempts.
+    /// Like `start`, with other waits between attempts and another grouping window.
     pub fn start_with(
         pool: SqlitePool,
         guard: Guard,
         public_url: Option<String>,
         retry_delays: Vec<Duration>,
+        group_window: Duration,
     ) -> Self {
         let sender = Arc::new(Sender {
             guard,
@@ -115,7 +124,7 @@ impl Notifier {
             client: OnceLock::new(),
         });
         let (queue, receiver) = mpsc::channel(QUEUE_SIZE);
-        tokio::spawn(dispatch(pool, sender.clone(), receiver));
+        tokio::spawn(dispatch(pool, sender.clone(), receiver, group_window));
         Self {
             queue: Some(queue),
             sender,
@@ -289,81 +298,185 @@ async fn telegram_description(mut response: reqwest::Response) -> Option<String>
     json["description"].as_str().map(str::to_string)
 }
 
-/// Routes each notification to its monitor's worker, started on its first alert.
+/// Sends notifications as they come, except that a `down` or `up` opens a window of
+/// `group_window`: everything received until it closes is sent together, so that each channel
+/// gets one message for several monitors down (or up) at once.
 async fn dispatch(
     pool: SqlitePool,
     sender: Arc<Sender>,
     mut receiver: mpsc::Receiver<Notification>,
+    group_window: Duration,
 ) {
-    let permits = Arc::new(Semaphore::new(MAX_CONCURRENT_SENDS));
-    let mut workers: HashMap<i64, mpsc::UnboundedSender<Notification>> = HashMap::new();
-    while let Some(notification) = receiver.recv().await {
-        let Some(monitor_id) = notification.monitor.as_ref().map(|m| m.id) else {
-            continue;
-        };
-        let worker = workers.entry(monitor_id).or_insert_with(|| {
-            let (tx, rx) = mpsc::unbounded_channel();
-            tokio::spawn(monitor_worker(
-                pool.clone(),
-                sender.clone(),
-                permits.clone(),
-                rx,
-            ));
-            tx
-        });
-        // The worker never stops while its sender lives.
-        let _ = worker.send(notification);
+    let mut router = Router {
+        pool,
+        sender,
+        permits: Arc::new(Semaphore::new(MAX_CONCURRENT_SENDS)),
+        workers: HashMap::new(),
+    };
+    let mut batch = Vec::new();
+    let mut deadline: Option<Instant> = None;
+    loop {
+        let flush_at = deadline;
+        tokio::select! {
+            received = receiver.recv() => {
+                let Some(notification) = received else { break };
+                if notification.monitor.is_none() {
+                    continue;
+                }
+                if deadline.is_none() {
+                    if !notification.event.groups() {
+                        router.route(vec![notification]).await;
+                        continue;
+                    }
+                    deadline = Some(Instant::now() + group_window);
+                }
+                batch.push(notification);
+            }
+            _ = tokio::time::sleep_until(flush_at.unwrap_or_else(Instant::now)), if flush_at.is_some() => {
+                deadline = None;
+                router.route(std::mem::take(&mut batch)).await;
+            }
+        }
     }
+    router.route(batch).await;
 }
 
-/// Delivers one monitor's notifications one after the other, so that a retried `down` never
-/// arrives after the `up` that followed it. The channels of one notification are served in
-/// parallel.
-async fn monitor_worker(
+/// One message to send to a channel, about one notification or a group of them.
+struct Job {
+    channel: Channel,
+    notifications: Vec<Arc<Notification>>,
+    message: Message,
+}
+
+/// Turns notifications into jobs for each channel's worker, started on the channel's first job.
+struct Router {
     pool: SqlitePool,
     sender: Arc<Sender>,
     permits: Arc<Semaphore>,
-    mut receiver: mpsc::UnboundedReceiver<Notification>,
-) {
-    while let Some(notification) = receiver.recv().await {
-        let monitor_id = notification.monitor.as_ref().map(|m| m.id);
-        let channels = match Channel::enabled_for_monitor(&pool, monitor_id.unwrap_or(0)).await {
-            Ok(channels) => channels,
-            Err(e) => {
-                tracing::error!(monitor_id, error = %e, "cannot read notification channels");
-                continue;
-            }
-        };
-        if channels.is_empty() {
-            continue;
+    workers: HashMap<i64, mpsc::UnboundedSender<Job>>,
+}
+
+impl Router {
+    async fn route(&mut self, notifications: Vec<Notification>) {
+        if notifications.is_empty() {
+            return;
         }
-        let tz = match Settings::load(&pool).await {
+        // Channels in the order they first appear, each with its notifications in order.
+        let mut per_channel: Vec<(Channel, Vec<Arc<Notification>>)> = Vec::new();
+        for notification in notifications {
+            let monitor_id = notification.monitor.as_ref().map_or(0, |m| m.id);
+            let channels = match Channel::enabled_for_monitor(&self.pool, monitor_id).await {
+                Ok(channels) => channels,
+                Err(e) => {
+                    tracing::error!(monitor_id, error = %e, "cannot read notification channels");
+                    continue;
+                }
+            };
+            let notification = Arc::new(notification);
+            for channel in channels {
+                match per_channel.iter_mut().find(|(c, _)| c.id == channel.id) {
+                    Some((_, list)) => list.push(notification.clone()),
+                    None => per_channel.push((channel, vec![notification.clone()])),
+                }
+            }
+        }
+        if per_channel.is_empty() {
+            return;
+        }
+        let tz = match Settings::load(&self.pool).await {
             Ok(settings) => settings.tz(),
             Err(_) => TimeZone::UTC,
         };
-        let message = Arc::new(Message::new(
-            &notification,
-            &tz,
-            sender.public_url.as_deref(),
-        ));
-        let notification = Arc::new(notification);
-        let mut deliveries = JoinSet::new();
-        for channel in channels {
-            let (pool, sender, permits) = (pool.clone(), sender.clone(), permits.clone());
-            let (notification, message) = (notification.clone(), message.clone());
-            deliveries.spawn(async move {
-                let result = sender
-                    .deliver(&permits, &channel, &notification, &message)
-                    .await;
-                if let Err(e) = &result {
-                    tracing::warn!(channel = %channel.name, error = %e, "alert not delivered");
-                }
-                if let Err(e) = log_delivery(&pool, &channel, &notification, result.err()).await {
-                    tracing::error!(error = %e, "cannot log the delivery");
-                }
-            });
+        let sender = self.sender.clone();
+        let public_url = sender.public_url.as_deref();
+        for (channel, list) in per_channel {
+            // Webhooks are read by programs, which expect one event per monitor.
+            let groups = if channel.kind == "webhook" {
+                (0..list.len()).map(|i| vec![i]).collect()
+            } else {
+                group(&list)
+            };
+            for indexes in groups {
+                let notifications: Vec<_> = indexes.iter().map(|&i| list[i].clone()).collect();
+                let message = match notifications.as_slice() {
+                    [one] => Message::new(one, &tz, public_url),
+                    many => {
+                        Message::group(&many.iter().map(|n| &**n).collect::<Vec<_>>(), public_url)
+                    }
+                };
+                let job = Job {
+                    channel: channel.clone(),
+                    notifications,
+                    message,
+                };
+                // The worker never stops while its sender lives.
+                let _ = self.worker(channel.id).send(job);
+            }
         }
-        deliveries.join_all().await;
+    }
+
+    fn worker(&mut self, channel_id: i64) -> &mpsc::UnboundedSender<Job> {
+        self.workers.entry(channel_id).or_insert_with(|| {
+            let (tx, rx) = mpsc::unbounded_channel();
+            tokio::spawn(channel_worker(
+                self.pool.clone(),
+                self.sender.clone(),
+                self.permits.clone(),
+                rx,
+            ));
+            tx
+        })
+    }
+}
+
+/// Splits a channel's notifications into messages, in sending order: the downs together, the
+/// ups together, anything else alone. A notification never joins a message sent before one
+/// already holding its monitor, so each monitor's alerts keep their order.
+fn group(notifications: &[Arc<Notification>]) -> Vec<Vec<usize>> {
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    for (i, notification) in notifications.iter().enumerate() {
+        let monitor = |j: &usize| notifications[*j].monitor.as_ref().map(|m| m.id);
+        let id = notification.monitor.as_ref().map(|m| m.id);
+        let after = groups
+            .iter()
+            .rposition(|g| g.iter().any(|j| monitor(j) == id))
+            .map_or(0, |p| p + 1);
+        let kind = notification.event.as_str();
+        let joins = notification.event.groups().then(|| {
+            groups[after..]
+                .iter()
+                .position(|g| notifications[g[0]].event.as_str() == kind)
+        });
+        match joins.flatten() {
+            Some(p) => groups[after + p].push(i),
+            None => groups.push(vec![i]),
+        }
+    }
+    groups
+}
+
+/// Sends one channel's messages one after the other, so that a retried `down` never arrives
+/// after the `up` that followed it. Channels are served in parallel.
+async fn channel_worker(
+    pool: SqlitePool,
+    sender: Arc<Sender>,
+    permits: Arc<Semaphore>,
+    mut receiver: mpsc::UnboundedReceiver<Job>,
+) {
+    while let Some(job) = receiver.recv().await {
+        let result = sender
+            .deliver(&permits, &job.channel, &job.notifications[0], &job.message)
+            .await;
+        if let Err(e) = &result {
+            tracing::warn!(channel = %job.channel.name, error = %e, "alert not delivered");
+        }
+        for notification in &job.notifications {
+            if let Err(e) =
+                log_delivery(&pool, &job.channel, notification, result.clone().err()).await
+            {
+                tracing::error!(error = %e, "cannot log the delivery");
+            }
+        }
     }
 }
 
@@ -406,4 +519,55 @@ fn truncate(text: &str) -> String {
         .take(ERROR_MAX_CHARS - 1)
         .chain(['…'])
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn of(monitor: i64, event: Event) -> Arc<Notification> {
+        Arc::new(Notification {
+            monitor: Some(MonitorRef {
+                id: monitor,
+                name: String::new(),
+                url: None,
+            }),
+            event,
+            at: 0,
+        })
+    }
+
+    fn down(monitor: i64) -> Arc<Notification> {
+        of(
+            monitor,
+            Event::Down {
+                since: 0,
+                cause: String::new(),
+            },
+        )
+    }
+
+    fn up(monitor: i64) -> Arc<Notification> {
+        of(monitor, Event::Up { down_since: 0 })
+    }
+
+    #[test]
+    fn downs_and_ups_are_grouped_by_event() {
+        let list = [down(1), down(2), up(3), down(4), up(5)];
+        assert_eq!(group(&list), [vec![0, 1, 3], vec![2, 4]]);
+    }
+
+    #[test]
+    fn other_events_stay_alone() {
+        let tls = || of(1, Event::TlsExpiring { expires_at: 0 });
+        let list = [tls(), down(2), tls()];
+        assert_eq!(group(&list), [vec![0], vec![1], vec![2]]);
+    }
+
+    #[test]
+    fn a_monitor_keeps_its_order() {
+        // 1 comes back up after 2 did: its up cannot join the earlier one.
+        let list = [up(2), down(1), up(1), down(3)];
+        assert_eq!(group(&list), [vec![0], vec![1, 3], vec![2]]);
+    }
 }
