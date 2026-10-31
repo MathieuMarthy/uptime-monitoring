@@ -80,14 +80,6 @@
         {% if groups.is_empty() %}
         <p class="empty-state">No monitor yet. <a href="/monitors/new">Add the first one</a> to start checking a site.</p>
         {% else %}
-        <div class="monitor-head" aria-hidden="true">
-            <span>Monitor</span>
-            <span class="trace-axis trace-{{ bars() }}">
-                {%- for label in axis.labels %}<span>{{ label }}</span>{% endfor -%}
-            </span>
-            <span class="num">Uptime</span>
-            <span class="num">Response</span>
-        </div>
         <div id="live-rows" data-live>
         <form id="bulk-form" method="POST" action="/monitors/bulk">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -95,7 +87,7 @@
             {#- Enter in the group field submits the form's first button: Move comes first, shown after. #}
             <div class="bulk-bar" data-bulk-bar>
                 <span class="bulk-group">
-                    <label class="visually-hidden" for="bulk-group">Move to group</label>
+                    <label class="bulk-label" for="bulk-group">Group</label>
                     <input class="field" id="bulk-group" name="group" list="bulk-groups" maxlength="{{ GROUP_MAX_CHARS }}"
                            placeholder="No group">
                     <datalist id="bulk-groups">
@@ -112,7 +104,7 @@
                 <button class="button-secondary" type="submit" name="action" value="resume">Resume</button>
                 {%- if !channels.is_empty() %}
                 <span class="bulk-channel">
-                    <label class="visually-hidden" for="bulk-channel">Alert channel</label>
+                    <label class="bulk-label" for="bulk-channel">Alert channel</label>
                     <select class="field" id="bulk-channel" name="channel">
                         {%- for (id, name) in channels %}
                         <option value="{{ id }}">{{ name }}</option>
@@ -124,6 +116,14 @@
                 {%- endif %}
                 <button class="button-danger" type="submit" name="action" value="delete"
                         data-confirm="Delete the selected monitors and all their history?">Delete</button>
+            </div>
+            <div class="monitor-head" aria-hidden="true">
+                <span>Monitor</span>
+                <span class="trace-axis trace-{{ bars() }}">
+                    {%- for label in axis.labels %}<span>{{ label }}</span>{% endfor -%}
+                </span>
+                <span class="num">Uptime</span>
+                <span class="num">Response</span>
             </div>
             {%- for group in groups %}
             {%- if grouped %}

@@ -199,11 +199,20 @@
     display: none;
 }
 
+/* Each field with its label and buttons, set apart by a rule. */
 .bulk-group,
 .bulk-channel {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
+    padding-left: 12px;
+    border-left: 1px solid var(--rule-soft);
+}
+
+.bulk-label {
+    font-size: 13px;
+    color: var(--muted);
 }
 
 /* First in the form for the Enter key, shown after the pause buttons. */

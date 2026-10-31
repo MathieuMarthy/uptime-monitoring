@@ -936,6 +936,26 @@ async fn bulk_rejects_odd_requests() {
 }
 
 #[tokio::test]
+async fn bulk_bar_sits_above_the_time_axis_with_visible_labels() {
+    let (app, pool) = common::test_app().await;
+    create_in(&app, "a", "Web").await;
+    add_channel(&pool, "Ops", true).await;
+    let body = get(&app, "/").await.body;
+    let rows = body.find(r#"id="live-rows""#).expect("live rows");
+    let bar = body.find("data-bulk-bar").expect("bulk bar");
+    let axis = body.find(r#"class="monitor-head""#).expect("time axis");
+    assert!(rows < bar && bar < axis, "{body}");
+    assert!(
+        body.contains(r#"<label class="bulk-label" for="bulk-group">Group</label>"#),
+        "{body}"
+    );
+    assert!(
+        body.contains(r#"<label class="bulk-label" for="bulk-channel">Alert channel</label>"#),
+        "{body}"
+    );
+}
+
+#[tokio::test]
 async fn dashboard_offers_bulk_actions_and_shows_their_outcome() {
     let (app, pool) = common::test_app().await;
     create_in(&app, "a", "Web").await;
