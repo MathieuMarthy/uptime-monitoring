@@ -129,7 +129,8 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
 
 ### Authentication
 
-- `admin`: single row (`id = 1`), `username`, `password_hash` (Argon2id), `updated_at`.
+- `admin`: single row (`id = 1`), `username`, `password_hash` (Argon2id), `updated_at`, `totp_secret` (base32,
+  NULL = two-factor off), `totp_last_step` (last TOTP time step accepted; a code is never accepted twice).
 - `sessions`: `token_hash` (SHA-256 of the session token; the token itself is never stored), `csrf_token`,
   `created_at`, `expires_at`.
 

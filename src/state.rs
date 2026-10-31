@@ -1,3 +1,4 @@
+use crate::auth::pending::PendingLogins;
 use crate::auth::random_token;
 use crate::auth::rate_limit::LoginLimiter;
 use crate::engine::EngineHandle;
@@ -20,6 +21,8 @@ pub struct AppState {
     /// Set while no admin exists: the one-time token of the `/setup` URL printed in the logs.
     pub setup_token: Arc<Mutex<Option<String>>>,
     pub login_limiter: Arc<Mutex<LoginLimiter>>,
+    /// Logins past the password, waiting for their two-factor code.
+    pub pending_logins: Arc<Mutex<PendingLogins>>,
     /// One password hash at a time: each Argon2 run takes 19 MiB.
     pub password_hashing: Arc<Semaphore>,
     pub trust_proxy_headers: bool,
@@ -47,6 +50,7 @@ impl AppState {
             db,
             setup_token: Arc::default(),
             login_limiter: Arc::default(),
+            pending_logins: Arc::default(),
             password_hashing: Arc::new(Semaphore::new(1)),
             trust_proxy_headers: false,
             public_url: None,

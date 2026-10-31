@@ -32,6 +32,13 @@ pub struct LoginForm {
     pub password: String,
 }
 
+/// The second login step, when two-factor authentication is on.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct TotpLoginForm {
+    pub code: String,
+}
+
 impl SetupForm {
     pub fn validate(&self) -> Result<SetupInput, FieldErrors> {
         let mut errors = FieldErrors::new();

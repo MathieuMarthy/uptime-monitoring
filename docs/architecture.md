@@ -33,7 +33,9 @@ uptime-monitoring/
 │   ├── healthcheck.rs            # Probe of /health used by the Docker HEALTHCHECK
 │   ├── error.rs                  # AppError → HTML error pages (404, 405, 403, 429, 500…)
 │   ├── auth/                     # Argon2 hashing, random tokens, session cookie
-│   │   └── rate_limit.rs         # In-memory limit on failed logins per IP
+│   │   ├── pending.rs            # Logins waiting for their two-factor code
+│   │   ├── rate_limit.rs         # In-memory limit on failed logins per IP
+│   │   └── totp.rs               # RFC 6238 codes, base32, QR code SVG
 │   ├── middleware.rs             # require_session (session + CSRF), security headers
 │   ├── time.rs                   # now_ms(), local days and hours, date formatting
 │   ├── windows.rs                # Maintenance windows in time (pure) + Maintenances, the shared set
@@ -69,7 +71,7 @@ uptime-monitoring/
 │   │   ├── stats.rs              # Bucket: availability summed over a time bucket
 │   │   └── status_page.rs        # Public pages + their monitors
 │   ├── forms/
-│   │   ├── auth.rs               # SetupForm, LoginForm
+│   │   ├── auth.rs               # SetupForm, LoginForm, TotpLoginForm
 │   │   ├── channel.rs            # ChannelForm → ChannelInput | FieldErrors
 │   │   ├── incident.rs           # NoteForm → NoteInput
 │   │   ├── maintenance.rs        # MaintenanceForm → MaintenanceInput | FieldErrors
@@ -91,7 +93,7 @@ uptime-monitoring/
 │       ├── mod.rs                # Router assembly (public / protected) + parse_id()
 │       ├── activity.rs           # /activity
 │       ├── alerts.rs             # /alerts/*
-│       ├── auth.rs               # /setup, /login, /logout
+│       ├── auth.rs               # /setup, /login, /login/totp, /logout
 │       ├── health.rs             # GET /health
 │       ├── incidents.rs          # /incidents/{id}/note
 │       ├── maintenances.rs       # /maintenances/*, /monitors/{id}/maintenance
@@ -167,6 +169,11 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   resets the count. Attempts are counted before the password check, so concurrent requests cannot exceed the budget.
   IPv6 clients are keyed on their /64. In memory, at most 10 000 clients: when full, unknown clients are refused until
   entries expire (the table is swept at most once a minute).
+- **Two-factor (optional).** TOTP per RFC 6238: HMAC-SHA1, 6 digits, 30 s steps, one step of drift on each side.
+  When it is on, a right password creates no session: it starts a pending login (in memory, 5 minutes, at most 100,
+  `__Host-login` cookie) and redirects to `/login/totp`. Each code counts toward the login rate limit; 5 wrong codes,
+  or a password change meanwhile, end the pending login. A code is used once: `admin.totp_last_step` only moves
+  forward, through a conditional `UPDATE`. No recovery codes: a lost app is fixed on the server (README).
 - **Headers.** Every response carries a strict CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and
   `Referrer-Policy: same-origin`; protected pages add `Cache-Control: no-store`. HSTS is left to the reverse proxy.
 
@@ -385,8 +392,8 @@ alerts follow the checks retention: older incidents only show their facts.
 
 ## Settings
 
-`/settings` holds three forms, each posted and validated on its own (`/settings/general`, `/settings/data`,
-`/settings/password`); success redirects to `/settings?saved=…`.
+`/settings` holds four forms, each posted and validated on its own (`/settings/general`, `/settings/data`,
+`/settings/password`, `/settings/totp/disable`); success redirects to `/settings?saved=…`.
 
 - **General.** The timezone, chosen among the names of the embedded tz database.
 - **Data and security.** Raw checks retention (2–365 days) and history retention (blank = forever, otherwise at least
@@ -398,6 +405,10 @@ alerts follow the checks retention: older incidents only show their facts.
 - **Password.** Current password, new one twice (setup rules). The new password is checked first; then the attempt
   counts toward the client's login limit and the current password is verified on the hashing semaphore. On success,
   every other session is deleted in the same transaction as the new hash.
+- **Two-factor authentication.** Off: a link to `/settings/totp`, which shows a new secret (text and QR code, drawn
+  as one SVG path from the `qrcode` crate) in a hidden field. The secret is stored only when a code of it is posted
+  back; every other session then ends, in the same transaction. On: turning it off takes the current password and a
+  code, and counts toward the login limit like a password change.
 
 ## Deployment
 

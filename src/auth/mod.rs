@@ -1,6 +1,8 @@
 //! Password hashing, random tokens and the session cookie.
 
+pub mod pending;
 pub mod rate_limit;
+pub mod totp;
 
 use argon2::Argon2;
 use argon2::password_hash::phc::PasswordHash;

@@ -20,6 +20,17 @@ pub struct SettingsTemplate {
     /// Banner after a successful save.
     pub saved: Option<&'static str>,
     pub storage: StorageUse,
+    pub totp_enabled: bool,
+}
+
+/// Turning two-factor authentication on: a new secret, as text and QR code, and its first code.
+#[derive(Template, WebTemplate)]
+#[template(path = "settings/totp.html")]
+pub struct TotpSetupTemplate {
+    pub csrf_token: String,
+    pub secret: String,
+    pub qr_svg: String,
+    pub error: Option<&'static str>,
 }
 
 impl SettingsTemplate {
@@ -40,6 +51,7 @@ impl SettingsTemplate {
             errors: FieldErrors::new(),
             saved: None,
             storage,
+            totp_enabled: false,
         }
     }
 

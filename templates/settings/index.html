@@ -131,5 +131,39 @@
             </div>
         </form>
     </div>
+
+    <div class="form-card">
+        <div class="form-section">
+            <h2 class="section-title">Two-factor authentication</h2>
+            {% if totp_enabled %}
+            <p class="form-hint">On: each login asks for a code from your authenticator app.</p>
+            <form action="/settings/totp/disable" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="totp_password">Current password</label>
+                        <input class="form-input" id="totp_password" name="current_password" type="password"
+                               autocomplete="current-password" required/>
+                        {% call field_error("totp_password") %}{% endcall %}
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="totp_code">Code</label>
+                        <input class="form-input" id="totp_code" name="code" type="text" inputmode="numeric"
+                               autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" required/>
+                        {% call field_error("totp_code") %}{% endcall %}
+                    </div>
+                </div>
+                <div class="form-actions-left">
+                    <button class="button-secondary" type="submit">Turn Off</button>
+                </div>
+            </form>
+            {% else %}
+            <p class="form-hint">Off. Turn it on to ask for a code from an authenticator app after the password.</p>
+            <div class="form-actions-left">
+                <a class="button-primary" href="/settings/totp">Set Up</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}

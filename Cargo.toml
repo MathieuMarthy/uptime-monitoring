@@ -30,6 +30,9 @@ x509-parser = "0.18.1"
 memchr = "2.8.3"
 unicode-normalization = "0.1.25"
 jiff = { version = "0.2.38", default-features = false, features = ["std", "tzdb-bundle-always"] }
+hmac = "0.13.0"
+sha1 = "0.11.0"
+qrcode = { version = "0.14.1", default-features = false }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

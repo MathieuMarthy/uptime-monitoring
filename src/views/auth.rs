@@ -24,3 +24,10 @@ pub struct LoginTemplate {
     pub username: String,
     pub error: Option<&'static str>,
 }
+
+/// The second login step: the authenticator code.
+#[derive(Template, WebTemplate)]
+#[template(path = "auth/totp.html")]
+pub struct LoginTotpTemplate {
+    pub error: Option<&'static str>,
+}

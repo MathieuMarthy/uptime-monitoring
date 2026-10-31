@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+
+{% block title %}Two-factor authentication - Uptime Monitoring{% endblock %}
+{% block nav_settings %}aria-current="page"{% endblock %}
+
+{% block styles %}
+<link href="/static/css/forms.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-header">
+        <h1 class="form-title">Two-factor authentication</h1>
+        <p class="form-subtitle">After the password, each login asks for a code from an authenticator app.</p>
+    </div>
+
+    {% if let Some(error) = error %}
+    <div class="error-banner" role="alert"><span>{{ error }}</span></div>
+    {% endif %}
+
+    <div class="form-card">
+        <form action="/settings/totp" method="POST" class="form-section">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="secret" value="{{ secret }}">
+            <h2 class="section-title">1. Add this account to your app</h2>
+            <div class="totp-secret">
+                {{ qr_svg|safe }}
+                <div class="form-group">
+                    <span class="form-label">Or type the key</span>
+                    <code class="totp-key">{{ secret }}</code>
+                    <span class="form-hint">Time-based, 6 digits, every 30 seconds.</span>
+                </div>
+            </div>
+
+            <h2 class="section-title">2. Enter the code it shows</h2>
+            <div class="form-group">
+                <label class="form-label" for="code">Code</label>
+                <input class="form-input" id="code" name="code" type="text" inputmode="numeric"
+                       autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" required/>
+                <span class="form-hint">Every other session is logged out. If you lose the app, only someone with
+                    access to the server can turn this off (see the README).</span>
+            </div>
+            <div class="form-actions-left">
+                <button class="button-primary" type="submit">Turn On</button>
+                <a class="button-secondary" href="/settings">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

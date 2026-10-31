@@ -211,6 +211,30 @@
     align-self: flex-start;
 }
 
+.totp-secret {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+/* Dark on white in both themes: scanners expect it. */
+.qr-code {
+    width: 180px;
+    height: 180px;
+    background: #fff;
+    fill: #000;
+    border-radius: 6px;
+}
+
+.totp-key {
+    font-family: ui-monospace, monospace;
+    font-size: 15px;
+    letter-spacing: 0.05em;
+    word-break: break-all;
+}
+
 @media (max-width: 640px) {
     .form-row,
     .form-row-wide-first {

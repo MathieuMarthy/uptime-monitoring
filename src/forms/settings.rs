@@ -35,6 +35,21 @@ pub struct PasswordForm {
     pub password_confirm: String,
 }
 
+/// Turns two-factor authentication on: the secret shown on the setup page and its current code.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct TotpEnableForm {
+    pub secret: String,
+    pub code: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct TotpDisableForm {
+    pub current_password: String,
+    pub code: String,
+}
+
 /// IANA names of the embedded tz database, sorted.
 pub fn timezones() -> Vec<String> {
     let mut names: Vec<String> = jiff::tz::db()

@@ -44,7 +44,8 @@ small enough to run next to the sites it watches.
 - Webhook, Discord and ntfy, retried, with a delivery log.
 
 **Security**
-- One admin account: Argon2 password, `Secure` session cookie, CSRF protection, login rate limit, strict CSP.
+- One admin account: Argon2 password, optional two-factor authentication (TOTP), `Secure` session cookie, CSRF
+  protection, login rate limit, strict CSP.
 - Optional blocking of private addresses (localhost, private networks, cloud metadata), resistant to DNS rebinding.
 - A 21 MB distroless image that drops root before doing anything.
 
@@ -103,7 +104,12 @@ nginx). Over plain HTTP, logging in only works on `localhost`.
 | `RUST_LOG`            | `uptime_monitoring=info,tower_http=info` | Log filter |
 | `PUID`, `PGID`        | `65532`                                  | User and group the process runs as when started as root; they own the database files. Ignored when started as another user (`user:` in Compose) |
 
-Timezone, data retention, private-address blocking and the password are changed from the *Settings* page.
+Timezone, data retention, private-address blocking, the password and two-factor authentication are changed from the
+*Settings* page. Lost your authenticator app? Turn two-factor off on the server, then set it up again:
+
+```bash
+sqlite3 uptime.db "UPDATE admin SET totp_secret = NULL, totp_last_step = NULL"
+```
 
 ## Build from source
 

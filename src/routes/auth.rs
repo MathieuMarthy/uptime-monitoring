@@ -1,19 +1,21 @@
+use crate::auth::pending::{LOGIN_COOKIE, expired_login_cookie, login_cookie};
+use crate::auth::totp::{self, decode_secret};
 use crate::auth::{
     SESSION_COOKIE, cookie, expired_session_cookie, hash_password, print_setup_url, secrets_match,
     session_cookie, sha256_hex, verify_password,
 };
 use crate::error::AppError;
-use crate::forms::auth::{LoginForm, SetupForm};
+use crate::forms::auth::{LoginForm, SetupForm, TotpLoginForm};
 use crate::forms::monitor::FieldErrors;
 use crate::models::{Admin, Session, is_unique_violation};
 use crate::routes::form_or_invalid;
 use crate::state::AppState;
 use crate::time::now_ms;
-use crate::views::auth::{LoginTemplate, SetupTemplate};
+use crate::views::auth::{LoginTemplate, LoginTotpTemplate, SetupTemplate};
 use axum::extract::rejection::{FormRejection, QueryRejection};
 use axum::extract::{ConnectInfo, FromRequestParts, Query, State};
 use axum::http::request::Parts;
-use axum::http::{HeaderMap, header};
+use axum::http::{HeaderMap, HeaderValue, header};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::get;
 use axum::{Extension, Form, Router};
@@ -22,6 +24,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::{Duration, Instant};
 
 const LOGIN_FAILED: &str = "Invalid username or password.";
+pub(super) const INVALID_CODE: &str = "Invalid code.";
 const HASHING_WAIT: Duration = Duration::from_secs(5);
 
 /// Routes reachable without a session.
@@ -29,6 +32,7 @@ pub fn public_router() -> Router<AppState> {
     Router::new()
         .route("/setup", get(setup_page).post(setup))
         .route("/login", get(login_page).post(login))
+        .route("/login/totp", get(totp_page).post(login_totp))
 }
 
 /// Routes behind the session guard.
@@ -171,9 +175,125 @@ async fn login(
         }
         .into_response());
     }
+    if admin.totp_secret.is_some() {
+        // The attempt count is reset only once the code is right too.
+        let token = state
+            .pending_logins
+            .lock()
+            .unwrap()
+            .start(admin.password_hash, Instant::now())
+            .ok_or(AppError::TooManyRequests)?;
+        return Ok((
+            [(header::SET_COOKIE, login_cookie(&token))],
+            Redirect::to("/login/totp"),
+        )
+            .into_response());
+    }
     state.login_limiter.lock().unwrap().record_success(ip);
     Session::purge_expired(&state.db, now_ms()).await?;
     start_session(&state).await
+}
+
+async fn totp_page(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    let pending = cookie(&headers, LOGIN_COOKIE).is_some_and(|token| {
+        state
+            .pending_logins
+            .lock()
+            .unwrap()
+            .password_hash(token, Instant::now())
+            .is_some()
+    });
+    if !pending {
+        return back_to_login();
+    }
+    LoginTotpTemplate { error: None }.into_response()
+}
+
+/// Each code counts toward the client's login attempts; five wrong ones end the pending login.
+async fn login_totp(
+    State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
+    headers: HeaderMap,
+    form: Result<Form<TotpLoginForm>, FormRejection>,
+) -> Result<Response, AppError> {
+    let form = form_or_invalid(form)?;
+    let Some(token) = cookie(&headers, LOGIN_COOKIE) else {
+        return Ok(back_to_login());
+    };
+    let verified_hash = state
+        .pending_logins
+        .lock()
+        .unwrap()
+        .password_hash(token, Instant::now())
+        .map(str::to_owned);
+    let Some(verified_hash) = verified_hash else {
+        return Ok(back_to_login());
+    };
+    if !state
+        .login_limiter
+        .lock()
+        .unwrap()
+        .try_attempt(ip, Instant::now())
+    {
+        return Err(AppError::TooManyRequests);
+    }
+
+    // A password change since the first step voids it.
+    let admin = Admin::find(&state.db)
+        .await?
+        .filter(|admin| admin.password_hash == verified_hash);
+    let Some(admin) = admin else {
+        state.pending_logins.lock().unwrap().finish(token);
+        return Ok(back_to_login());
+    };
+    let code_ok = match &admin.totp_secret {
+        Some(secret) => totp_code_ok(&state, secret, admin.totp_last_step, &form.code).await?,
+        // Turned off since the first step: the password was enough.
+        None => true,
+    };
+    if !code_ok {
+        tracing::warn!(%ip, "wrong two-factor code");
+        if !state.pending_logins.lock().unwrap().fail(token) {
+            return Ok(back_to_login());
+        }
+        return Ok(LoginTotpTemplate {
+            error: Some(INVALID_CODE),
+        }
+        .into_response());
+    }
+    state.pending_logins.lock().unwrap().finish(token);
+    state.login_limiter.lock().unwrap().record_success(ip);
+    Session::purge_expired(&state.db, now_ms()).await?;
+    let mut response = start_session(&state).await?;
+    response.headers_mut().append(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&expired_login_cookie()).expect("a valid header"),
+    );
+    Ok(response)
+}
+
+/// Whether `code` is a current code of `secret` not used before; a match is recorded as used.
+pub(super) async fn totp_code_ok(
+    state: &AppState,
+    secret: &str,
+    last_step: Option<i64>,
+    code: &str,
+) -> Result<bool, AppError> {
+    let Some(bytes) = decode_secret(secret) else {
+        return Ok(false);
+    };
+    match totp::verify(&bytes, code, now_ms(), last_step) {
+        Some(step) => Ok(Admin::use_totp_step(&state.db, secret, step).await?),
+        None => Ok(false),
+    }
+}
+
+fn back_to_login() -> Response {
+    (
+        [(header::SET_COOKIE, expired_login_cookie())],
+        Redirect::to("/login"),
+    )
+        .into_response()
 }
 
 async fn logout(
