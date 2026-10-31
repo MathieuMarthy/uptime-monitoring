@@ -179,24 +179,55 @@ impl MaintenanceForm {
         if local_start.is_none() {
             errors.insert("local_start", "Enter a time such as 02:30.".to_string());
         }
-        let duration_min = self
-            .duration_min
-            .trim()
-            .parse::<i64>()
-            .ok()
-            .filter(|d| (1..=MAX_WEEKLY_MINUTES).contains(d));
-        if duration_min.is_none() {
-            errors.insert(
-                "duration_min",
-                format!("Duration must be 1 to {MAX_WEEKLY_MINUTES} minutes."),
-            );
-        }
+        let duration_min = self.duration_min.trim().parse::<i64>().ok();
+        let longest = longest_duration(weekdays);
+        let duration_min = match duration_min {
+            Some(d) if !(1..=MAX_WEEKLY_MINUTES).contains(&d) => {
+                errors.insert(
+                    "duration_min",
+                    format!("Duration must be 1 to {MAX_WEEKLY_MINUTES} minutes."),
+                );
+                None
+            }
+            Some(d) if d > longest => {
+                errors.insert(
+                    "duration_min",
+                    format!(
+                        "Duration must be at most {longest} minutes, the time between two of its \
+                         days: occurrences may not overlap."
+                    ),
+                );
+                None
+            }
+            Some(d) => Some(d),
+            None => {
+                errors.insert(
+                    "duration_min",
+                    format!("Duration must be 1 to {MAX_WEEKLY_MINUTES} minutes."),
+                );
+                None
+            }
+        };
         (weekdays != 0).then_some(Schedule::Weekly {
             weekdays,
             local_start: local_start?,
             duration_min: duration_min?,
         })
     }
+}
+
+/// The longest duration whose occurrences on `weekdays` never overlap: the shortest gap between
+/// two picked days, a week for a single day.
+fn longest_duration(weekdays: u8) -> i64 {
+    let days: Vec<i64> = (0..7).filter(|d| weekdays & (1 << d) != 0).collect();
+    let gap = days
+        .iter()
+        .zip(days.iter().cycle().skip(1))
+        .map(|(a, b)| (b - a).rem_euclid(7))
+        .map(|g| if g == 0 { 7 } else { g })
+        .min()
+        .unwrap_or(7);
+    gap * 24 * 60
 }
 
 /// The checkbox of a group: its name compared as group names are.
@@ -242,6 +273,15 @@ mod tests {
         );
         assert_eq!(format_local(&paris, at), "2026-07-01T14:00");
         assert_eq!(parse_local(&paris, "tomorrow"), None);
+    }
+
+    #[test]
+    fn occurrences_may_last_until_the_next_day_picked() {
+        assert_eq!(longest_duration(0b1), MAX_WEEKLY_MINUTES);
+        assert_eq!(longest_duration(0b11), 1440);
+        // Monday and Thursday: 3 days apart one way, 4 the other.
+        assert_eq!(longest_duration(0b1001), 3 * 1440);
+        assert_eq!(longest_duration(0b100_0001), 1440, "Sunday to Monday");
     }
 
     #[test]

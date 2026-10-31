@@ -11,12 +11,13 @@ use crate::views::incidents::{
     ALERT_DELAY_MS, AlertRow, Context, Fact, FailureRow, Following, IncidentDetail,
     error_kind_label,
 };
-use crate::views::maintenances::describe;
+use crate::views::maintenances::{describe, monitors_label};
 use askama::Template;
 use askama_web::WebTemplate;
 use jiff::ToSpan;
 use jiff::tz::TimeZone;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 
 /// Events per page.
 pub const PAGE: usize = 50;
@@ -309,7 +310,7 @@ impl IndexTemplate {
             }
         }
         if filter.kind.shows(Kind::Maintenance) {
-            let names: Vec<(i64, String)> = Monitor::summaries(pool)
+            let names: HashMap<i64, String> = Monitor::summaries(pool)
                 .await?
                 .into_iter()
                 .map(|m| (m.id, m.name))
@@ -424,23 +425,16 @@ async fn maintenance_edges(
     monitor: Option<i64>,
     from: i64,
     now: i64,
-    names: &[(i64, String)],
+    names: &HashMap<i64, String>,
 ) -> Result<Vec<MaintenanceEdge>, AppError> {
     let mut edges = Vec::new();
     for (m, ids) in Maintenance::all(pool).await? {
         if monitor.is_some_and(|id| !m.all_monitors && !ids.contains(&id)) {
             continue;
         }
-        let monitors = if m.all_monitors {
-            "All monitors".to_string()
-        } else {
-            names
-                .iter()
-                .filter(|(id, _)| ids.contains(id))
-                .map(|(_, name)| name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
+        let monitors = monitors_label(m.all_monitors, &ids, names);
+        // Occurrences ended before the window was created never happened.
+        let from = from.max(m.created_at);
         for (start, end) in m.schedule().occurrences_between(tz, from, now + 1) {
             let window = describe(
                 &crate::windows::Schedule::Once {
@@ -449,7 +443,8 @@ async fn maintenance_edges(
                 },
                 tz,
             );
-            for (at, started) in [(start, true), (end, false)] {
+            // A window created while on started to apply when created.
+            for (at, started) in [(start.max(m.created_at), true), (end, false)] {
                 if (from..=now).contains(&at) {
                     edges.push(MaintenanceEdge {
                         id: m.id,

@@ -12,6 +12,7 @@ use crate::time::{
 };
 use crate::views::heartbeat::{Axis, DailyHistory, Heartbeat};
 use crate::views::incidents::{Context, Following, IncidentDetail, error_kind_label};
+use crate::views::maintenances::short_time;
 use crate::windows::{Current, Maintenances};
 use askama::Template;
 use askama_web::WebTemplate;
@@ -857,11 +858,7 @@ fn status_line(view: &MonitorView, latest: Option<&Incident>, tz: &TimeZone, now
     if let Some(m) = &view.maintenance {
         return format!(
             "In maintenance until {} ({}): checks neither count nor alert.",
-            if day_of(tz, m.ends_at) == day_of(tz, now) {
-                format_time(tz, m.ends_at)
-            } else {
-                format_datetime(tz, m.ends_at)
-            },
+            short_time(tz, m.ends_at, now),
             m.title
         );
     }

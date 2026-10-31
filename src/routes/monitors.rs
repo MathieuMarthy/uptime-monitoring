@@ -95,6 +95,8 @@ async fn bulk(State(state): State<AppState>, body: String) -> Result<Redirect, A
             "delete" => {
                 let deleted = Monitor::delete_many(&state.db, &ids).await?;
                 deleted.iter().for_each(|&id| state.engine.reload(id));
+                // SQLite reuses the last id: a new monitor must not inherit its windows.
+                state.maintenances.reload(&state.db).await?;
                 BulkDone::Deleted(deleted.len() as u64)
             }
             "group" => match clean_group(&group) {
@@ -322,6 +324,8 @@ async fn test_page(
 async fn delete(State(state): State<AppState>, PathId(id): PathId) -> Result<Redirect, AppError> {
     if Monitor::delete(&state.db, id).await? {
         state.engine.reload(id);
+        // SQLite reuses the last id: a new monitor must not inherit its windows.
+        state.maintenances.reload(&state.db).await?;
         Ok(Redirect::to("/"))
     } else {
         Err(AppError::NotFound)

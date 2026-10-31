@@ -217,11 +217,12 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 ## Maintenance windows
 
 - **Schedule** (`windows.rs`, pure). One-off (`[starts_at, ends_at)`) or weekly: days (bit 0 = Monday), a local
-  start time in the instance timezone and a duration up to a week, in real time. A start in a DST gap moves forward
+  start time in the instance timezone and a duration in real time, at most the gap between two picked days (a week for
+  one day) so occurrences never overlap. A start in a DST gap moves forward
   by the gap (jiff's compatible rule); in a fold, the first is taken.
 - **Shared set.** `Maintenances` holds every window in memory (`Arc<RwLock>`), with the timezone. Saving, deleting or
-  starting a window, and changing the timezone, reload it whole, and drop the cached status pages. The engine asks it
-  at each check.
+  starting a window, and changing the timezone, reload it whole, and drop the cached status pages; deleting a monitor
+  reloads it too, since SQLite reuses the last id. Reloads run one at a time. The engine asks it at each check.
 - **Effect on a check** (`MonitorState::record`, `in_maintenance`). The check is recorded and shown, with
   `covered_ms = 0` and `down = 0`, so it counts in no uptime figure. The state machine is frozen (`verdict::frozen`):
   no transition, no incident opened or resolved, no alert, no certificate warning; a failure series below the
@@ -234,7 +235,8 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   lamp; after *Paused*, before the state); such a monitor is not counted down in headlines. A status page shows a
   banner per window in progress on its monitors, titled only when the window is announced
   (`show_on_status_pages`), and announced windows starting within 7 days. The Activity page computes starts and
-  ends from the schedules (`type=maintenance`); a deleted window leaves no event.
+  ends from the schedules (`type=maintenance`), from the window's `created_at` on (a window created while on starts
+  then); a deleted or edited window rewrites its past events.
 - **Retention.** One-off windows ended before the history cutoff are purged with the history; weekly ones stay.
 
 ## Alerts

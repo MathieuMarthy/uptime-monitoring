@@ -59,6 +59,7 @@ async fn update_general(
             Settings::update_timezone(&state.db, &timezone).await?;
             // Weekly maintenance windows follow the instance timezone.
             state.maintenances.reload(&state.db).await?;
+            state.public_pages.clear();
             Ok(Redirect::to("/settings?saved=general").into_response())
         }
         Err(errors) => {

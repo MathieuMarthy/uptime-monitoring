@@ -4,7 +4,7 @@ use crate::windows::Schedule;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
 const COLUMNS: &str = "id, title, all_monitors, show_on_status_pages, starts_at, ends_at, weekdays, \
-    local_start, duration_min";
+    local_start, duration_min, created_at";
 
 /// A maintenance window: its monitors' checks run but neither count nor alert while it is on.
 #[derive(Debug, Clone, FromRow)]
@@ -20,6 +20,8 @@ pub struct Maintenance {
     weekdays: Option<i64>,
     local_start: Option<i64>,
     duration_min: Option<i64>,
+    /// Occurrences before it never happened.
+    pub created_at: i64,
 }
 
 /// A validated maintenance, ready to be stored.
@@ -92,20 +94,27 @@ impl Maintenance {
 
     pub async fn create(pool: &SqlitePool, input: &MaintenanceInput) -> Result<i64, sqlx::Error> {
         let now = now_ms();
+        let (once, weekly) = split(&input.schedule);
         let mut tx = pool.begin().await?;
-        // A placeholder schedule, which `write` replaces.
         let id = sqlx::query(
-            "INSERT INTO maintenances (title, created_at, updated_at, all_monitors,
-                 show_on_status_pages, starts_at, ends_at, weekdays, local_start, duration_min)
-             VALUES (?, ?, ?, 0, 0, 0, 1, NULL, NULL, NULL)",
+            "INSERT INTO maintenances (title, all_monitors, show_on_status_pages, starts_at, ends_at,
+                 weekdays, local_start, duration_min, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&input.title)
+        .bind(input.all_monitors)
+        .bind(input.show_on_status_pages)
+        .bind(once.map(|o| o.0))
+        .bind(once.map(|o| o.1))
+        .bind(weekly.map(|w| w.0))
+        .bind(weekly.map(|w| w.1))
+        .bind(weekly.map(|w| w.2))
         .bind(now)
         .bind(now)
         .execute(&mut *tx)
         .await?
         .last_insert_rowid();
-        write(&mut tx, id, input, now).await?;
+        set_monitors(&mut tx, id, &input.monitor_ids).await?;
         tx.commit().await?;
         Ok(id)
     }
@@ -143,6 +152,21 @@ impl Maintenance {
     }
 }
 
+type OnceColumns = (i64, i64);
+type WeeklyColumns = (i64, i64, i64);
+
+/// A schedule as its columns: `(starts_at, ends_at)` or `(weekdays, local_start, duration_min)`.
+fn split(schedule: &Schedule) -> (Option<OnceColumns>, Option<WeeklyColumns>) {
+    match *schedule {
+        Schedule::Once { starts_at, ends_at } => (Some((starts_at, ends_at)), None),
+        Schedule::Weekly {
+            weekdays,
+            local_start,
+            duration_min,
+        } => (None, Some((i64::from(weekdays), local_start, duration_min))),
+    }
+}
+
 /// Writes the fields and monitors of maintenance `id`. Returns `false` when it does not exist.
 async fn write(
     conn: &mut SqliteConnection,
@@ -150,14 +174,7 @@ async fn write(
     input: &MaintenanceInput,
     now: i64,
 ) -> Result<bool, sqlx::Error> {
-    let (once, weekly) = match input.schedule {
-        Schedule::Once { starts_at, ends_at } => (Some((starts_at, ends_at)), None),
-        Schedule::Weekly {
-            weekdays,
-            local_start,
-            duration_min,
-        } => (None, Some((i64::from(weekdays), local_start, duration_min))),
-    };
+    let (once, weekly) = split(&input.schedule);
     let updated = sqlx::query(
         "UPDATE maintenances SET title = ?, all_monitors = ?, show_on_status_pages = ?,
              starts_at = ?, ends_at = ?, weekdays = ?, local_start = ?, duration_min = ?,
@@ -179,18 +196,27 @@ async fn write(
     if updated.rows_affected() == 0 {
         return Ok(false);
     }
+    set_monitors(conn, id, &input.monitor_ids).await?;
+    Ok(true)
+}
+
+/// Replaces the monitors of maintenance `id`; monitors deleted meanwhile are skipped.
+async fn set_monitors(
+    conn: &mut SqliteConnection,
+    id: i64,
+    monitor_ids: &[i64],
+) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM maintenance_monitors WHERE maintenance_id = ?")
         .bind(id)
         .execute(&mut *conn)
         .await?;
-    // Monitors deleted meanwhile are skipped.
     sqlx::query(
         "INSERT INTO maintenance_monitors (maintenance_id, monitor_id)
          SELECT ?, id FROM monitors WHERE id IN (SELECT value FROM json_each(?))",
     )
     .bind(id)
-    .bind(id_list(&input.monitor_ids))
+    .bind(id_list(monitor_ids))
     .execute(conn)
     .await?;
-    Ok(true)
+    Ok(())
 }

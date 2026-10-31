@@ -6,7 +6,7 @@ use crate::routes::{PathId, form_or_invalid};
 use crate::state::AppState;
 use crate::time::now_ms;
 use crate::views::maintenances::{FormTemplate, IndexTemplate};
-use crate::windows::{MAX_WEEKLY_MINUTES, Schedule};
+use crate::windows::Schedule;
 use axum::extract::State;
 use axum::extract::rejection::FormRejection;
 use axum::http::StatusCode;
@@ -106,6 +106,9 @@ async fn delete(State(state): State<AppState>, PathId(id): PathId) -> Result<Red
     Ok(Redirect::to("/maintenances"))
 }
 
+/// "Maintenance now" lasts at most 4 hours: longer work is planned on the maintenance page.
+const NOW_MAX_MINUTES: i64 = 240;
+
 #[derive(Deserialize)]
 struct NowForm {
     minutes: String,
@@ -123,7 +126,7 @@ async fn start_now(
         .trim()
         .parse::<i64>()
         .ok()
-        .filter(|m| (1..=MAX_WEEKLY_MINUTES).contains(m))
+        .filter(|m| (1..=NOW_MAX_MINUTES).contains(m))
         .ok_or(AppError::InvalidRequest(StatusCode::BAD_REQUEST))?;
     Monitor::find(&state.db, id)
         .await?

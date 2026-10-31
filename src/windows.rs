@@ -132,7 +132,11 @@ fn local_date(tz: &TimeZone, at: i64) -> Option<Date> {
 /// The maintenance windows, kept in memory and shared by the engine and the pages. Few and
 /// small: reloaded whole after any change to a window or to the timezone.
 #[derive(Clone, Default)]
-pub struct Maintenances(Arc<RwLock<Loaded>>);
+pub struct Maintenances {
+    loaded: Arc<RwLock<Loaded>>,
+    /// One reload at a time, so an older read never overwrites a newer one.
+    reloading: Arc<tokio::sync::Mutex<()>>,
+}
 
 struct Loaded {
     tz: TimeZone,
@@ -179,6 +183,7 @@ pub struct Current {
 
 impl Maintenances {
     pub async fn reload(&self, pool: &SqlitePool) -> Result<(), sqlx::Error> {
+        let _turn = self.reloading.lock().await;
         let tz = Settings::load(pool).await?.tz();
         let windows = Maintenance::all(pool)
             .await?
@@ -191,7 +196,7 @@ impl Maintenances {
                 monitor_ids,
             })
             .collect();
-        *self.0.write().unwrap() = Loaded { tz, windows };
+        *self.loaded.write().unwrap() = Loaded { tz, windows };
         Ok(())
     }
 
@@ -202,7 +207,7 @@ impl Maintenances {
 
     /// The window covering `monitor_id` at `at` that ends last, if any.
     pub fn current(&self, monitor_id: i64, at: i64) -> Option<Current> {
-        let loaded = self.0.read().unwrap();
+        let loaded = self.loaded.read().unwrap();
         loaded
             .windows
             .iter()
@@ -225,7 +230,7 @@ impl Maintenances {
         now: i64,
         horizon_ms: i64,
     ) -> (Vec<Notice>, Vec<Notice>) {
-        let loaded = self.0.read().unwrap();
+        let loaded = self.loaded.read().unwrap();
         let (mut current, mut planned) = (Vec::new(), Vec::new());
         for w in &loaded.windows {
             if !monitor_ids.iter().any(|&id| w.applies_to(id)) {

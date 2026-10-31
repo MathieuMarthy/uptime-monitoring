@@ -135,7 +135,7 @@ pub fn short_time(tz: &TimeZone, at: i64, now: i64) -> String {
     }
 }
 
-fn monitors_label(all: bool, ids: &[i64], names: &HashMap<i64, String>) -> String {
+pub fn monitors_label(all: bool, ids: &[i64], names: &HashMap<i64, String>) -> String {
     if all {
         return "All monitors".to_string();
     }

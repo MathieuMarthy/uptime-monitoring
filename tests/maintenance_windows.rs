@@ -415,3 +415,63 @@ async fn activity_lists_maintenance_windows() {
     assert!(r.body.contains("Maintenance started"), "{}", r.body);
     assert!(r.body.contains("Deploy"));
 }
+
+#[tokio::test]
+async fn a_new_monitor_does_not_inherit_a_deleted_ones_window() {
+    let (app, pool) = common::test_app().await;
+    let a = monitor(&pool, "A").await;
+    on_now(&app, &pool, vec![a]).await;
+    let r = post_form(&app, &format!("/monitors/{a}/delete"), "").await;
+    assert_eq!(r.status, 303);
+    let b = monitor(&pool, "B").await;
+    assert_eq!(a, b, "SQLite reuses the id");
+    assert!(!app.state.maintenances.covers(b, now_ms()));
+}
+
+#[tokio::test]
+async fn activity_shows_no_occurrence_before_a_window_existed() {
+    let (app, pool) = common::test_app().await;
+    let a = monitor(&pool, "A").await;
+    Maintenance::create(
+        &pool,
+        &MaintenanceInput {
+            schedule: Schedule::Weekly {
+                weekdays: 0b111_1111,
+                // Twelve hours away: not on now, whenever the test runs.
+                local_start: (now_ms() / HOUR + 12) % 24 * 60,
+                duration_min: 60,
+            },
+            ..once("Nightly", 0, 0, vec![a])
+        },
+    )
+    .await
+    .unwrap();
+    let r = get(&app, "/activity?days=30").await;
+    assert!(!r.body.contains("Nightly"), "{}", r.body);
+}
+
+#[tokio::test]
+async fn weekly_occurrences_may_not_overlap() {
+    let (app, pool) = common::test_app().await;
+    let r = post_form(
+        &app,
+        "/maintenances/new",
+        "title=x&kind=weekly&day_0=on&day_1=on&local_start=00%3A00&duration_min=1441&all_monitors=on",
+    )
+    .await;
+    assert!(
+        r.body.contains("Duration must be at most 1440 minutes"),
+        "{}",
+        r.body
+    );
+    assert!(Maintenance::all(&pool).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn maintenance_now_lasts_at_most_four_hours() {
+    let (app, pool) = common::test_app().await;
+    let a = monitor(&pool, "A").await;
+    let r = post_form(&app, &format!("/monitors/{a}/maintenance"), "minutes=241").await;
+    assert_eq!(r.status, 400);
+    assert!(Maintenance::all(&pool).await.unwrap().is_empty());
+}
