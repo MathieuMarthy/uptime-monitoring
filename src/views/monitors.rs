@@ -166,7 +166,12 @@ impl MonitorGroup {
 
     /// The rename form of a named group.
     pub fn rename_url(&self) -> Option<String> {
-        self.name.as_deref().map(rename_group_url)
+        self.name.as_deref().map(|group| {
+            let query = form_urlencoded::Serializer::new(String::new())
+                .append_pair("name", group)
+                .finish();
+            format!("/groups/rename?{query}")
+        })
     }
 
     /// Groups the rows, given in name order: by group name ignoring case (spelled as on its first
@@ -947,6 +952,29 @@ impl FormTemplate {
     }
 }
 
+/// The form that renames a group: every monitor in it moves to the new name.
+#[derive(Template, WebTemplate)]
+#[template(path = "monitors/rename_group.html")]
+pub struct RenameGroupTemplate {
+    /// The group, spelled as on the dashboard.
+    pub name: String,
+    pub new_name: String,
+    pub count: usize,
+    /// Group names in use, suggested for a merge.
+    pub groups: Vec<String>,
+    pub error: Option<String>,
+    pub csrf_token: String,
+}
+
+impl RenameGroupTemplate {
+    pub fn monitors(&self) -> String {
+        match self.count {
+            1 => "1 monitor".to_string(),
+            n => format!("{n} monitors"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1093,33 +1121,5 @@ mod tests {
         let h = Headline::new(0, 0, 0, 0, vec![]);
         assert_eq!(h.text, "No monitors yet");
         assert_eq!(h.others, "Add a monitor to start checking a site.");
-    }
-}
-
-pub fn rename_group_url(group: &str) -> String {
-    let query = form_urlencoded::Serializer::new(String::new())
-        .append_pair("name", group)
-        .finish();
-    format!("/groups/rename?{query}")
-}
-
-/// The form that renames a group: every monitor in it moves to the new name.
-#[derive(Template, WebTemplate)]
-#[template(path = "monitors/rename_group.html")]
-pub struct RenameGroupTemplate {
-    /// The group, spelled as on the dashboard.
-    pub name: String,
-    pub new_name: String,
-    pub count: usize,
-    pub error: Option<String>,
-    pub csrf_token: String,
-}
-
-impl RenameGroupTemplate {
-    pub fn monitors(&self) -> String {
-        match self.count {
-            1 => "1 monitor".to_string(),
-            n => format!("{n} monitors"),
-        }
     }
 }

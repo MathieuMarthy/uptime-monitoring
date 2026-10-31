@@ -1080,14 +1080,24 @@ async fn rename_can_fix_the_case_or_merge_into_another_group() {
     let (app, pool) = common::test_app().await;
     create_in(&app, "a", "web").await;
     create_in(&app, "b", "Other").await;
+    create_in(&app, "c", "WEB").await;
     let r = post_form(&app, "/groups/rename", "name=web&new_name=Web").await;
-    assert_redirect(&r, "/?done=renamed&count=1");
+    assert_redirect(&r, "/?done=renamed&count=2");
+    // The group it merges into takes the new spelling too: one group, one name.
     let r = post_form(&app, "/groups/rename", "name=Web&new_name=other").await;
-    assert_redirect(&r, "/?done=renamed&count=1");
+    assert_redirect(&r, "/?done=renamed&count=3");
     assert_eq!(
         groups(&pool).await,
-        [Some("other".into()), Some("Other".into())]
+        [
+            Some("other".into()),
+            Some("other".into()),
+            Some("other".into())
+        ]
     );
+    // A typed name is cleaned like a stored one; the form suggests the groups in use.
+    let r = get(&app, "/groups/rename?name=+other++").await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(r.body.contains(r#"<option value="other">"#), "{}", r.body);
 }
 
 #[tokio::test]

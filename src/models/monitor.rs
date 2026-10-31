@@ -361,19 +361,25 @@ impl Monitor {
         Ok(result.rows_affected())
     }
 
-    /// The monitors of this group, whatever its spelling on each, by name.
-    pub async fn group_members(pool: &SqlitePool, group: &str) -> Result<Vec<i64>, sqlx::Error> {
+    /// A group's spelling on the dashboard (as on its first monitor by name) and the ids of its
+    /// monitors, whatever their spelling. `None` when no monitor is in it.
+    pub async fn group(
+        pool: &SqlitePool,
+        group: &str,
+    ) -> Result<Option<(String, Vec<i64>)>, sqlx::Error> {
         let rows: Vec<(i64, String)> = sqlx::query_as(
             "SELECT id, group_name FROM monitors WHERE group_name IS NOT NULL ORDER BY name_key",
         )
         .fetch_all(pool)
         .await?;
         let key = name_key(group);
-        Ok(rows
-            .into_iter()
-            .filter(|(_, name)| name_key(name) == key)
-            .map(|(id, _)| id)
-            .collect())
+        let mut members = rows.into_iter().filter(|(_, name)| name_key(name) == key);
+        Ok(members.next().map(|(id, spelling)| {
+            let ids = std::iter::once(id)
+                .chain(members.map(|(id, _)| id))
+                .collect();
+            (spelling, ids)
+        }))
     }
 
     /// Returns `false` when no monitor has this id. Pausing resolves the open incident and resets

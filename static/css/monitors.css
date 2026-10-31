@@ -79,11 +79,13 @@
     border-radius: 4px;
     color: var(--muted);
     opacity: 0;
+    pointer-events: none;
 }
 
 .monitor-group-head:hover .monitor-group-rename,
 .monitor-group-rename:focus-visible {
     opacity: 1;
+    pointer-events: auto;
 }
 
 .monitor-group-rename:hover {
@@ -93,6 +95,7 @@
 @media (hover: none) {
     .monitor-group-rename {
         opacity: 1;
+        pointer-events: auto;
     }
 }
 
