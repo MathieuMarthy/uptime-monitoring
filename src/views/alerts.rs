@@ -85,6 +85,8 @@ fn event_label(event: &str) -> &'static str {
         "down" => "Down",
         "up" => "Up",
         "tls_expiring" => "Certificate",
+        "degraded" => "Slow",
+        "latency_normal" => "Fast again",
         _ => "Test",
     }
 }

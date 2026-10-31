@@ -164,6 +164,27 @@
 
                 <div class="form-row" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                     <div class="form-group">
+                        <label class="form-label" for="latency_warn_ms">Latency Threshold (ms)</label>
+                        <input class="form-input" id="latency_warn_ms" name="latency_warn_ms" type="number"
+                               min="1" max="119999" step="1" value="{{ form.latency_warn_ms }}"/>
+                        <span class="form-hint">Slower responses, as many in a row as the failure threshold, mark the monitor Degraded. Leave empty to disable.</span>
+                        {% call field_error("latency_warn_ms") %}{% endcall %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-group" for="latency_alerts">
+                            <input type="checkbox" id="latency_alerts" name="latency_alerts"
+                                   {% if form.latency_alerts.is_some() %}checked{% endif %}/>
+                            <div class="checkbox-label-group">
+                                <span class="form-label">Alert When Degraded</span>
+                                <span class="form-hint">Send an alert when responses turn slow and when they are fast again.</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-row" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
+                    <div class="form-group">
                         <label class="checkbox-group" for="follow_redirects">
                             <input type="checkbox" id="follow_redirects" name="follow_redirects"
                                    {% if form.follow_redirects.is_some() %}checked{% endif %}/>

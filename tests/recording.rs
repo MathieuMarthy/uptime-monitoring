@@ -1,11 +1,12 @@
 mod common;
 
 use sqlx::SqlitePool;
+use uptime_monitoring::engine::slowness::SlowTransition;
 use uptime_monitoring::engine::verdict::{CheckOutcome, ErrorKind, Failure, Health, Transition};
 
 const DAY_MS: i64 = 86_400_000;
 use uptime_monitoring::forms::monitor::{MonitorForm, MonitorInput};
-use uptime_monitoring::models::{Incident, Monitor, MonitorState, MonitorStatus};
+use uptime_monitoring::models::{Incident, Monitor, MonitorState, MonitorStatus, Rules, Slowdown};
 
 fn input(threshold: &str) -> MonitorInput {
     MonitorForm {
@@ -16,6 +17,15 @@ fn input(threshold: &str) -> MonitorInput {
     }
     .validate()
     .unwrap()
+}
+
+fn rules(failure_threshold: i64, tls_warn_days: Option<i64>) -> Rules {
+    Rules {
+        failure_threshold,
+        tls_warn_days,
+        latency_warn_ms: None,
+        latency_alerts: true,
+    }
 }
 
 async fn monitor(threshold: &str) -> (SqlitePool, i64) {
@@ -61,10 +71,11 @@ async fn record_all(
         .health();
     let mut transitions = Vec::new();
     for outcome in outcomes {
-        let recorded = MonitorState::record(pool, id, outcome, health, threshold, None, false)
-            .await
-            .unwrap()
-            .expect("monitor is active");
+        let recorded =
+            MonitorState::record(pool, id, outcome, health, &rules(threshold, None), false)
+                .await
+                .unwrap()
+                .expect("monitor is active");
         health = recorded.health;
         transitions.push(recorded.transition);
     }
@@ -171,16 +182,30 @@ async fn recovery_resolves_incident() {
 async fn paused_or_deleted_monitor_is_not_recorded() {
     let (pool, id) = monitor("1").await;
     Monitor::toggle_pause(&pool, id).await.unwrap();
-    let recorded = MonitorState::record(&pool, id, &ok_at(1_000), Health::PENDING, 1, None, false)
-        .await
-        .unwrap();
+    let recorded = MonitorState::record(
+        &pool,
+        id,
+        &ok_at(1_000),
+        Health::PENDING,
+        &rules(1, None),
+        false,
+    )
+    .await
+    .unwrap();
     assert_eq!(recorded, None);
     assert_eq!(count(&pool, "checks").await, 0);
 
     Monitor::delete(&pool, id).await.unwrap();
-    let recorded = MonitorState::record(&pool, id, &ok_at(2_000), Health::PENDING, 1, None, false)
-        .await
-        .unwrap();
+    let recorded = MonitorState::record(
+        &pool,
+        id,
+        &ok_at(2_000),
+        Health::PENDING,
+        &rules(1, None),
+        false,
+    )
+    .await
+    .unwrap();
     assert_eq!(recorded, None);
     assert_eq!(count(&pool, "checks").await, 0);
 }
@@ -268,15 +293,14 @@ async fn stale_health_is_not_recorded() {
             consecutive_failures: 1,
             failing_since: Some(1_000),
         },
-        1,
-        None,
+        &rules(1, None),
         false,
     )
     .await
     .unwrap();
     assert_eq!(down, None, "the state was reset meanwhile");
     assert!(
-        MonitorState::record(&pool, id, &ok_at(3_000), stale, 1, None, false)
+        MonitorState::record(&pool, id, &ok_at(3_000), stale, &rules(1, None), false)
             .await
             .unwrap()
             .is_some(),
@@ -303,8 +327,7 @@ async fn incident_opens_even_without_the_first_failed_check() {
         id,
         &fail_at(2_000, ErrorKind::Timeout),
         health,
-        2,
-        None,
+        &rules(2, None),
         false,
     )
     .await
@@ -375,7 +398,7 @@ async fn record_cert(pool: &SqlitePool, id: i64, outcome: &CheckOutcome) -> Opti
         .unwrap()
         .unwrap()
         .health();
-    MonitorState::record(pool, id, outcome, health, 1, Some(14), false)
+    MonitorState::record(pool, id, outcome, health, &rules(1, Some(14)), false)
         .await
         .unwrap()
         .expect("monitor is active")
@@ -433,11 +456,17 @@ async fn certificate_warning_needs_a_threshold_and_a_certificate() {
         .unwrap()
         .unwrap()
         .health();
-    let recorded =
-        MonitorState::record(&pool, id, &ok_with_cert(0, DAY_MS), health, 1, None, false)
-            .await
-            .unwrap()
-            .unwrap();
+    let recorded = MonitorState::record(
+        &pool,
+        id,
+        &ok_with_cert(0, DAY_MS),
+        health,
+        &rules(1, None),
+        false,
+    )
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(recorded.tls_warning, None, "warning disabled");
     assert_eq!(
         record_cert(&pool, id, &fail_at(1_000, ErrorKind::Timeout)).await,
@@ -465,11 +494,17 @@ async fn record_maintained(
         .health();
     let mut transitions = Vec::new();
     for (outcome, maintained) in outcomes {
-        let recorded =
-            MonitorState::record(pool, id, outcome, health, threshold, Some(14), *maintained)
-                .await
-                .unwrap()
-                .expect("monitor is active");
+        let recorded = MonitorState::record(
+            pool,
+            id,
+            outcome,
+            health,
+            &rules(threshold, Some(14)),
+            *maintained,
+        )
+        .await
+        .unwrap()
+        .expect("monitor is active");
         health = recorded.health;
         transitions.push(recorded.transition);
         assert!(
@@ -580,4 +615,208 @@ async fn no_certificate_warning_during_maintenance() {
         Some(DAY_MS),
         "the certificate is still seen"
     );
+}
+
+fn slow_at(at: i64, latency_ms: i64) -> CheckOutcome {
+    CheckOutcome {
+        latency_ms: Some(latency_ms),
+        ..ok_at(at)
+    }
+}
+
+async fn slowdowns_of(pool: &SqlitePool, id: i64) -> Vec<Slowdown> {
+    sqlx::query_as(
+        "SELECT id, monitor_id, started_at, resolved_at, threshold_ms, alerted FROM slowdowns
+         WHERE monitor_id = ? ORDER BY started_at DESC",
+    )
+    .bind(id)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+fn slow_rules(threshold: i64, latency_alerts: bool) -> Rules {
+    Rules {
+        latency_warn_ms: Some(500),
+        latency_alerts,
+        ..rules(threshold, None)
+    }
+}
+
+/// Records each outcome with a 500 ms threshold and returns the slowness transitions.
+async fn record_speeds(
+    pool: &SqlitePool,
+    id: i64,
+    threshold: i64,
+    outcomes: &[CheckOutcome],
+) -> Vec<Option<SlowTransition>> {
+    record_with(pool, id, &slow_rules(threshold, true), outcomes)
+        .await
+        .into_iter()
+        .map(|(transition, _)| transition)
+        .collect()
+}
+
+/// The slowness transitions, each with whether it alerts.
+async fn record_with(
+    pool: &SqlitePool,
+    id: i64,
+    rules: &Rules,
+    outcomes: &[CheckOutcome],
+) -> Vec<(Option<SlowTransition>, bool)> {
+    let mut health = MonitorState::find(pool, id)
+        .await
+        .unwrap()
+        .unwrap()
+        .health();
+    let mut transitions = Vec::new();
+    for outcome in outcomes {
+        let recorded = MonitorState::record(pool, id, outcome, health, rules, false)
+            .await
+            .unwrap()
+            .expect("monitor is active");
+        health = recorded.health;
+        transitions.push((recorded.slow_transition, recorded.slow_alert));
+    }
+    transitions
+}
+
+#[tokio::test]
+async fn slow_series_opens_a_slowdown_and_a_fast_check_ends_it() {
+    let (pool, id) = monitor("2").await;
+    let transitions = record_speeds(
+        &pool,
+        id,
+        2,
+        &[
+            slow_at(1_000, 900),
+            slow_at(2_000, 800),
+            slow_at(3_000, 700),
+        ],
+    )
+    .await;
+    assert_eq!(
+        transitions,
+        [
+            None,
+            Some(SlowTransition::Degraded {
+                since: 1_000,
+                threshold_ms: 500
+            }),
+            None
+        ]
+    );
+    let state = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(state.degraded_since, Some(1_000));
+    let slowdowns = slowdowns_of(&pool, id).await;
+    assert_eq!(slowdowns.len(), 1);
+    assert_eq!(
+        (
+            slowdowns[0].started_at,
+            slowdowns[0].resolved_at,
+            slowdowns[0].threshold_ms
+        ),
+        (1_000, None, 500)
+    );
+
+    let transitions = record_speeds(&pool, id, 2, &[ok_at(4_000)]).await;
+    assert_eq!(
+        transitions,
+        [Some(SlowTransition::Normal {
+            degraded_since: 1_000
+        })]
+    );
+    let state = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(state.degraded_since, None);
+    let slowdowns = slowdowns_of(&pool, id).await;
+    assert_eq!(slowdowns[0].resolved_at, Some(4_000));
+}
+
+#[tokio::test]
+async fn going_down_ends_a_slowdown_silently_where_the_outage_starts() {
+    let (pool, id) = monitor("2").await;
+    record_speeds(&pool, id, 2, &[slow_at(1_000, 900), slow_at(1_500, 900)]).await;
+    let transitions = record_speeds(
+        &pool,
+        id,
+        2,
+        &[
+            fail_at(2_000, ErrorKind::Timeout),
+            fail_at(3_000, ErrorKind::Timeout),
+        ],
+    )
+    .await;
+    assert_eq!(transitions, [None, None]);
+    let state = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(state.status, MonitorStatus::Down);
+    assert_eq!(state.degraded_since, None);
+    let slowdowns = slowdowns_of(&pool, id).await;
+    assert_eq!(slowdowns[0].resolved_at, Some(2_000));
+}
+
+#[tokio::test]
+async fn pause_ends_a_slowdown_at_the_last_check() {
+    let (pool, id) = monitor("1").await;
+    record_speeds(&pool, id, 1, &[slow_at(1_000, 900)]).await;
+    Monitor::toggle_pause(&pool, id).await.unwrap();
+    let state = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(
+        (state.slow_checks, state.slow_since, state.degraded_since),
+        (0, None, None)
+    );
+    let slowdowns = slowdowns_of(&pool, id).await;
+    assert_eq!(slowdowns[0].resolved_at, Some(1_000));
+}
+
+#[tokio::test]
+async fn back_to_normal_alerts_only_when_the_slowdown_did() {
+    let (pool, id) = monitor("1").await;
+    // Alerts off at the start, on by the end: neither alerts.
+    let opened = record_with(&pool, id, &slow_rules(1, false), &[slow_at(1_000, 900)]).await;
+    assert!(matches!(
+        opened[..],
+        [(Some(SlowTransition::Degraded { .. }), false)]
+    ));
+    let ended = record_with(&pool, id, &slow_rules(1, true), &[ok_at(2_000)]).await;
+    assert!(matches!(
+        ended[..],
+        [(Some(SlowTransition::Normal { .. }), false)]
+    ));
+    // Alerts on at the start, off by the end: both alert.
+    let opened = record_with(&pool, id, &slow_rules(1, true), &[slow_at(3_000, 900)]).await;
+    assert!(matches!(
+        opened[..],
+        [(Some(SlowTransition::Degraded { .. }), true)]
+    ));
+    let ended = record_with(&pool, id, &slow_rules(1, false), &[ok_at(4_000)]).await;
+    assert!(matches!(
+        ended[..],
+        [(Some(SlowTransition::Normal { .. }), true)]
+    ));
+}
+
+#[tokio::test]
+async fn changing_the_latency_threshold_ends_a_slowdown_at_the_edit() {
+    let (pool, id) = monitor("1").await;
+    let same = MonitorInput {
+        latency_warn_ms: Some(500),
+        ..input("1")
+    };
+    Monitor::update(&pool, id, &same).await.unwrap();
+    record_speeds(&pool, id, 1, &[slow_at(1_000, 900)]).await;
+    Monitor::update(&pool, id, &same).await.unwrap();
+    assert_eq!(
+        slowdowns_of(&pool, id).await[0].resolved_at,
+        None,
+        "unchanged"
+    );
+
+    Monitor::update(&pool, id, &input("1")).await.unwrap();
+    let state = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(
+        (state.slow_checks, state.slow_since, state.degraded_since),
+        (0, None, None)
+    );
+    let resolved = slowdowns_of(&pool, id).await[0].resolved_at;
+    assert!(resolved.is_some_and(|at| at > 1_000), "{resolved:?}");
 }

@@ -1,8 +1,9 @@
 //! The loop that checks one monitor, forever, at its own pace.
 
 use crate::engine::http::HttpChecker;
+use crate::engine::slowness::SlowTransition;
 use crate::engine::verdict::{self, CheckOutcome, ErrorKind, Failure, Health, Transition};
-use crate::models::{Monitor, MonitorState, Recorded};
+use crate::models::{Monitor, MonitorState, Recorded, Rules};
 use crate::notify::{Event, MonitorRef, Notification, Notifier};
 use crate::time::now_ms;
 use crate::windows::Maintenances;
@@ -154,14 +155,24 @@ impl Scheduler {
             monitor.id,
             outcome,
             health,
-            monitor.failure_threshold,
-            monitor.tls_expiry_warn_days,
+            &Rules::of(monitor),
             self.maintenances.covers(monitor.id, outcome.checked_at),
         )
         .await
         {
             Ok(Some(recorded)) => {
                 log_transition(monitor, recorded.transition, outcome.failure.as_ref());
+                match recorded.slow_transition {
+                    Some(SlowTransition::Degraded { .. }) => tracing::warn!(
+                        monitor = %monitor.name,
+                        latency_ms = outcome.latency_ms,
+                        "monitor is degraded"
+                    ),
+                    Some(SlowTransition::Normal { .. }) => {
+                        tracing::info!(monitor = %monitor.name, "monitor is fast again")
+                    }
+                    None => {}
+                }
                 for event in events(health, &recorded, outcome) {
                     self.notifier.notify(Notification {
                         monitor: Some(MonitorRef {
@@ -205,6 +216,21 @@ fn events(before: Health, recorded: &Recorded, outcome: &CheckOutcome) -> Vec<Ev
     if let Some(expires_at) = recorded.tls_warning {
         events.push(Event::TlsExpiring { expires_at });
     }
+    match recorded.slow_transition.filter(|_| recorded.slow_alert) {
+        Some(SlowTransition::Degraded {
+            since,
+            threshold_ms,
+        }) => events.push(Event::Degraded {
+            since,
+            // A slow check has a response.
+            latency_ms: outcome.latency_ms.unwrap_or_default(),
+            threshold_ms,
+        }),
+        Some(SlowTransition::Normal { degraded_since }) => {
+            events.push(Event::LatencyNormal { degraded_since })
+        }
+        None => {}
+    }
     events
 }
 
@@ -223,5 +249,55 @@ fn log_transition(
             tracing::info!(monitor = %monitor.name, "monitor is up again")
         }
         None => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn recorded(slow_transition: Option<SlowTransition>, slow_alert: bool) -> Recorded {
+        Recorded {
+            health: Health::PENDING,
+            transition: None,
+            tls_warning: None,
+            slow_transition,
+            slow_alert,
+        }
+    }
+
+    fn slow_outcome() -> CheckOutcome {
+        CheckOutcome {
+            checked_at: 30,
+            latency_ms: Some(1_200),
+            status_code: Some(200),
+            failure: None,
+            tls_expires_at: None,
+        }
+    }
+
+    #[test]
+    fn slowdowns_alert_only_when_recording_says_so() {
+        let degraded = Some(SlowTransition::Degraded {
+            since: 10,
+            threshold_ms: 800,
+        });
+        assert_eq!(
+            events(Health::PENDING, &recorded(degraded, true), &slow_outcome()),
+            [Event::Degraded {
+                since: 10,
+                latency_ms: 1_200,
+                threshold_ms: 800
+            }]
+        );
+        assert_eq!(
+            events(Health::PENDING, &recorded(degraded, false), &slow_outcome()),
+            []
+        );
+        let normal = Some(SlowTransition::Normal { degraded_since: 10 });
+        assert_eq!(
+            events(Health::PENDING, &recorded(normal, true), &slow_outcome()),
+            [Event::LatencyNormal { degraded_since: 10 }]
+        );
     }
 }

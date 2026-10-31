@@ -33,6 +33,7 @@ pub struct ShownMonitor {
     pub name: String,
     pub paused: bool,
     pub status: MonitorStatus,
+    pub degraded_since: Option<i64>,
 }
 
 impl StatusPage {
@@ -151,7 +152,7 @@ impl StatusPage {
     ) -> Result<Vec<ShownMonitor>, sqlx::Error> {
         sqlx::query_as(
             "SELECT m.id AS monitor_id, COALESCE(pm.display_name, m.name) AS name, m.paused,
-                    s.status
+                    s.status, s.degraded_since
              FROM status_page_monitors pm
              JOIN monitors m ON m.id = pm.monitor_id
              JOIN monitor_state s ON s.monitor_id = m.id

@@ -1,12 +1,14 @@
-//! The Activity page: outages, failed checks, certificate warnings and maintenance windows
-//! across monitors, latest first, grouped by local day.
+//! The Activity page: outages, slowdowns, failed checks, certificate warnings and maintenance
+//! windows across monitors, latest first, grouped by local day.
 
 use crate::error::AppError;
 use crate::models::{
     CertificateWarning, Check, FailedCheck, Incident, Maintenance, Monitor, MonitorState,
-    MonitorSummary, NamedIncident, NotificationLog, Settings,
+    MonitorSummary, NamedIncident, NamedSlowdown, NotificationLog, Settings, Slowdown,
 };
-use crate::time::{DAY_MS, day_of, days_left, format_datetime, format_time, now_ms};
+use crate::time::{
+    DAY_MS, day_of, days_left, format_datetime, format_duration, format_time, now_ms,
+};
 use crate::views::incidents::{
     ALERT_DELAY_MS, AlertRow, Context, Fact, FailureRow, Following, IncidentDetail,
     error_kind_label,
@@ -27,15 +29,17 @@ const PERIODS: [i64; 3] = [7, 30, 90];
 pub enum Kind {
     All,
     Outages,
+    Slowdowns,
     Checks,
     Certificates,
     Maintenance,
 }
 
 impl Kind {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::All,
         Self::Outages,
+        Self::Slowdowns,
         Self::Checks,
         Self::Certificates,
         Self::Maintenance,
@@ -44,6 +48,7 @@ impl Kind {
     fn parse(value: Option<&str>) -> Self {
         match value {
             Some("outages") => Self::Outages,
+            Some("slowdowns") => Self::Slowdowns,
             Some("checks") => Self::Checks,
             Some("certificates") => Self::Certificates,
             Some("maintenance") => Self::Maintenance,
@@ -55,6 +60,7 @@ impl Kind {
         match self {
             Self::All => None,
             Self::Outages => Some("outages"),
+            Self::Slowdowns => Some("slowdowns"),
             Self::Checks => Some("checks"),
             Self::Certificates => Some("certificates"),
             Self::Maintenance => Some("maintenance"),
@@ -65,6 +71,7 @@ impl Kind {
         match self {
             Self::All => "All events",
             Self::Outages => "Outages",
+            Self::Slowdowns => "Slowdowns",
             Self::Checks => "Failed checks",
             Self::Certificates => "Certificates",
             Self::Maintenance => "Maintenance",
@@ -92,6 +99,7 @@ const MAINTENANCE_END: u8 = 3;
 const OUTAGE: u8 = 2;
 const FAILURE: u8 = 1;
 const CERTIFICATE: u8 = 0;
+const SLOWDOWN: u8 = 5;
 
 /// Where a page ends. Events sort by time, then source, then id (the incident's, the
 /// maintenance's, or the monitor's for the other sources), latest first, so two events never tie.
@@ -206,8 +214,21 @@ pub struct MaintenanceEvent {
     pub facts: Vec<Fact>,
 }
 
+pub struct SlowdownEvent {
+    pub monitor_id: i64,
+    pub monitor_name: String,
+    pub time: String,
+    pub ongoing: bool,
+    /// `10 min`: how long it lasted.
+    pub duration: String,
+    pub threshold_ms: i64,
+    pub facts: Vec<Fact>,
+    pub alerts: Vec<AlertRow>,
+}
+
 pub enum Event {
     Outage(IncidentDetail),
+    Slowdown(SlowdownEvent),
     Failure(FailureEvent),
     Certificate(CertificateEvent),
     Maintenance(MaintenanceEvent),
@@ -240,6 +261,7 @@ pub struct IndexTemplate {
 /// One source's row, before it is turned into an event.
 enum Raw {
     Outage(NamedIncident),
+    Slowdown(NamedSlowdown),
     Failure(FailedCheck),
     Certificate(CertificateWarning),
     Maintenance(MaintenanceEdge),
@@ -260,6 +282,7 @@ impl Raw {
     fn cursor(&self) -> Cursor {
         let (at, source, id) = match self {
             Self::Outage(i) => (i.incident.started_at, OUTAGE, i.incident.id),
+            Self::Slowdown(s) => (s.slowdown.started_at, SLOWDOWN, s.slowdown.id),
             Self::Failure(f) => (f.checked_at, FAILURE, f.monitor_id),
             Self::Certificate(w) => (w.warned_at, CERTIFICATE, w.monitor_id),
             Self::Maintenance(m) => (
@@ -294,6 +317,12 @@ impl IndexTemplate {
             let (before, tie) = Cursor::bounds(after, OUTAGE);
             for i in Incident::started_between(pool, monitor, from, before, tie, limit).await? {
                 raw.push(Raw::Outage(i));
+            }
+        }
+        if filter.kind.shows(Kind::Slowdowns) {
+            let (before, tie) = Cursor::bounds(after, SLOWDOWN);
+            for s in Slowdown::started_between(pool, monitor, from, before, tie, limit).await? {
+                raw.push(Raw::Slowdown(s));
             }
         }
         if filter.kind.shows(Kind::Checks) {
@@ -349,6 +378,7 @@ impl IndexTemplate {
                         .await?,
                     )
                 }
+                Raw::Slowdown(s) => Event::Slowdown(slowdown_event(pool, &tz, s, now).await?),
                 Raw::Failure(f) => Event::Failure(failure_event(&tz, f)),
                 Raw::Certificate(w) => {
                     Event::Certificate(certificate_event(pool, &tz, w, now).await?)
@@ -407,8 +437,9 @@ impl IndexTemplate {
     /// What the page lists, for its lede and empty state.
     pub fn scope(&self) -> &'static str {
         match self.filter.kind {
-            Kind::All => "Outages, failed checks, certificate warnings and maintenance",
+            Kind::All => "Outages, slowdowns, failed checks, certificate warnings and maintenance",
             Kind::Outages => "Outages",
+            Kind::Slowdowns => "Slowdowns",
             Kind::Checks => "Failed checks that did not make a monitor down",
             Kind::Certificates => "Certificate warnings",
             Kind::Maintenance => "Maintenance windows",
@@ -494,6 +525,56 @@ fn failure_event(tz: &TimeZone, f: FailedCheck) -> FailureEvent {
         monitor_name: f.monitor_name,
         row,
     }
+}
+
+async fn slowdown_event(
+    pool: &SqlitePool,
+    tz: &TimeZone,
+    s: NamedSlowdown,
+    now: i64,
+) -> Result<SlowdownEvent, AppError> {
+    let NamedSlowdown {
+        slowdown,
+        monitor_name,
+        next_started_at,
+    } = s;
+    let end = slowdown.resolved_at.unwrap_or(now);
+    // Alerts from the next slowdown's start on are that one's.
+    let alerts_until = next_started_at.map_or(end + ALERT_DELAY_MS, |next| {
+        (end + ALERT_DELAY_MS).min(next - 1)
+    });
+    let alerts = NotificationLog::for_monitor_between(
+        pool,
+        slowdown.monitor_id,
+        &["degraded", "latency_normal"],
+        slowdown.started_at,
+        alerts_until,
+    )
+    .await?;
+    let mut facts = vec![Fact {
+        label: "Started",
+        value: format_datetime(tz, slowdown.started_at),
+    }];
+    if let Some(resolved_at) = slowdown.resolved_at {
+        facts.push(Fact {
+            label: "Ended",
+            value: format_datetime(tz, resolved_at),
+        });
+    }
+    facts.push(Fact {
+        label: "Threshold",
+        value: format!("{} ms", slowdown.threshold_ms),
+    });
+    Ok(SlowdownEvent {
+        monitor_id: slowdown.monitor_id,
+        monitor_name,
+        time: format_time(tz, slowdown.started_at),
+        ongoing: slowdown.resolved_at.is_none(),
+        duration: format_duration(end - slowdown.started_at),
+        threshold_ms: slowdown.threshold_ms,
+        facts,
+        alerts: alerts.into_iter().map(|a| AlertRow::new(tz, a)).collect(),
+    })
 }
 
 async fn certificate_event(

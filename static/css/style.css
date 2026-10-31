@@ -462,6 +462,8 @@ main {
     to { transform: scale(2.6); opacity: 0; }
 }
 .lamp-pending { background: var(--caution); box-shadow: var(--halo-caution); }
+/* Up but slow: a go centre in a caution ring, apart from pending's plain caution. */
+.lamp-degraded { background: var(--go); border: 3px solid var(--caution); box-shadow: var(--halo-caution); }
 .lamp-paused { background: transparent; border: 2px solid var(--off); }
 /* Half filled: checked, but not counted. */
 .lamp-maintenance {

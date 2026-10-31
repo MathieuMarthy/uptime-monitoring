@@ -59,6 +59,26 @@ impl Message {
                     ),
                 }
             }
+            Event::Degraded {
+                since,
+                latency_ms,
+                threshold_ms,
+            } => (
+                format!("{name} is slow"),
+                format!(
+                    "Responses take {latency_ms} ms, above the {threshold_ms} ms threshold.\nSlow since {}.",
+                    format_datetime(tz, *since)
+                ),
+                Severity::Warning,
+            ),
+            Event::LatencyNormal { degraded_since } => (
+                format!("{name} is fast again"),
+                format!(
+                    "Response times are back to normal after {}.",
+                    format_duration(notification.at - degraded_since)
+                ),
+                Severity::Resolved,
+            ),
             Event::Test => (
                 "Test notification".to_string(),
                 "This channel works.".to_string(),
@@ -188,6 +208,34 @@ mod tests {
             "{}",
             expired.text
         );
+    }
+
+    #[test]
+    fn degraded_gives_the_latency_and_threshold() {
+        let m = message(Event::Degraded {
+            since: 10 * DAY_MS - 180_000,
+            latency_ms: 1_240,
+            threshold_ms: 800,
+        });
+        assert_eq!(m.title, "API is slow");
+        assert_eq!(
+            m.text,
+            "Responses take 1240 ms, above the 800 ms threshold.\nSlow since 1970-01-10 23:57.\nhttps://api.example.com"
+        );
+        assert_eq!(m.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn latency_normal_gives_the_slowdown_length() {
+        let m = message(Event::LatencyNormal {
+            degraded_since: 10 * DAY_MS - 600_000,
+        });
+        assert_eq!(m.title, "API is fast again");
+        assert_eq!(
+            m.text,
+            "Response times are back to normal after 10 min.\nhttps://api.example.com"
+        );
+        assert_eq!(m.severity, Severity::Resolved);
     }
 
     #[test]

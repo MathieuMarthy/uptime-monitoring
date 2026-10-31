@@ -17,7 +17,8 @@
 }
 
 .status-down { color: var(--stop-ink); }
-.status-pending { color: var(--caution-ink); }
+.status-pending,
+.status-degraded { color: var(--caution-ink); }
 .status-paused { color: var(--muted); }
 .status-maintenance { color: var(--maint-ink); }
 

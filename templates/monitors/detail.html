@@ -238,6 +238,12 @@
                 <dt>Certificate warning</dt>
                 <dd>{% match m.tls_expiry_warn_days %}{% when Some with (days) %}{{ days }} days before expiry{% when None %}Off{% endmatch %}</dd>
             </div>
+            {% if !m.is_push() %}
+            <div>
+                <dt>Latency threshold</dt>
+                <dd>{% match m.latency_warn_ms %}{% when Some with (ms) %}{{ ms }} ms, {% if m.latency_alerts %}alerts on{% else %}no alerts{% endif %}{% when None %}Off{% endmatch %}</dd>
+            </div>
+            {% endif %}
             <div><dt>State</dt><dd>{% if m.paused %}Paused{% else %}Active{% endif %}</dd></div>
         </dl>
         {% if let Some(keyword) = m.keyword %}

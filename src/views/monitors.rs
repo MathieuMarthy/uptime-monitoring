@@ -53,6 +53,7 @@ impl MonitorView {
         status_label(
             self.monitor.paused,
             self.maintenance.is_some(),
+            self.state.degraded_since.is_some(),
             self.state.status,
         )
     }
@@ -61,14 +62,20 @@ impl MonitorView {
         status_key(
             self.monitor.paused,
             self.maintenance.is_some(),
+            self.state.degraded_since.is_some(),
             self.state.status,
         )
     }
 }
 
 /// A paused monitor shows as paused, then one in a maintenance window as such, whatever its
-/// state.
-pub fn status_label(paused: bool, maintenance: bool, status: MonitorStatus) -> &'static str {
+/// state; an up monitor with a slowdown (`degraded`) as degraded.
+pub fn status_label(
+    paused: bool,
+    maintenance: bool,
+    degraded: bool,
+    status: MonitorStatus,
+) -> &'static str {
     if paused {
         return "Paused";
     }
@@ -77,14 +84,20 @@ pub fn status_label(paused: bool, maintenance: bool, status: MonitorStatus) -> &
     }
     match status {
         MonitorStatus::Pending => "Pending",
+        MonitorStatus::Up if degraded => "Degraded",
         MonitorStatus::Up => "Up",
         MonitorStatus::Down => "Down",
     }
 }
 
-/// `up`, `down`, `pending`, `maintenance` or `paused`: the suffix of the `lamp-` and `row-`
-/// classes.
-pub fn status_key(paused: bool, maintenance: bool, status: MonitorStatus) -> &'static str {
+/// `up`, `degraded`, `down`, `pending`, `maintenance` or `paused`: the suffix of the `lamp-` and
+/// `row-` classes.
+pub fn status_key(
+    paused: bool,
+    maintenance: bool,
+    degraded: bool,
+    status: MonitorStatus,
+) -> &'static str {
     if paused {
         return "paused";
     }
@@ -93,19 +106,21 @@ pub fn status_key(paused: bool, maintenance: bool, status: MonitorStatus) -> &'s
     }
     match status {
         MonitorStatus::Pending => "pending",
+        MonitorStatus::Up if degraded => "degraded",
         MonitorStatus::Up => "up",
         MonitorStatus::Down => "down",
     }
 }
 
-/// Dashboard order: down, pending, up, in maintenance, then paused.
+/// Dashboard order: down, degraded, pending, up, in maintenance, then paused.
 fn status_rank(key: &str) -> u8 {
     match key {
         "down" => 0,
-        "pending" => 1,
-        "up" => 2,
-        "maintenance" => 3,
-        _ => 4,
+        "degraded" => 1,
+        "pending" => 2,
+        "up" => 3,
+        "maintenance" => 4,
+        _ => 5,
     }
 }
 
@@ -137,11 +152,21 @@ impl MonitorRow {
     }
 
     pub fn status_label(&self) -> &'static str {
-        status_label(self.monitor.paused, self.maintenance, self.monitor.status)
+        status_label(
+            self.monitor.paused,
+            self.maintenance,
+            self.monitor.degraded_since.is_some(),
+            self.monitor.status,
+        )
     }
 
     pub fn status_key(&self) -> &'static str {
-        status_key(self.monitor.paused, self.maintenance, self.monitor.status)
+        status_key(
+            self.monitor.paused,
+            self.maintenance,
+            self.monitor.degraded_since.is_some(),
+            self.monitor.status,
+        )
     }
 }
 
@@ -202,18 +227,19 @@ impl MonitorGroup {
                     }),
                     None => "group-none".to_string(),
                 };
-                let counts: Vec<String> = ["down", "pending", "up", "maintenance", "paused"]
-                    .into_iter()
-                    .filter_map(|key| {
-                        let count = rows.iter().filter(|r| r.status_key() == key).count();
-                        let key = if key == "maintenance" {
-                            "in maintenance"
-                        } else {
-                            key
-                        };
-                        (count > 0).then(|| format!("{count} {key}"))
-                    })
-                    .collect();
+                let counts: Vec<String> =
+                    ["down", "degraded", "pending", "up", "maintenance", "paused"]
+                        .into_iter()
+                        .filter_map(|key| {
+                            let count = rows.iter().filter(|r| r.status_key() == key).count();
+                            let key = if key == "maintenance" {
+                                "in maintenance"
+                            } else {
+                                key
+                            };
+                            (count > 0).then(|| format!("{count} {key}"))
+                        })
+                        .collect();
                 Self {
                     name,
                     id,
@@ -248,6 +274,7 @@ impl Range {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusFilter {
     Down,
+    Degraded,
     Paused,
 }
 
@@ -255,6 +282,7 @@ impl StatusFilter {
     fn parse(value: Option<&str>) -> Option<Self> {
         match value {
             Some("down") => Some(Self::Down),
+            Some("degraded") => Some(Self::Degraded),
             Some("paused") => Some(Self::Paused),
             _ => None,
         }
@@ -263,6 +291,7 @@ impl StatusFilter {
     pub fn param(self) -> &'static str {
         match self {
             Self::Down => "down",
+            Self::Degraded => "degraded",
             Self::Paused => "paused",
         }
     }
@@ -270,6 +299,7 @@ impl StatusFilter {
     fn matches(self, row: &MonitorRow) -> bool {
         match self {
             Self::Down => row.status_key() == "down",
+            Self::Degraded => row.status_key() == "degraded",
             Self::Paused => row.monitor.paused,
         }
     }
@@ -482,6 +512,7 @@ impl Headline {
     /// `down` lists the down monitors' ids and names, in dashboard order.
     pub fn new(
         up: usize,
+        degraded: usize,
         pending: usize,
         maintenance: usize,
         paused: usize,
@@ -495,13 +526,23 @@ impl Headline {
                     n => format!("{n} monitors are down"),
                 },
             ),
+            _ if degraded > 0 => (
+                "degraded",
+                match degraded {
+                    1 => "1 monitor is degraded".to_string(),
+                    n => format!("{n} monitors are degraded"),
+                },
+            ),
             _ if pending > 0 => ("pending", "No monitor is down".to_string()),
             _ if up > 0 => ("up", "All monitors are up".to_string()),
             _ if maintenance > 0 => ("maintenance", "No monitor is down".to_string()),
             _ if paused > 0 => ("paused", "Every monitor is paused".to_string()),
             _ => ("paused", "No monitors yet".to_string()),
         };
+        // The count the headline gives is left out.
+        let degraded_other = if down.is_empty() { 0 } else { degraded };
         let others: Vec<String> = [
+            (degraded_other, "degraded"),
             (pending, "pending"),
             (up, "up"),
             (maintenance, "in maintenance"),
@@ -625,9 +666,11 @@ impl IndexTemplate {
             .map(|r| (r.monitor.id, r.monitor.name.clone()))
             .collect();
         let paused = with_key("paused");
+        let degraded = with_key("degraded");
         let chips = [
             ("All", None, rows.len()),
             ("Down", Some(StatusFilter::Down), down.len()),
+            ("Degraded", Some(StatusFilter::Degraded), degraded),
             ("Paused", Some(StatusFilter::Paused), paused),
         ]
         .into_iter()
@@ -641,6 +684,7 @@ impl IndexTemplate {
         .collect();
         let headline = Headline::new(
             with_key("up"),
+            degraded,
             with_key("pending"),
             with_key("maintenance"),
             paused,
@@ -914,6 +958,16 @@ fn status_line(view: &MonitorView, latest: Option<&Incident>, tz: &TimeZone, now
         .trim_end()
         .to_string(),
         MonitorStatus::Pending => "Pending.".to_string(),
+        MonitorStatus::Up if let Some(since) = state.degraded_since => {
+            // A threshold change ends the slowdown: the current one is the slowdown's.
+            match view.monitor.latency_warn_ms {
+                Some(ms) => format!(
+                    "Degraded since {}: responses slower than {ms} ms.",
+                    short_time(tz, since, now)
+                ),
+                None => format!("Degraded since {}.", short_time(tz, since, now)),
+            }
+        }
         MonitorStatus::Up => match latest.and_then(|i| i.resolved_at) {
             Some(at) => format!("Up since {}.", format_datetime(tz, at)),
             None => "Up, no outage recorded.".to_string(),
@@ -1105,6 +1159,7 @@ mod tests {
     fn headline_puts_down_monitors_first() {
         let h = Headline::new(
             8,
+            0,
             1,
             0,
             0,
@@ -1114,30 +1169,57 @@ mod tests {
         assert_eq!(named(&h), "A, B and C.");
         assert_eq!(h.others, "1 pending, 8 up.");
 
-        let h = Headline::new(0, 0, 0, 0, vec![(1, "A".into())]);
+        let h = Headline::new(0, 0, 0, 0, 0, vec![(1, "A".into())]);
         assert_eq!(h.text, "1 monitor is down");
         assert_eq!((named(&h).as_str(), h.others.as_str()), ("A.", ""));
     }
 
     #[test]
     fn headline_without_down_monitors() {
-        let h = Headline::new(3, 1, 0, 0, vec![]);
+        let h = Headline::new(3, 0, 1, 0, 0, vec![]);
         assert_eq!(
             (h.state, h.text.as_str()),
             ("pending", "No monitor is down")
         );
-        let h = Headline::new(3, 0, 1, 2, vec![]);
+        let h = Headline::new(3, 0, 0, 1, 2, vec![]);
         assert_eq!((h.state, h.text.as_str()), ("up", "All monitors are up"));
         assert_eq!(h.others, "3 up, 1 in maintenance, 2 paused.");
-        let h = Headline::new(0, 0, 0, 2, vec![]);
+        let h = Headline::new(0, 0, 0, 0, 2, vec![]);
         assert_eq!(h.text, "Every monitor is paused");
-        let h = Headline::new(0, 0, 2, 1, vec![]);
+        let h = Headline::new(0, 0, 0, 2, 1, vec![]);
         assert_eq!(
             (h.state, h.text.as_str()),
             ("maintenance", "No monitor is down")
         );
-        let h = Headline::new(0, 0, 0, 0, vec![]);
+        let h = Headline::new(0, 0, 0, 0, 0, vec![]);
         assert_eq!(h.text, "No monitors yet");
         assert_eq!(h.others, "Add a monitor to start checking a site.");
+    }
+
+    #[test]
+    fn headline_names_the_degraded_count_after_down() {
+        let h = Headline::new(3, 2, 1, 0, 0, vec![]);
+        assert_eq!(
+            (h.state, h.text.as_str()),
+            ("degraded", "2 monitors are degraded")
+        );
+        assert_eq!(h.others, "1 pending, 3 up.");
+        let h = Headline::new(0, 1, 0, 0, 0, vec![]);
+        assert_eq!(h.text, "1 monitor is degraded");
+        let h = Headline::new(0, 1, 0, 0, 0, vec![(1, "A".into())]);
+        assert_eq!((h.state, h.others.as_str()), ("down", "1 degraded."));
+    }
+
+    #[test]
+    fn degraded_only_shows_on_an_up_monitor() {
+        use MonitorStatus::{Down, Up};
+        assert_eq!(status_key(false, false, true, Up), "degraded");
+        assert_eq!(status_label(false, false, true, Up), "Degraded");
+        assert_eq!(status_key(false, false, true, Down), "down");
+        assert_eq!(status_key(false, true, true, Up), "maintenance");
+        assert_eq!(status_key(true, false, true, Up), "paused");
+        assert_eq!(status_key(false, false, false, Up), "up");
+        assert!(status_rank("down") < status_rank("degraded"));
+        assert!(status_rank("degraded") < status_rank("pending"));
     }
 }

@@ -23,6 +23,7 @@ erDiagram
     MONITORS ||--|| MONITOR_STATE : "runtime state"
     MONITORS ||--o{ CHECKS : "raw results (short retention)"
     MONITORS ||--o{ INCIDENTS : "outages"
+    MONITORS ||--o{ SLOWDOWNS : "degraded periods"
     MONITORS ||--o{ DAILY_STATS : "daily rollups"
     MONITORS ||--o{ MONITOR_CHANNELS : ""
     NOTIFICATION_CHANNELS ||--o{ MONITOR_CHANNELS : ""
@@ -62,6 +63,8 @@ erDiagram
 | `paused` | INTEGER | NOT NULL DEFAULT 0 | |
 | `push_token` | TEXT | UNIQUE, CHECK set exactly for `push` | 64 hex characters, the secret of `/push/{token}`; kept readable to be shown again |
 | `grace_s` | INTEGER | NOT NULL DEFAULT 0 | push: how late a ping may be after `interval_s`; 0 for HTTP |
+| `latency_warn_ms` | INTEGER | NULL, CHECK > 0 | slower successful responses count toward *degraded*; NULL = off, always for push |
+| `latency_alerts` | INTEGER | NOT NULL DEFAULT 1 | alert on entering and leaving *degraded* |
 | `created_at`, `updated_at` | INTEGER | NOT NULL | |
 
 ### `monitor_state` — runtime state, written by the check engine (1:1)
@@ -69,7 +72,8 @@ erDiagram
 `monitor_id` (PK, FK cascade), `status` (`pending` \| `up` \| `down`, default `pending`), `consecutive_failures`,
 `failing_since` (`checked_at` of the first failure of the current series, NULL after a success), `last_check_at`,
 `last_latency_ms`, `last_error`, `tls_expires_at`, `tls_warned_for` (expiry date already alerted on), `tls_warned_at`
-(when that warning was given; only the last one is kept, for the Activity page).
+(when that warning was given; only the last one is kept, for the Activity page), `slow_checks` (successful checks in
+a row above `latency_warn_ms`), `slow_since` (the first of them), `degraded_since` (NULL unless degraded).
 A row is created in the same transaction as its monitor. Pausing a monitor resets it to `pending` and resolves the
 open incident, in the same transaction.
 
@@ -93,6 +97,12 @@ pages; kept as ticked even without a note).
 Indexes: `(monitor_id, started_at DESC)`, `started_at` (Activity page); unique partial index on `monitor_id WHERE resolved_at IS NULL` — at most one
 open incident per monitor.
 
+### `slowdowns` — degraded periods, long retention
+
+`id`, `monitor_id` (FK cascade), `started_at` (first slow check of the series), `resolved_at` (NULL while degraded),
+`threshold_ms` (in force at the start), `alerted` (its start was alerted, so its end is). Purged like incidents. Indexes: `(monitor_id, started_at DESC)`, `started_at`;
+unique partial index on `monitor_id WHERE resolved_at IS NULL`.
+
 ### `daily_stats` — daily rollups, long retention
 
 `WITHOUT ROWID`, PK `(monitor_id, day)`. `day` is the local date of the instance timezone, encoded `YYYYMMDD`.
@@ -109,7 +119,7 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
   ntfy, `{token, chat_id, server?}` for Telegram, `server` absent for the public Bot API), `enabled`, `created_at`.
 - `monitor_channels`: `(monitor_id, channel_id)` PK, both FK cascade; index on `channel_id`.
 - `notification_log`: `id`, `channel_id`, `monitor_id` (both FK `SET NULL`), `event` (`down` \| `up` \|
-  `tls_expiring` \| `test`), `sent_at`, `ok`, `error`. Purged with `checks`. Indexes on `channel_id` and
+  `tls_expiring` \| `degraded` \| `latency_normal` \| `test`), `sent_at`, `ok`, `error`. Purged with `checks`. Indexes on `channel_id` and
   `(monitor_id, sent_at)`.
 
 ### Public status pages
@@ -141,5 +151,5 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
 |---|---|
 | `timezone` | `'UTC'` (IANA name; pre-filled from the browser during setup) |
 | `checks_retention_days` | 7 (≥ 2) |
-| `history_retention_days` | NULL = kept forever (incidents, daily stats); otherwise ≥ `checks_retention_days` |
+| `history_retention_days` | NULL = kept forever (incidents, slowdowns, daily stats); otherwise ≥ `checks_retention_days` |
 | `block_private_targets` | 0 |

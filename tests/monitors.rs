@@ -1121,3 +1121,60 @@ async fn invalid_new_group_name_shows_the_form_again() {
     }
     assert_eq!(groups(&pool).await, [Some("Web".into())]);
 }
+
+#[tokio::test]
+async fn latency_threshold_round_trips_through_the_form() {
+    let (app, pool) = common::test_app().await;
+    let r = post_form(&app, "/monitors/new", &form("api", "&latency_warn_ms=800")).await;
+    assert_redirect(&r, "/monitors/1");
+    let stored: (Option<i64>, bool) =
+        sqlx::query_as("SELECT latency_warn_ms, latency_alerts FROM monitors WHERE id = 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(stored, (Some(800), false), "unticked box means no alerts");
+    let body = get(&app, "/monitors/1/edit").await.body;
+    assert!(body.contains(r#"name="latency_warn_ms" type="number""#));
+    assert!(body.contains(r#"value="800""#), "{body}");
+    let r = post_form(
+        &app,
+        "/monitors/new",
+        &form("web", "&latency_warn_ms=10000"),
+    )
+    .await;
+    assert_eq!(r.status, 200, "the form comes back with its error");
+    assert!(r.body.contains("between 1 and 9999"), "{}", r.body);
+}
+
+#[tokio::test]
+async fn degraded_monitor_shows_on_dashboard_and_detail() {
+    let (app, pool) = common::test_app().await;
+    create(&app, "a").await;
+    create(&app, "b").await;
+    post_form(
+        &app,
+        "/monitors/1/edit",
+        &form("a", "&latency_warn_ms=500&latency_alerts=on"),
+    )
+    .await;
+    sqlx::query(
+        "UPDATE monitor_state SET status = 'up', last_check_at = 1, last_latency_ms = 900,
+                                  degraded_since = CASE monitor_id WHEN 1 THEN 1 END",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let body = get(&app, "/").await.body;
+    assert!(body.contains("1 monitor is degraded"), "{body}");
+    assert!(body.contains(r#"state-degraded">Degraded<"#), "{body}");
+    assert!(body.contains("lamp-degraded"));
+    assert!(body.contains("Degraded"));
+    let body = get(&app, "/?status=degraded").await.body;
+    assert!(body.contains(r#"data-search="b "#), "rows are all rendered");
+    assert!(body.contains(r#"data-status="up" hidden"#), "{body}");
+
+    let body = get(&app, "/monitors/1").await.body;
+    assert!(body.contains("responses slower than 500 ms."), "{body}");
+    assert!(body.contains("500 ms, alerts on"));
+}

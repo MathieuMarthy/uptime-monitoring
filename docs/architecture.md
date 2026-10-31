@@ -51,6 +51,7 @@ uptime-monitoring/
 │   │   ├── scheduler.rs          # The loop of one monitor: check, record, sleep
 │   │   ├── http.rs               # One HTTP(S) check → CheckOutcome
 │   │   ├── verdict.rs            # Pure pending/up/down state machine
+│   │   ├── slowness.rs           # Pure degraded state: slow-check series, slowdowns
 │   │   └── guard.rs              # Private-target blocking (resolver, literal IPs, redirects)
 │   ├── notify/                   # Alerts
 │   │   ├── mod.rs                # Notifier: queue, dispatcher, retries, delivery log
@@ -68,6 +69,7 @@ uptime-monitoring/
 │   │   ├── notification_log.rs   # Deliveries, final result after retries
 │   │   ├── session.rs            # Login sessions (token stored as SHA-256)
 │   │   ├── settings.rs           # The single settings row; StorageUse for the disk estimate
+│   │   ├── slowdown.rs           # Degraded periods
 │   │   ├── stats.rs              # Bucket: availability summed over a time bucket
 │   │   └── status_page.rs        # Public pages + their monitors
 │   ├── forms/
@@ -213,6 +215,14 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   active and its state is still the one the task knows, so a check that finishes after a pause, an unpause or a
   deletion is dropped and its task ends. A response without TLS clears `tls_expires_at`; a check without a response
   keeps it.
+- **Degraded** (`slowness.rs`). An HTTP monitor may have a `latency_warn_ms` threshold (1 ms to just under its
+  timeout). A successful check slower than it extends the slow series (`monitor_state.slow_checks`, `slow_since`);
+  `failure_threshold` slow checks in a row make the monitor degraded (`degraded_since`) and open a slowdown dated
+  from the first of them. One check at or under the threshold ends it; slow checks while degraded change nothing (no write). A failed
+  check leaves the series as it is. Going down ends the slowdown silently where the outage starts; a pause ends it
+  at the last check; changing or removing the threshold ends it at the edit and drops the series. During a window a fast check ends it
+  silently and a slow one drops the series. The monitor stays `up`: uptime ignores slowness. The second state
+  is read from the first statement's `RETURNING`, which leaves it alone, and written in the same transaction.
 - **Certificate warning.** When a check leaves `tls_expires_at` within the monitor's `tls_expiry_warn_days`, the
   same transaction sets `tls_warned_for` to that date: one warning per expiry date, again after a renewal.
 - **Private targets.** With `settings.block_private_targets`, loopback, private, link-local (cloud metadata), CGNAT,
@@ -250,7 +260,9 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 ## Alerts
 
 - **Events.** After recording a check, the scheduler hands the notifier `down` (cause, start of the outage), `up`
-  (downtime) and `tls_expiring` events. Only transitions alert: nothing on startup, pause or deletion.
+  (downtime) and `tls_expiring` events, plus `degraded` (latency, threshold, start) when the monitor's `latency_alerts`
+  is on, and `latency_normal` (length) when the slowdown's start was alerted (`slowdowns.alerted`), so the two
+  always come in pairs whatever the setting does meanwhile. Only transitions alert: nothing on startup, pause or deletion.
 - **Dispatch** (`notify/mod.rs`). A bounded queue (1 000; beyond, alerts are dropped and logged) feeds one task,
   which hands each alert to its monitor's worker (started on the monitor's first alert). A worker sends its alerts one
   after the other, so a retried `down` never lands after the `up` that followed it; the channels of one alert are
@@ -295,8 +307,9 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Changing the timezone** (from the settings page) resumes the rollup from the last day key: the first day
   in the new zone overlaps the last one (moving east) or leaves hours out (moving west).
 - **Dashboard.** One query for monitors and states (no body or headers), one for the 24 hourly bars of all monitors
-  (`?range=90d`: the 90 daily bars, through `DailyHistory::load_many`). Monitors are listed down first, then pending,
-  up and paused, by name within each state; a sentence on top names the down ones. Every row shares one time axis.
+  (`?range=90d`: the 90 daily bars, through `DailyHistory::load_many`). Monitors are listed down first, then degraded,
+  pending, up and paused, by name within each state; a sentence on top names the down ones, or counts the
+  degraded ones. A degraded monitor shows as such (lamp, label, `status=degraded`) only while up and not in maintenance. Every row shares one time axis.
 - **Groups.** A monitor's optional `group_name` is free text, invisible characters dropped and spaces collapsed so
   that look-alike names make one group (*Ungrouped* is refused: it titles the monitors without one); its form suggests the groups in use (`<datalist>`). A group
   exists while a monitor uses it: renaming means editing its monitors. Once any monitor has a group, the dashboard
@@ -322,7 +335,7 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Search and filters.** The dashboard state lives in its URL (`/?range=90d&q=api&status=down&group=Web`):
   `DashboardFilter` renders every row and marks those left out `hidden`, with the groups left empty, so the page
   works without JS and a link shares it. The search matches name, URL and group (`data-search`), ignoring case and
-  accents; `status` is `down` or `paused`; `group` compares like group names, `Ungrouped` picking the monitors
+  accents; `status` is `down`, `degraded` or `paused`; `group` compares like group names, `Ungrouped` picking the monitors
   without one. The state chips count every monitor and are a `data-live` block. `static/js/filter.js` applies the
   same filter at once in the browser, keeps the URL in step with `history.replaceState` (so the live refresh
   fetches the same filter), unfolds groups with matches; `/` focuses the search, Esc clears it.
@@ -345,16 +358,18 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 
 ## Activity
 
-`GET /activity` lists, latest first and grouped by local day, the incidents started in the period, the failed checks
+`GET /activity` lists, latest first and grouped by local day, the incidents and slowdowns started in the period, the failed checks
 that did not count as downtime (`ok = 0 AND NOT down`, minus the first failure of each incident), the last
 certificate warning of each monitor (`monitor_state.tls_warned_at`) and the starts and ends of maintenance windows.
 Failed checks made during a window show too: they did not count. Filters are query parameters read leniently
-(anything unexpected falls back to the default): `type` (`outages`, `checks`, `certificates`, `maintenance`), `monitor`, `days` (7,
+(anything unexpected falls back to the default): `type` (`outages`, `slowdowns`, `checks`, `certificates`, `maintenance`), `monitor`, `days` (7,
 30 or 90) and `before`, the cursor of the next page: `time-source-id`, since events sort by time, then source, then
 id, so two events logged in the same millisecond never fall between pages. A page holds 50 events: each source is
 read with `LIMIT 51`, then merged. An incident unfolds (`<details>`, no JS) to its facts, its last 10 failed checks
 with their count (one query, `COUNT(*) OVER ()`) and the alerts logged for it: its down alert before the next incident
-of the monitor starts, its up alert within 5 min of its end and before the next incident ends. Failed checks and
+of the monitor starts, its up alert within 5 min of its end and before the next incident ends. A slowdown unfolds to its start, end,
+threshold and the `degraded` / `latency_normal` alerts logged from its start to 5 min after its end, and before
+the monitor's next slowdown starts. Failed checks and
 alerts follow the checks retention: older incidents only show their facts.
 
 ## Look
@@ -388,8 +403,8 @@ alerts follow the checks retention: older incidents only show their facts.
   the form's order, by name). Stored positions are renumbered from 0. `/public-pages/{id}/preview` shows the page,
   published or not, never cached.
 - **Public** (`GET /status/{slug}`, no session). An unpublished page is a 404, like an unknown slug. It shows the
-  overall state as a sentence naming what is down (*Billing is down*, *2 services are down*, *All services are
-  running*; paused monitors are ignored), then per monitor its display
+  overall state as a sentence naming what is down (*Billing is down*, *2 services are down*, *Some services are
+  slow* when none is down but some are degraded, *All services are running*; paused monitors are ignored), then per monitor its display
   name, status, 90 daily bars and 90-day uptime, then the last 10 incidents open at some point in the last 90 days, open
   ones first, with their start and duration. A monitor's URL, errors and incident causes are never shown: they can reveal
   internal hosts. `live.js` refreshes it like the admin pages.

@@ -76,6 +76,8 @@ impl AlertRow {
                 "down" => "down alert",
                 "up" => "back up alert",
                 "tls_expiring" => "certificate alert",
+                "degraded" => "slow alert",
+                "latency_normal" => "fast again alert",
                 _ => "test",
             },
             ok: entry.ok,

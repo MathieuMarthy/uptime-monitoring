@@ -298,3 +298,61 @@ async fn events_sharing_a_time_are_not_lost_between_pages() {
     assert_eq!(shown("API failure 50."), 1);
     assert_eq!(shown("Blog failure."), 1);
 }
+
+#[tokio::test]
+async fn activity_lists_slowdowns_with_their_alerts() {
+    let (app, pool, now) = app_with_history().await;
+    exec(
+        &pool,
+        "INSERT INTO slowdowns (monitor_id, started_at, resolved_at, threshold_ms)
+         VALUES (2, ?1 - 600000, NULL, 800),
+                (1, ?1 - 9000000, ?1 - 8400000, 500)",
+        now,
+    )
+    .await;
+    exec(
+        &pool,
+        "INSERT INTO notification_log (channel_id, monitor_id, event, sent_at, ok, error)
+         VALUES (1, 2, 'degraded', ?1 - 480000, 1, NULL),
+                (1, 1, 'latency_normal', ?1 - 8400000, 1, NULL)",
+        now,
+    )
+    .await;
+
+    let body = get(&app, "/activity").await.body;
+    assert!(body.contains("Blog is slow"), "ongoing slowdown");
+    assert!(body.contains("API was slow 10 min"), "ended slowdown");
+    assert!(body.contains("slow alert"));
+    assert!(body.contains("fast again alert"));
+    assert!(body.contains("800 ms"));
+    assert!(position(&body, "Blog is slow") < position(&body, "API was slow"));
+
+    let body = get(&app, "/activity?type=slowdowns").await.body;
+    assert!(body.contains("Blog is slow"));
+    assert!(!body.contains("API was down"));
+    assert!(!body.contains("Blog failed a check"));
+    let body = get(&app, "/activity?type=outages").await.body;
+    assert!(!body.contains("is slow"));
+}
+
+#[tokio::test]
+async fn slowdown_alerts_stop_where_the_next_slowdown_starts() {
+    let (app, pool, now) = app_with_history().await;
+    exec(
+        &pool,
+        "INSERT INTO slowdowns (monitor_id, started_at, resolved_at, threshold_ms, alerted)
+         VALUES (2, ?1 - 600000, ?1 - 540000, 800, 1),
+                (2, ?1 - 480000, NULL, 900, 1)",
+        now,
+    )
+    .await;
+    exec(
+        &pool,
+        "INSERT INTO notification_log (channel_id, monitor_id, event, sent_at, ok, error)
+         VALUES (1, 2, 'degraded', ?1 - 420000, 0, 'second slowdown')",
+        now,
+    )
+    .await;
+    let body = get(&app, "/activity?type=slowdowns").await.body;
+    assert_eq!(body.matches("second slowdown").count(), 1, "{body}");
+}

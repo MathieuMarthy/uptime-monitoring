@@ -53,6 +53,14 @@ pub enum Event {
     Up { down_since: i64 },
     /// The certificate expires within the monitor's warning period, or has expired.
     TlsExpiring { expires_at: i64 },
+    /// Responses stayed above the latency threshold; the slowdown started at `since`.
+    Degraded {
+        since: i64,
+        latency_ms: i64,
+        threshold_ms: i64,
+    },
+    /// The slowdown that started at `degraded_since` is over.
+    LatencyNormal { degraded_since: i64 },
     /// Sent from the alerts page to try a channel.
     Test,
 }
@@ -64,6 +72,8 @@ impl Event {
             Self::Down { .. } => "down",
             Self::Up { .. } => "up",
             Self::TlsExpiring { .. } => "tls_expiring",
+            Self::Degraded { .. } => "degraded",
+            Self::LatencyNormal { .. } => "latency_normal",
             Self::Test => "test",
         }
     }

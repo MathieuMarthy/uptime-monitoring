@@ -83,9 +83,18 @@ pub struct PublicHeadline {
 
 impl PublicHeadline {
     /// `down` names the services down, in page order; `since` is when the only one went down.
-    pub fn new(listed: usize, down: &[&str], since: Option<&str>) -> Self {
+    /// `degraded` counts the slow ones, shown when none is down.
+    pub fn new(listed: usize, degraded: usize, down: &[&str], since: Option<&str>) -> Self {
         let (state, text, detail) = match down {
             _ if listed == 0 => ("paused", "No service listed yet".to_string(), String::new()),
+            [] if degraded > 0 => (
+                "degraded",
+                "Some services are slow".to_string(),
+                match degraded {
+                    1 => "1 service responds slowly.".to_string(),
+                    n => format!("{n} services respond slowly."),
+                },
+            ),
             [] => ("up", "All services are running".to_string(), String::new()),
             [name] => (
                 "down",
@@ -202,12 +211,33 @@ impl PublicTemplate {
             _ => None,
         };
         let names: Vec<&str> = down.iter().map(|m| m.name.as_str()).collect();
-        let headline = PublicHeadline::new(shown.len(), &names, since);
+        let degraded = shown
+            .iter()
+            .filter(|m| {
+                status_key(
+                    m.paused,
+                    maintained.contains(&m.monitor_id),
+                    m.degraded_since.is_some(),
+                    m.status,
+                ) == "degraded"
+            })
+            .count();
+        let headline = PublicHeadline::new(shown.len(), degraded, &names, since);
         let monitors = shown
             .into_iter()
             .map(|m| PublicMonitor {
-                status_label: status_label(m.paused, maintained.contains(&m.monitor_id), m.status),
-                status_key: status_key(m.paused, maintained.contains(&m.monitor_id), m.status),
+                status_label: status_label(
+                    m.paused,
+                    maintained.contains(&m.monitor_id),
+                    m.degraded_since.is_some(),
+                    m.status,
+                ),
+                status_key: status_key(
+                    m.paused,
+                    maintained.contains(&m.monitor_id),
+                    m.degraded_since.is_some(),
+                    m.status,
+                ),
                 daily: daily
                     .remove(&m.monitor_id)
                     .expect("one history per monitor"),
@@ -239,21 +269,39 @@ mod tests {
     use super::*;
 
     #[test]
+    fn public_headline_says_when_services_are_slow() {
+        let h = PublicHeadline::new(3, 1, &[], None);
+        assert_eq!(
+            (h.state, h.text.as_str(), h.detail.as_str()),
+            (
+                "degraded",
+                "Some services are slow",
+                "1 service responds slowly."
+            )
+        );
+        assert_eq!(
+            PublicHeadline::new(3, 2, &[], None).detail,
+            "2 services respond slowly."
+        );
+        assert_eq!(PublicHeadline::new(3, 1, &["A"], None).state, "down");
+    }
+
+    #[test]
     fn public_headline_names_what_is_down() {
-        let h = PublicHeadline::new(3, &["Billing"], Some("14:21"));
+        let h = PublicHeadline::new(3, 0, &["Billing"], Some("14:21"));
         assert_eq!(h.text, "Billing is down");
         assert_eq!(h.detail, "Unavailable since 14:21.");
-        let h = PublicHeadline::new(3, &["A", "B", "C"], None);
+        let h = PublicHeadline::new(3, 0, &["A", "B", "C"], None);
         assert_eq!(
             (h.text.as_str(), h.detail.as_str()),
             ("3 services are down", "A, B and C.")
         );
         assert_eq!(
-            PublicHeadline::new(3, &[], None).text,
+            PublicHeadline::new(3, 0, &[], None).text,
             "All services are running"
         );
         assert_eq!(
-            PublicHeadline::new(0, &[], None).text,
+            PublicHeadline::new(0, 0, &[], None).text,
             "No service listed yet"
         );
     }

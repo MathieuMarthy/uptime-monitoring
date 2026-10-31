@@ -9,6 +9,7 @@ pub mod monitor_state;
 pub mod notification_log;
 pub mod session;
 pub mod settings;
+pub mod slowdown;
 pub mod stats;
 pub mod status_page;
 
@@ -19,10 +20,11 @@ pub use daily_stat::DailyStat;
 pub use incident::{Incident, NamedIncident};
 pub use maintenance::{Maintenance, MaintenanceInput};
 pub use monitor::{Monitor, MonitorSummary, name_key};
-pub use monitor_state::{CertificateWarning, MonitorState, MonitorStatus, Recorded};
+pub use monitor_state::{CertificateWarning, MonitorState, MonitorStatus, Recorded, Rules};
 pub use notification_log::{Delivery, LogEntry, NotificationLog};
 pub use session::{NewSession, Session};
 pub use settings::{Settings, StorageUse};
+pub use slowdown::{NamedSlowdown, Slowdown};
 pub use stats::Bucket;
 pub use status_page::{ShownMonitor, StatusPage, StatusPageSummary};
 

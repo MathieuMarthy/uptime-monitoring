@@ -1,10 +1,11 @@
+use crate::engine::slowness::{self, Sample, SlowTransition, Slowness};
 use crate::engine::verdict::{self, CheckOutcome, Health, Transition};
-use crate::models::{Check, Incident};
+use crate::models::{Check, Incident, Monitor, Slowdown};
 use crate::time::DAY_MS;
 use sqlx::{FromRow, SqliteConnection, SqlitePool};
 
 const COLUMNS: &str = "monitor_id, status, consecutive_failures, failing_since, last_check_at, last_latency_ms, \
-    last_error, tls_expires_at, tls_warned_for, tls_warned_at";
+    last_error, tls_expires_at, tls_warned_for, tls_warned_at, slow_checks, slow_since, degraded_since";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "TEXT", rename_all = "lowercase")]
@@ -21,6 +22,31 @@ pub struct Recorded {
     pub transition: Option<Transition>,
     /// The certificate expiry to warn about, the first time it comes within the warning period.
     pub tls_warning: Option<i64>,
+    pub slow_transition: Option<SlowTransition>,
+    /// `slow_transition` is to be alerted: a start with alerts on, the end of a start alerted.
+    pub slow_alert: bool,
+}
+
+/// The settings of a monitor that drive its state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rules {
+    pub failure_threshold: i64,
+    /// `None`: no certificate warning.
+    pub tls_warn_days: Option<i64>,
+    /// `None`: no degraded state.
+    pub latency_warn_ms: Option<i64>,
+    pub latency_alerts: bool,
+}
+
+impl Rules {
+    pub fn of(monitor: &Monitor) -> Self {
+        Self {
+            failure_threshold: monitor.failure_threshold,
+            tls_warn_days: monitor.tls_expiry_warn_days,
+            latency_warn_ms: monitor.latency_warn_ms,
+            latency_alerts: monitor.latency_alerts,
+        }
+    }
 }
 
 /// A monitor's runtime state, written only by the check engine.
@@ -37,6 +63,10 @@ pub struct MonitorState {
     pub tls_warned_for: Option<i64>,
     /// When the warning about `tls_warned_for` was given.
     pub tls_warned_at: Option<i64>,
+    pub slow_checks: i64,
+    pub slow_since: Option<i64>,
+    /// Since when the monitor is degraded; `None` when it is not.
+    pub degraded_since: Option<i64>,
 }
 
 /// A certificate warning, for the Activity page.
@@ -109,31 +139,39 @@ impl MonitorState {
     /// the state machine is frozen: no transition, no certificate warning, and a failure series
     /// below the threshold starts again after the window. A success still ends an outage, but
     /// raises no alert.
+    ///
+    /// Slow responses open and resolve slowdowns (see `slowness::apply`).
     pub async fn record(
         pool: &SqlitePool,
         monitor_id: i64,
         outcome: &CheckOutcome,
         health: Health,
-        failure_threshold: i64,
-        tls_warn_days: Option<i64>,
+        rules: &Rules,
         in_maintenance: bool,
     ) -> Result<Option<Recorded>, sqlx::Error> {
         let (next, transition) = if in_maintenance {
             (verdict::frozen(health, outcome.ok()), None)
         } else {
-            verdict::apply(health, outcome.ok(), outcome.checked_at, failure_threshold)
+            verdict::apply(
+                health,
+                outcome.ok(),
+                outcome.checked_at,
+                rules.failure_threshold,
+            )
         };
-        let tls_warn_days = tls_warn_days.filter(|_| !in_maintenance);
+        let tls_warn_days = rules.tls_warn_days.filter(|_| !in_maintenance);
         let mut tx = pool.begin().await?;
 
-        // Written first so the transaction takes the write lock at once.
-        let updated = sqlx::query(
+        // Written first so the transaction takes the write lock at once. RETURNING gives the
+        // slowness as it was: this statement leaves it alone.
+        let before: Option<(i64, Option<i64>, Option<i64>)> = sqlx::query_as(
             "UPDATE monitor_state
              SET status = ?, consecutive_failures = ?, failing_since = ?, last_check_at = ?,
                  last_latency_ms = ?, last_error = ?,
                  tls_expires_at = CASE WHEN ? THEN ? ELSE tls_expires_at END
              WHERE monitor_id = ? AND (SELECT paused FROM monitors WHERE id = ?) = 0
-               AND status = ? AND consecutive_failures = ? AND failing_since IS ?",
+               AND status = ? AND consecutive_failures = ? AND failing_since IS ?
+             RETURNING slow_checks, slow_since, degraded_since",
         )
         .bind(next.status)
         .bind(next.consecutive_failures)
@@ -149,11 +187,11 @@ impl MonitorState {
         .bind(health.status)
         .bind(health.consecutive_failures)
         .bind(health.failing_since)
-        .execute(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
-        if updated.rows_affected() == 0 {
+        let Some((slow_checks, slow_since, degraded_since)) = before else {
             return Ok(None);
-        }
+        };
 
         Check::insert(&mut tx, monitor_id, outcome, in_maintenance).await?;
         match transition {
@@ -170,6 +208,64 @@ impl MonitorState {
             }
             None => {}
         }
+
+        let slow_before = Slowness {
+            slow_checks,
+            slow_since,
+            degraded_since,
+        };
+        let (slow_after, slow_transition) = slowness::apply(
+            slow_before,
+            Sample {
+                checked_at: outcome.checked_at,
+                latency_ms: outcome.latency_ms.filter(|_| outcome.ok()),
+            },
+            rules.latency_warn_ms,
+            rules.failure_threshold,
+            matches!(transition, Some(Transition::WentDown { .. })),
+            in_maintenance,
+        );
+        if slow_after != slow_before {
+            sqlx::query(
+                "UPDATE monitor_state SET slow_checks = ?, slow_since = ?, degraded_since = ?
+                 WHERE monitor_id = ?",
+            )
+            .bind(slow_after.slow_checks)
+            .bind(slow_after.slow_since)
+            .bind(slow_after.degraded_since)
+            .bind(monitor_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        let slow_alert = match slow_transition {
+            Some(SlowTransition::Degraded {
+                since,
+                threshold_ms,
+            }) => {
+                Slowdown::open(
+                    &mut tx,
+                    monitor_id,
+                    since,
+                    threshold_ms,
+                    rules.latency_alerts,
+                )
+                .await?;
+                rules.latency_alerts
+            }
+            Some(SlowTransition::Normal { .. }) => {
+                Slowdown::resolve(&mut tx, monitor_id, outcome.checked_at).await?
+            }
+            // Ended silently: where the outage starts, or at this check.
+            None if slow_before.degraded_since.is_some() && slow_after.degraded_since.is_none() => {
+                let at = match transition {
+                    Some(Transition::WentDown { since }) => since,
+                    _ => outcome.checked_at,
+                };
+                Slowdown::resolve(&mut tx, monitor_id, at).await?;
+                false
+            }
+            None => false,
+        };
 
         let tls_warning =
             match tls_warn_days {
@@ -192,10 +288,30 @@ impl MonitorState {
             health: next,
             transition,
             tls_warning,
+            slow_transition,
+            slow_alert,
         }))
     }
 
-    /// On pause: resolves the open incident at the last check (nothing is known after it, so ending later would count
+    /// Drops the slow series and ends the slowdown at `at`, silently: the threshold changed, so
+    /// what was measured against the old one no longer holds.
+    pub async fn clear_slowness(
+        conn: &mut SqliteConnection,
+        monitor_id: i64,
+        at: i64,
+    ) -> Result<(), sqlx::Error> {
+        Slowdown::resolve(&mut *conn, monitor_id, at).await?;
+        sqlx::query(
+            "UPDATE monitor_state SET slow_checks = 0, slow_since = NULL, degraded_since = NULL
+             WHERE monitor_id = ?",
+        )
+        .bind(monitor_id)
+        .execute(conn)
+        .await?;
+        Ok(())
+    }
+
+    /// On pause: resolves the open incident and slowdown at the last check (nothing is known after it, so ending later would count
     /// unseen time as an outage) and puts the monitor back to `pending`.
     pub async fn reset_for_pause(
         conn: &mut SqliteConnection,
@@ -209,9 +325,11 @@ impl MonitorState {
                 .await?;
         let end = last_check.and_then(|(at,)| at).unwrap_or(now);
         Incident::resolve(&mut *conn, monitor_id, end).await?;
+        Slowdown::resolve(&mut *conn, monitor_id, end).await?;
         sqlx::query(
             "UPDATE monitor_state
-             SET status = 'pending', consecutive_failures = 0, failing_since = NULL
+             SET status = 'pending', consecutive_failures = 0, failing_since = NULL,
+                 slow_checks = 0, slow_since = NULL, degraded_since = NULL
              WHERE monitor_id = ?",
         )
         .bind(monitor_id)

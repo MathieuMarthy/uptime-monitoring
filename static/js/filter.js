@@ -12,7 +12,7 @@ if (form) {
     // As the server: without combining marks, and group names compared like `name_key`.
     const fold = (text) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
     const key = (name) => name.toLowerCase().normalize("NFC");
-    let status = ["down", "paused"].includes(params.get("status")) ? params.get("status") : "";
+    let status = ["down", "degraded", "paused"].includes(params.get("status")) ? params.get("status") : "";
     // Read from the URL, not the menu: the menu is missing when no monitor has a group.
     let group = params.get("group")?.trim() ?? "";
     const groupOf = (item) => item.closest("details[data-group]")?.dataset.group ?? "Ungrouped";

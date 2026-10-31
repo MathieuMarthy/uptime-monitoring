@@ -53,6 +53,48 @@
             {% match event %}
             {% when Event::Outage with (incident) %}
             {% include "partials/incident.html" %}
+            {% when Event::Slowdown with (slow) %}
+            <details class="event event-slowdown">
+                <summary class="event-summary">
+                    <span class="event-time">{{ slow.time }}</span>
+                    <span class="lamp {% if slow.ongoing %}lamp-degraded{% else %}lamp-up{% endif %}" aria-hidden="true"></span>
+                    <span class="event-text">
+                        <span class="event-title">{% if slow.ongoing %}{{ slow.monitor_name }} is slow{% else %}{{ slow.monitor_name }} was slow {{ slow.duration }}{% endif %}</span>
+                        <span class="event-subtitle">Responses above {{ slow.threshold_ms }} ms</span>
+                    </span>
+                    <span class="chip {% if slow.ongoing %}chip-caution{% else %}chip-up{% endif %}">{% if slow.ongoing %}Ongoing{% else %}Ended{% endif %}</span>
+                    <svg class="event-chevron" aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
+                        <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </summary>
+                <div class="event-body">
+                    <dl class="facts">
+                        {% for fact in slow.facts %}
+                        <div><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+                        {% endfor %}
+                    </dl>
+                    <div class="event-part">
+                        <h3>Alerts sent</h3>
+                        {% if slow.alerts.is_empty() %}
+                        <p class="section-note">None: alerts are off for this monitor, no channel was linked, or the alerts are older than the retention period.</p>
+                        {% else %}
+                        <ul class="alert-list">
+                            {% for alert in slow.alerts %}
+                            <li>
+                                <span class="alert-time">{{ alert.time }}</span>
+                                <span class="alert-channel">{{ alert.channel }}</span>
+                                <span>{{ alert.event }}</span>
+                                {% if alert.ok %}<span class="text-green">delivered</span>
+                                {% else %}<span class="text-red">failed{% if let Some(error) = alert.error %}: {{ error }}{% endif %}</span>{% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                    <a class="button-secondary button-small event-link" href="/monitors/{{ slow.monitor_id }}">Open {{ slow.monitor_name }}</a>
+                </div>
+            </details>
             {% when Event::Failure with (failure) %}
             <details class="event event-failure">
                 <summary class="event-summary">

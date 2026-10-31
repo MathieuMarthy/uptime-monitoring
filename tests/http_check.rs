@@ -69,6 +69,8 @@ fn monitor(url: &str) -> Monitor {
         updated_at: 0,
         push_token: None,
         grace_s: 0,
+        latency_warn_ms: None,
+        latency_alerts: true,
     }
 }
 

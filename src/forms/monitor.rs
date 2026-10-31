@@ -70,6 +70,9 @@ pub struct MonitorForm {
     pub failure_threshold: String,
     pub tls_expiry_warn_days: String,
     pub grace_s: String,
+    /// Blank: no latency threshold.
+    pub latency_warn_ms: String,
+    pub latency_alerts: Option<String>,
     pub headers: String,
     pub body: String,
     pub keyword: String,
@@ -130,6 +133,10 @@ pub struct MonitorInput {
     pub tls_expiry_warn_days: Option<i64>,
     /// 0 for HTTP.
     pub grace_s: i64,
+    /// Slower successful responses count toward the degraded state; `None` for push.
+    pub latency_warn_ms: Option<i64>,
+    /// Alert when the monitor becomes degraded and when it is back to normal.
+    pub latency_alerts: bool,
     pub paused: bool,
     /// The notification channels its alerts go to.
     pub channel_ids: Vec<i64>,
@@ -150,6 +157,8 @@ impl MonitorForm {
             failure_threshold: "3".to_string(),
             tls_expiry_warn_days: "14".to_string(),
             grace_s: "60".to_string(),
+            latency_warn_ms: String::new(),
+            latency_alerts: Some("on".to_string()),
             headers: String::new(),
             body: String::new(),
             keyword: String::new(),
@@ -185,6 +194,11 @@ impl MonitorForm {
             },
             // HTTP monitors store 0: switching one to push offers the default.
             grace_s: if m.is_push() { m.grace_s } else { 60 }.to_string(),
+            latency_warn_ms: m
+                .latency_warn_ms
+                .map(|ms| ms.to_string())
+                .unwrap_or_default(),
+            latency_alerts: checkbox(m.latency_alerts),
             headers: m.headers.clone().unwrap_or_default(),
             body: m.body.clone().unwrap_or_default(),
             keyword: m.keyword.clone().unwrap_or_default(),
@@ -301,6 +315,8 @@ impl MonitorForm {
             failure_threshold: failure_threshold.unwrap(),
             tls_expiry_warn_days: http.tls_expiry_warn_days,
             grace_s: grace_s.unwrap(),
+            latency_warn_ms: http.latency_warn_ms,
+            latency_alerts: self.latency_alerts.is_some(),
             paused: self.active.is_none(),
             channel_ids: self.channel_ids(),
         })
@@ -337,6 +353,19 @@ impl MonitorForm {
                 "Timeout cannot be longer than the check interval.".to_string(),
             );
         }
+
+        // Strictly below the timeout: a slower response is a failure, not slow.
+        let latency_warn_ms = if self.latency_warn_ms.trim().is_empty() {
+            None
+        } else {
+            parse_bounded(
+                &self.latency_warn_ms,
+                1,
+                timeout_s.unwrap_or(120) * 1000 - 1,
+            )
+            .map_err(|m| errors.insert("latency_warn_ms", m))
+            .ok()
+        };
 
         let tls_expiry_warn_days = if self.tls_expiry_warn_days.trim().is_empty() {
             None
@@ -384,6 +413,7 @@ impl MonitorForm {
             ignore_tls_errors: self.ignore_tls_errors.is_some(),
             timeout_s: timeout_s.unwrap_or(10),
             tls_expiry_warn_days,
+            latency_warn_ms,
         }
     }
 }
@@ -401,6 +431,7 @@ struct HttpFields {
     ignore_tls_errors: bool,
     timeout_s: i64,
     tls_expiry_warn_days: Option<i64>,
+    latency_warn_ms: Option<i64>,
 }
 
 impl Default for HttpFields {
@@ -416,6 +447,7 @@ impl Default for HttpFields {
             ignore_tls_errors: false,
             timeout_s: 10,
             tls_expiry_warn_days: None,
+            latency_warn_ms: None,
         }
     }
 }
@@ -1047,6 +1079,54 @@ mod tests {
             grace_s: "60".to_string(),
             ..MonitorForm::new_defaults()
         }
+    }
+
+    #[test]
+    fn latency_threshold_blank_disables_and_is_bounded_by_the_timeout() {
+        let i = valid().validate().unwrap();
+        assert_eq!(i.latency_warn_ms, None);
+        assert!(i.latency_alerts);
+        let i = MonitorForm {
+            latency_warn_ms: " 800 ".into(),
+            latency_alerts: None,
+            ..valid()
+        }
+        .validate()
+        .unwrap();
+        assert_eq!(i.latency_warn_ms, Some(800));
+        assert!(!i.latency_alerts);
+        for bad in ["0", "x", "10000"] {
+            assert_field_error(
+                MonitorForm {
+                    timeout_s: "10".into(),
+                    latency_warn_ms: bad.into(),
+                    ..valid()
+                },
+                "latency_warn_ms",
+            );
+        }
+        assert_eq!(
+            MonitorForm {
+                timeout_s: "10".into(),
+                latency_warn_ms: "9999".into(),
+                ..valid()
+            }
+            .validate()
+            .unwrap()
+            .latency_warn_ms,
+            Some(9999)
+        );
+    }
+
+    #[test]
+    fn push_has_no_latency_threshold() {
+        let i = MonitorForm {
+            latency_warn_ms: "x".into(),
+            ..push()
+        }
+        .validate()
+        .unwrap();
+        assert_eq!(i.latency_warn_ms, None);
     }
 
     #[test]

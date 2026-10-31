@@ -8,7 +8,7 @@ use unicode_normalization::UnicodeNormalization;
 
 const COLUMNS: &str = "id, name, group_name, kind, url, method, headers, body, keyword, accepted_statuses, \
     follow_redirects, ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold, tls_expiry_warn_days, paused, \
-    created_at, updated_at, push_token, grace_s";
+    created_at, updated_at, push_token, grace_s, latency_warn_ms, latency_alerts";
 
 /// A monitor's configuration, written only by the admin.
 #[derive(Debug, Clone, FromRow)]
@@ -37,6 +37,10 @@ pub struct Monitor {
     pub push_token: Option<String>,
     /// Push monitors only: how late a ping may be; 0 for HTTP.
     pub grace_s: i64,
+    /// Slower successful responses count toward the degraded state; `None`: off.
+    pub latency_warn_ms: Option<i64>,
+    /// Alert on entering and leaving the degraded state.
+    pub latency_alerts: bool,
 }
 
 /// What the dashboard shows of a monitor: no request body or headers.
@@ -49,6 +53,7 @@ pub struct MonitorSummary {
     pub paused: bool,
     pub status: MonitorStatus,
     pub last_latency_ms: Option<i64>,
+    pub degraded_since: Option<i64>,
 }
 
 impl Monitor {
@@ -73,6 +78,8 @@ impl Monitor {
             failure_threshold,
             tls_expiry_warn_days,
             grace_s,
+            latency_warn_ms,
+            latency_alerts,
             paused,
             channel_ids: _,
         } = input.clone();
@@ -99,6 +106,8 @@ impl Monitor {
             updated_at: 0,
             push_token: None,
             grace_s,
+            latency_warn_ms,
+            latency_alerts,
         }
     }
 
@@ -135,7 +144,8 @@ impl Monitor {
     /// Every monitor with its state, sorted by name.
     pub async fn summaries(pool: &SqlitePool) -> Result<Vec<MonitorSummary>, sqlx::Error> {
         sqlx::query_as(
-            "SELECT m.id, m.name, m.group_name, m.url, m.paused, s.status, s.last_latency_ms
+            "SELECT m.id, m.name, m.group_name, m.url, m.paused, s.status, s.last_latency_ms,
+                    s.degraded_since
              FROM monitors m JOIN monitor_state s ON s.monitor_id = m.id
              ORDER BY m.name_key",
         )
@@ -225,9 +235,10 @@ impl Monitor {
             INSERT INTO monitors (
                 name, name_key, group_name, url, method, headers, body, keyword, accepted_statuses, follow_redirects,
                 ignore_tls_errors, interval_s, retry_interval_s, timeout_s, failure_threshold,
-                tls_expiry_warn_days, paused, created_at, updated_at, kind, grace_s, push_token
+                tls_expiry_warn_days, paused, created_at, updated_at, kind, grace_s, push_token,
+                latency_warn_ms, latency_alerts
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&input.name)
@@ -252,6 +263,8 @@ impl Monitor {
         .bind(&input.kind)
         .bind(input.grace_s)
         .bind((input.kind == PUSH).then(random_token))
+        .bind(input.latency_warn_ms)
+        .bind(input.latency_alerts)
         .execute(&mut **tx)
         .await?
         .last_insert_rowid();
@@ -272,13 +285,18 @@ impl Monitor {
     ) -> Result<bool, sqlx::Error> {
         let now = now_ms();
         let mut tx = pool.begin().await?;
+        let old_threshold: Option<Option<i64>> =
+            sqlx::query_scalar("SELECT latency_warn_ms FROM monitors WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await?;
         let result = sqlx::query(
             r#"
             UPDATE monitors
             SET name = ?, name_key = ?, group_name = ?, url = ?, method = ?, headers = ?, body = ?, keyword = ?,
                 accepted_statuses = ?, follow_redirects = ?, ignore_tls_errors = ?, interval_s = ?,
                 retry_interval_s = ?, timeout_s = ?, failure_threshold = ?, tls_expiry_warn_days = ?, paused = ?, updated_at = ?,
-                kind = ?, grace_s = ?,
+                kind = ?, grace_s = ?, latency_warn_ms = ?, latency_alerts = ?,
                 -- A push monitor keeps its URL across edits; a new one gets the token bound here.
                 push_token = CASE WHEN ? = 'push' THEN COALESCE(push_token, ?) END
             WHERE id = ?
@@ -304,6 +322,8 @@ impl Monitor {
         .bind(now)
         .bind(&input.kind)
         .bind(input.grace_s)
+        .bind(input.latency_warn_ms)
+        .bind(input.latency_alerts)
         // SET expressions read the old row: the new kind is bound again.
         .bind(&input.kind)
         .bind(random_token())
@@ -316,6 +336,8 @@ impl Monitor {
 
         if input.paused {
             MonitorState::reset_for_pause(&mut tx, id, now).await?;
+        } else if old_threshold.flatten() != input.latency_warn_ms {
+            MonitorState::clear_slowness(&mut tx, id, now).await?;
         }
         Channel::set_for_monitor(&mut tx, id, &input.channel_ids).await?;
         tx.commit().await?;

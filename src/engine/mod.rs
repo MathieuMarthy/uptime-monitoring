@@ -7,6 +7,7 @@
 pub mod guard;
 pub mod http;
 pub mod scheduler;
+pub mod slowness;
 pub mod verdict;
 
 use crate::engine::guard::Guard;
