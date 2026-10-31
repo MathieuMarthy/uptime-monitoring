@@ -43,7 +43,7 @@ if (form) {
                 details.open = true; // a folded group would hide its matches
             }
         }
-        noMatch.hidden = !document.querySelector("li[data-search]:not([hidden])");
+        noMatch.hidden = !!document.querySelector("li[data-search]:not([hidden])");
 
         for (const chip of document.querySelectorAll("#status-filter a")) {
             chip.href = url({ status: chip.dataset.status });
