@@ -107,7 +107,8 @@ impl MonitorState {
     ///
     /// During a maintenance window (`in_maintenance`) the check is kept but covers no time, and
     /// the state machine is frozen: no transition, no certificate warning, and a failure series
-    /// below the threshold starts again after the window.
+    /// below the threshold starts again after the window. A success still ends an outage, but
+    /// raises no alert.
     pub async fn record(
         pool: &SqlitePool,
         monitor_id: i64,
@@ -118,7 +119,7 @@ impl MonitorState {
         in_maintenance: bool,
     ) -> Result<Option<Recorded>, sqlx::Error> {
         let (next, transition) = if in_maintenance {
-            (verdict::frozen(health), None)
+            (verdict::frozen(health, outcome.ok()), None)
         } else {
             verdict::apply(health, outcome.ok(), outcome.checked_at, failure_threshold)
         };
@@ -161,6 +162,10 @@ impl MonitorState {
                 Incident::open(&mut tx, monitor_id, since, latest).await?
             }
             Some(Transition::Recovered) => {
+                Incident::resolve(&mut tx, monitor_id, outcome.checked_at).await?
+            }
+            // A success during a window: the outage is over, silently.
+            None if health.status == MonitorStatus::Down && next.status == MonitorStatus::Up => {
                 Incident::resolve(&mut tx, monitor_id, outcome.checked_at).await?
             }
             None => {}

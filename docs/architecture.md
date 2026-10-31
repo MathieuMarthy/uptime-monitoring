@@ -226,8 +226,8 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **Effect on a check** (`MonitorState::record`, `in_maintenance`). The check is recorded and shown, with
   `covered_ms = 0` and `down = 0`, so it counts in no uptime figure. The state machine is frozen (`verdict::frozen`):
   no transition, no incident opened or resolved, no alert, no certificate warning; a failure series below the
-  threshold starts again after the window. A down monitor stays down, its incident open: the first success after the
-  window resolves it and alerts *up*. The check after the window covers the gap since the last one as usual. A push
+  threshold starts again after the window. A success ends an outage: the incident is resolved at that check, without
+  an *up* alert; a failure leaves a down monitor down, its incident open. The check after the window covers the gap since the last one as usual. A push
   monitor's missed deadline in a window is a check like the others.
 - **Pages.** `/maintenances` lists windows in progress, upcoming and past, and edits them; the form's group boxes
   pick the group's members when saved (no lasting link to the group). A monitor's page has *Maintenance now* (15 min

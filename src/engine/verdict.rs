@@ -117,10 +117,17 @@ pub fn apply(
     (next, goes_down.then_some(Transition::WentDown { since }))
 }
 
-/// The health kept through a check made during a maintenance window: a down monitor stays as
-/// it is (its incident stays open), any other drops its failure series.
-pub fn frozen(health: Health) -> Health {
-    if health.status == MonitorStatus::Down {
+/// The health after a check made during a maintenance window: a success ends an outage (its
+/// incident is resolved, without alert), a failure leaves a down monitor as it is, and any
+/// other monitor drops its failure series.
+pub fn frozen(health: Health, ok: bool) -> Health {
+    if health.status == MonitorStatus::Down && ok {
+        Health {
+            status: MonitorStatus::Up,
+            consecutive_failures: 0,
+            failing_since: None,
+        }
+    } else if health.status == MonitorStatus::Down {
         health
     } else {
         Health {
@@ -233,10 +240,14 @@ mod tests {
 
     #[test]
     fn maintenance_keeps_down_and_drops_a_series() {
-        assert_eq!(frozen(health(Down, 4, Some(5))), health(Down, 4, Some(5)));
-        assert_eq!(frozen(health(Up, 2, Some(5))), health(Up, 0, None));
         assert_eq!(
-            frozen(health(Pending, 1, Some(5))),
+            frozen(health(Down, 4, Some(5)), false),
+            health(Down, 4, Some(5))
+        );
+        assert_eq!(frozen(health(Down, 4, Some(5)), true), health(Up, 0, None));
+        assert_eq!(frozen(health(Up, 2, Some(5)), false), health(Up, 0, None));
+        assert_eq!(
+            frozen(health(Pending, 1, Some(5)), false),
             health(Pending, 0, None)
         );
     }

@@ -528,7 +528,7 @@ async fn failures_during_maintenance_neither_go_down_nor_count() {
 }
 
 #[tokio::test]
-async fn an_open_incident_stays_open_through_maintenance() {
+async fn a_success_during_maintenance_ends_the_outage_without_alert() {
     let (pool, id) = monitor("1").await;
     let transitions = record_maintained(
         &pool,
@@ -536,9 +536,9 @@ async fn an_open_incident_stays_open_through_maintenance() {
         1,
         &[
             (fail_at(1_000, ErrorKind::Timeout), false),
-            // A success during the window does not resolve it.
-            (ok_at(2_000), true),
-            (fail_at(3_000, ErrorKind::Timeout), true),
+            // A failure in the window changes nothing: still down.
+            (fail_at(2_000, ErrorKind::Timeout), true),
+            (ok_at(3_000), true),
             (ok_at(4_000), false),
         ],
     )
@@ -549,20 +549,23 @@ async fn an_open_incident_stays_open_through_maintenance() {
             Some(Transition::WentDown { since: 1_000 }),
             None,
             None,
-            Some(Transition::Recovered),
-        ]
+            None
+        ],
+        "no up alert"
     );
     let incidents = Incident::for_monitor(&pool, id).await.unwrap();
-    assert_eq!(incidents[0].resolved_at, Some(4_000));
+    assert_eq!(incidents[0].resolved_at, Some(3_000));
+    let s = MonitorState::find(&pool, id).await.unwrap().unwrap();
+    assert_eq!(s.status, MonitorStatus::Up);
     assert_eq!(
         covered_and_down(&pool, id).await,
         vec![
             (1_000, 0, 0),
             (2_000, 0, 0),
             (3_000, 0, 0),
-            (4_000, 1_000, 1)
+            (4_000, 1_000, 0)
         ],
-        "the window's time is not counted"
+        "the window's time is not counted, and the site was up after it"
     );
 }
 
