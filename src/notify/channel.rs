@@ -89,13 +89,16 @@ impl ChannelConfig {
         .to_string()
     }
 
-    /// The server the request goes to, checked by the guard. Telegram's full URL carries the
-    /// bot token, so only its server is given here.
-    pub fn target(&self) -> &str {
+    /// Where the request goes. Telegram's URL carries the bot token.
+    fn url(&self) -> String {
         match self {
-            Self::Webhook(c) | Self::Discord(c) => &c.url,
-            Self::Ntfy(c) => &c.server,
-            Self::Telegram(c) => &c.server,
+            Self::Webhook(c) | Self::Discord(c) => c.url.clone(),
+            Self::Ntfy(c) => c.server.clone(),
+            Self::Telegram(c) => format!(
+                "{}/bot{}/sendMessage",
+                c.server.trim_end_matches('/'),
+                c.token
+            ),
         }
     }
 
@@ -146,16 +149,8 @@ impl ChannelConfig {
                 Self::Ntfy(_) => body["click"] = json!(link),
             }
         }
-        let url = match self {
-            Self::Telegram(c) => format!(
-                "{}/bot{}/sendMessage",
-                c.server.trim_end_matches('/'),
-                c.token
-            ),
-            _ => self.target().to_string(),
-        };
         let mut request = client
-            .post(url)
+            .post(self.url())
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .body(body.to_string());
         if let Self::Ntfy(NtfyConfig {
@@ -187,7 +182,11 @@ fn ntfy_tag(severity: Severity) -> &'static str {
     }
 }
 
-/// Plain text, so that nothing in a monitor name or cause needs escaping.
+/// Telegram refuses a text over 4,096 characters; this leaves room for how it counts emoji.
+const TELEGRAM_TEXT_MAX_CHARS: usize = 4_000;
+
+/// Plain text, so that nothing in a monitor name or cause needs escaping. A long message is cut
+/// so that the link stays.
 fn telegram_text(message: &Message) -> String {
     let emoji = match message.severity {
         Severity::Critical => "🚨",
@@ -195,12 +194,20 @@ fn telegram_text(message: &Message) -> String {
         Severity::Warning => "⚠️",
         Severity::Info => "🔔",
     };
-    let mut text = format!("{emoji} {}\n\n{}", message.title, message.text);
-    if let Some(link) = &message.link {
-        text.push_str("\n\n");
-        text.push_str(link);
-    }
-    text
+    let head = format!("{emoji} {}\n\n", message.title);
+    let tail = message
+        .link
+        .as_ref()
+        .map_or(String::new(), |link| format!("\n\n{link}"));
+    let room = TELEGRAM_TEXT_MAX_CHARS.saturating_sub(head.chars().count() + tail.chars().count());
+    let body = if message.text.chars().count() > room {
+        let mut cut: String = message.text.chars().take(room.saturating_sub(1)).collect();
+        cut.push('…');
+        cut
+    } else {
+        message.text.clone()
+    };
+    format!("{head}{body}{tail}")
 }
 
 #[cfg(test)]
@@ -237,10 +244,26 @@ mod tests {
     }
 
     #[test]
+    fn telegram_text_fits_in_one_message() {
+        let message = Message {
+            title: "API is down".to_string(),
+            text: "é".repeat(5_000),
+            severity: Severity::Critical,
+            link: Some("https://up.example.com/monitors/1".to_string()),
+        };
+        let text = telegram_text(&message);
+        assert_eq!(text.chars().count(), TELEGRAM_TEXT_MAX_CHARS);
+        assert!(
+            text.ends_with("…\n\nhttps://up.example.com/monitors/1"),
+            "the link is kept"
+        );
+    }
+
+    #[test]
     fn telegram_server_defaults_to_the_bot_api_and_is_not_stored() {
         let config =
             ChannelConfig::parse("telegram", r#"{"token":"1:A","chat_id":"@ops"}"#).unwrap();
-        assert_eq!(config.target(), TELEGRAM_API);
+        assert!(matches!(&config, ChannelConfig::Telegram(c) if c.server == TELEGRAM_API));
         assert!(!config.to_json().contains("server"));
     }
 }

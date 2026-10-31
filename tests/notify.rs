@@ -213,6 +213,40 @@ async fn telegram_sends_a_text_message_to_its_chat() {
 }
 
 #[tokio::test]
+async fn telegram_errors_carry_its_description() {
+    let pool = common::test_app().await.1;
+    let app = Router::new().route(
+        "/{*rest}",
+        post(|| async {
+            (
+                StatusCode::BAD_REQUEST,
+                r#"{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}"#,
+            )
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let m = monitor(&pool).await;
+    let telegram = serde_json::json!({
+        "server": format!("http://{addr}"), "token": "123:SECRET", "chat_id": "-1001"
+    });
+    link(
+        &pool,
+        m.id,
+        channel(&pool, "telegram", telegram, true).await,
+    )
+    .await;
+
+    notifier(&pool).notify(down(&m));
+    let log = wait_for_log(&pool, 1).await;
+    assert_eq!(
+        log[0].error.as_deref(),
+        Some("HTTP 400: Bad Request: chat not found")
+    );
+}
+
+#[tokio::test]
 async fn public_url_links_every_channel_to_the_detail_page() {
     let pool = common::test_app().await.1;
     let (url, mut rx) = receiver(vec![]).await;

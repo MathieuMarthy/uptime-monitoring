@@ -251,14 +251,20 @@ fn is_bot_token(token: &str) -> bool {
     }
 }
 
-/// A numeric id (negative for groups and channels) or a public `@username` (5 to 32 characters).
+/// A numeric id (negative for groups and channels) or a public `@username`: 5 to 32 letters,
+/// digits or `_`, starting with a letter and not ending with `_`.
 fn is_chat_id(chat_id: &str) -> bool {
     if let Some(name) = chat_id.strip_prefix('@') {
         return (5..=32).contains(&name.len())
-            && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+            && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+            && name.starts_with(|c: char| c.is_ascii_alphabetic())
+            && !name.ends_with('_');
     }
     let digits = chat_id.strip_prefix('-').unwrap_or(chat_id);
-    !digits.is_empty() && digits.len() <= 20 && digits.bytes().all(|b| b.is_ascii_digit())
+    !digits.is_empty()
+        && digits.len() <= 20
+        && digits.bytes().all(|b| b.is_ascii_digit())
+        && digits.bytes().any(|b| b != b'0')
 }
 
 #[cfg(test)]
@@ -391,7 +397,18 @@ mod tests {
                 })
             );
         }
-        for chat_id in ["", "-", "1-2", "@ab", "@has space"] {
+        for chat_id in [
+            "",
+            "-",
+            "1-2",
+            "0",
+            "-00",
+            "@ab",
+            "@has space",
+            "@_ops_x",
+            "@ops_x_",
+            "@1opsx",
+        ] {
             f.telegram_chat_id = chat_id.to_string();
             assert!(
                 f.validate(None)

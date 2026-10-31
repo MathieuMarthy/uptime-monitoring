@@ -13,7 +13,7 @@ use crate::notify::channel::ChannelConfig;
 use crate::notify::message::Message;
 use crate::time::now_ms;
 use jiff::tz::TimeZone;
-use reqwest::{Client, StatusCode, Url};
+use reqwest::{Client, StatusCode};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 use std::error::Error;
@@ -224,20 +224,24 @@ impl Sender {
         notification: &Notification,
         message: &Message,
     ) -> Result<(), SendError> {
-        let url = Url::parse(config.target()).map_err(|_| SendError {
-            message: "invalid URL".to_string(),
-            retry: false,
-        })?;
-        self.guard.check_url(&url).map_err(|e| SendError {
+        // The guard checks the URL actually requested; a URL that does not parse fails here.
+        let request = config
+            .request(self.client(), notification, message)
+            .build()
+            .map_err(|_| SendError {
+                message: "invalid URL".to_string(),
+                retry: false,
+            })?;
+        self.guard.check_url(request.url()).map_err(|e| SendError {
             message: e.to_string(),
             retry: false,
         })?;
-        let response = config
-            .request(self.client(), notification, message)
-            .send()
+        let response = self
+            .client()
+            .execute(request)
             .await
             .map_err(|e| SendError {
-                // Webhook URLs carry their secret.
+                // Webhook and Telegram URLs carry their secret.
                 message: truncate(&error_chain(&e.without_url())),
                 retry: true,
             })?;
@@ -245,15 +249,34 @@ impl Sender {
         if status.is_success() {
             return Ok(());
         }
-        Err(SendError {
-            message: format!("HTTP {}", status.as_u16()),
-            retry: status.is_server_error()
-                || matches!(
-                    status,
-                    StatusCode::TOO_MANY_REQUESTS | StatusCode::REQUEST_TIMEOUT
-                ),
-        })
+        let retry = status.is_server_error()
+            || matches!(
+                status,
+                StatusCode::TOO_MANY_REQUESTS | StatusCode::REQUEST_TIMEOUT
+            );
+        let mut message = format!("HTTP {}", status.as_u16());
+        if matches!(config, ChannelConfig::Telegram(_))
+            && let Some(description) = telegram_description(response).await
+        {
+            message = truncate(&format!("{message}: {description}"));
+        }
+        Err(SendError { message, retry })
     }
+}
+
+/// The reason Telegram gives for a refusal ("Bad Request: chat not found"), read from at most
+/// 4 KB of its answer.
+async fn telegram_description(mut response: reqwest::Response) -> Option<String> {
+    const MAX_BYTES: usize = 4096;
+    let mut body = Vec::new();
+    while let Ok(Some(chunk)) = response.chunk().await {
+        body.extend_from_slice(&chunk);
+        if body.len() > MAX_BYTES {
+            return None;
+        }
+    }
+    let json: serde_json::Value = serde_json::from_slice(&body).ok()?;
+    json["description"].as_str().map(str::to_string)
 }
 
 /// Routes each notification to its monitor's worker, started on its first alert.
