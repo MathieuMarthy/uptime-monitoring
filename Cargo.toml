@@ -33,6 +33,7 @@ unicode-normalization = "0.1.25"
 jiff = { version = "0.2.38", default-features = false, features = ["std", "tzdb-bundle-always"] }
 hmac = "0.13.0"
 sha1 = "0.11.0"
+futures-util = { version = "0.3", default-features = false }
 qrcode = { version = "0.14.1", default-features = false }
 
 [dev-dependencies]

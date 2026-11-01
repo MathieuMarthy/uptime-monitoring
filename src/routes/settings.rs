@@ -10,15 +10,18 @@ use crate::routes::auth::{ClientIp, INVALID_CODE, totp_code_ok, with_password_ha
 use crate::routes::form_or_invalid;
 use crate::state::AppState;
 use crate::time::now_ms;
+use crate::transfer::Export;
 use crate::views::settings::{SettingsTemplate, TotpSetupTemplate};
+use axum::body::Body;
 use axum::extract::rejection::{FormRejection, QueryRejection};
 use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Form, Router};
 use serde::Deserialize;
 use std::time::Instant;
+use tokio::io::AsyncReadExt;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -28,6 +31,59 @@ pub fn router() -> Router<AppState> {
         .route("/settings/password", post(change_password))
         .route("/settings/totp", get(totp_setup).post(enable_totp))
         .route("/settings/totp/disable", post(disable_totp))
+        .route("/settings/export", get(export))
+        .route("/settings/backup", get(backup))
+}
+
+/// A copy of the whole database, streamed from disk.
+async fn backup(State(state): State<AppState>) -> Result<Response, AppError> {
+    let file = crate::db::backup(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(Box::new(e)))?;
+    let chunks = futures_util::stream::try_unfold(file, |mut file| async move {
+        let mut chunk = vec![0; 64 * 1024];
+        let read = file.read(&mut chunk).await?;
+        chunk.truncate(read);
+        Ok::<_, std::io::Error>((read > 0).then_some((chunk, file)))
+    });
+    let name = format!("uptime-monitoring-{}.db", today(&state).await?);
+    Ok(attachment(
+        "application/vnd.sqlite3",
+        &name,
+        Body::from_stream(chunks),
+    ))
+}
+
+/// The configuration as a JSON file, secrets included.
+async fn export(State(state): State<AppState>) -> Result<Response, AppError> {
+    let export = Export::load(&state.db).await?;
+    let json =
+        serde_json::to_string_pretty(&export).map_err(|e| AppError::Internal(Box::new(e)))?;
+    Ok(attachment(
+        "application/json",
+        &format!("uptime-monitoring-{}.json", today(&state).await?),
+        json,
+    ))
+}
+
+/// The local date of the instance, for file names.
+async fn today(state: &AppState) -> Result<String, AppError> {
+    let tz = Settings::load(&state.db).await?.tz();
+    Ok(jiff::Timestamp::now().to_zoned(tz).date().to_string())
+}
+
+fn attachment(content_type: &'static str, file_name: &str, body: impl Into<Body>) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, content_type.to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{file_name}\""),
+            ),
+        ],
+        body.into(),
+    )
+        .into_response()
 }
 
 #[derive(Deserialize)]

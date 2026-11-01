@@ -165,5 +165,19 @@
             {% endif %}
         </div>
     </div>
+
+    <div class="form-card">
+        <div class="form-section">
+            <h2 class="section-title">Backup</h2>
+            <p class="form-hint">The configuration file holds the monitors, channels, public pages and maintenance
+                windows, linked by name, to import here or into another instance. It includes secrets: push URLs,
+                channel tokens. The database copy holds everything, history and account included: stop the
+                container and put it in place of the database file to restore it.</p>
+            <div class="form-actions-left">
+                <a class="button-primary" href="/settings/export" download>Export configuration</a>
+                <a class="button-secondary" href="/settings/backup" download>Download database</a>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

@@ -34,3 +34,65 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
 
     Ok(pool)
 }
+
+/// A consistent copy of the database, taken while it runs, opened and already unlinked: the file
+/// is gone once the handle is dropped. Written next to the database (a mounted volume has room
+/// for it), in the temporary directory for an in-memory one.
+pub async fn backup(pool: &SqlitePool) -> Result<tokio::fs::File, BackupError> {
+    // One copy at a time: each one takes the size of the database on disk.
+    static RUNNING: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+    let _permit = RUNNING.acquire().await.expect("never closed");
+
+    let main_file: String =
+        sqlx::query_scalar("SELECT file FROM pragma_database_list WHERE name = 'main'")
+            .fetch_one(pool)
+            .await?;
+    let dir = std::path::Path::new(&main_file)
+        .parent()
+        .filter(|_| !main_file.is_empty())
+        .map_or_else(std::env::temp_dir, std::path::Path::to_path_buf);
+    let path = dir.join(format!(".backup-{}.db", crate::auth::random_token()));
+
+    let copied = sqlx::query("VACUUM INTO ?")
+        .bind(path.to_string_lossy().as_ref())
+        .execute(pool)
+        .await;
+    let file = match copied {
+        Ok(_) => tokio::fs::File::open(&path)
+            .await
+            .map_err(BackupError::from),
+        Err(e) => Err(e.into()),
+    };
+    // Unlinked whatever happened; an open handle still reads it.
+    let _ = tokio::fs::remove_file(&path).await;
+    file
+}
+
+#[derive(Debug)]
+pub enum BackupError {
+    Sql(sqlx::Error),
+    Io(std::io::Error),
+}
+
+impl From<sqlx::Error> for BackupError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Sql(e)
+    }
+}
+
+impl From<std::io::Error> for BackupError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+impl std::fmt::Display for BackupError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Sql(e) => write!(f, "database copy failed: {e}"),
+            Self::Io(e) => write!(f, "reading the database copy failed: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for BackupError {}

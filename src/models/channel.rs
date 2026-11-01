@@ -90,6 +90,13 @@ impl Channel {
     }
 
     pub async fn create(pool: &SqlitePool, input: &ChannelInput) -> Result<i64, sqlx::Error> {
+        Self::insert(&mut *pool.acquire().await?, input).await
+    }
+
+    pub async fn insert(
+        conn: &mut SqliteConnection,
+        input: &ChannelInput,
+    ) -> Result<i64, sqlx::Error> {
         let id = sqlx::query(
             "INSERT INTO notification_channels (name, kind, config, enabled, group_alerts, created_at)
              VALUES (?, ?, ?, ?, ?, ?)",
@@ -100,7 +107,7 @@ impl Channel {
         .bind(input.enabled)
         .bind(input.group_alerts)
         .bind(now_ms())
-        .execute(pool)
+        .execute(conn)
         .await?
         .last_insert_rowid();
         Ok(id)
@@ -144,6 +151,13 @@ impl Channel {
     ) -> Result<Vec<i64>, sqlx::Error> {
         sqlx::query_scalar("SELECT channel_id FROM monitor_channels WHERE monitor_id = ?")
             .bind(monitor_id)
+            .fetch_all(pool)
+            .await
+    }
+
+    /// Every monitor–channel link, as `(monitor_id, channel_id)`.
+    pub async fn links(pool: &SqlitePool) -> Result<Vec<(i64, i64)>, sqlx::Error> {
+        sqlx::query_as("SELECT monitor_id, channel_id FROM monitor_channels")
             .fetch_all(pool)
             .await
     }

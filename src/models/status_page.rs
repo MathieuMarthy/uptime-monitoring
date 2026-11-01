@@ -66,9 +66,28 @@ impl StatusPage {
         .await
     }
 
+    /// Every page, by slug.
+    pub async fn all(pool: &SqlitePool) -> Result<Vec<Self>, sqlx::Error> {
+        sqlx::query_as(sqlx::AssertSqlSafe(format!(
+            "SELECT {COLUMNS} FROM status_pages ORDER BY slug"
+        )))
+        .fetch_all(pool)
+        .await
+    }
+
     pub async fn create(pool: &SqlitePool, input: &StatusPageInput) -> Result<i64, sqlx::Error> {
-        let now = now_ms();
         let mut tx = pool.begin().await?;
+        let id = Self::insert(&mut tx, input).await?;
+        tx.commit().await?;
+        Ok(id)
+    }
+
+    /// The page and its monitors, within the caller's transaction.
+    pub async fn insert(
+        conn: &mut SqliteConnection,
+        input: &StatusPageInput,
+    ) -> Result<i64, sqlx::Error> {
+        let now = now_ms();
         let id = sqlx::query(
             "INSERT INTO status_pages (slug, title, description, published, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?)",
@@ -79,11 +98,10 @@ impl StatusPage {
         .bind(input.published)
         .bind(now)
         .bind(now)
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?
         .last_insert_rowid();
-        set_monitors(&mut tx, id, &input.monitors).await?;
-        tx.commit().await?;
+        set_monitors(conn, id, &input.monitors).await?;
         Ok(id)
     }
 

@@ -93,9 +93,19 @@ impl Maintenance {
     }
 
     pub async fn create(pool: &SqlitePool, input: &MaintenanceInput) -> Result<i64, sqlx::Error> {
+        let mut tx = pool.begin().await?;
+        let id = Self::insert(&mut tx, input).await?;
+        tx.commit().await?;
+        Ok(id)
+    }
+
+    /// The window and its monitors, within the caller's transaction.
+    pub async fn insert(
+        conn: &mut SqliteConnection,
+        input: &MaintenanceInput,
+    ) -> Result<i64, sqlx::Error> {
         let now = now_ms();
         let (once, weekly) = split(&input.schedule);
-        let mut tx = pool.begin().await?;
         let id = sqlx::query(
             "INSERT INTO maintenances (title, all_monitors, show_on_status_pages, starts_at, ends_at,
                  weekdays, local_start, duration_min, created_at, updated_at)
@@ -111,11 +121,10 @@ impl Maintenance {
         .bind(weekly.map(|w| w.2))
         .bind(now)
         .bind(now)
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?
         .last_insert_rowid();
-        set_monitors(&mut tx, id, &input.monitor_ids).await?;
-        tx.commit().await?;
+        set_monitors(conn, id, &input.monitor_ids).await?;
         Ok(id)
     }
 

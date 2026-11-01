@@ -2456,6 +2456,7 @@ dependencies = [
  "askama_web",
  "axum",
  "form_urlencoded",
+ "futures-util",
  "getrandom 0.4.3",
  "hmac",
  "http",

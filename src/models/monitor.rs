@@ -2,7 +2,7 @@ use crate::auth::random_token;
 use crate::forms::monitor::{MonitorInput, PUSH};
 use crate::models::{Channel, MonitorState, MonitorStatus, id_list};
 use crate::time::now_ms;
-use sqlx::{FromRow, SqlitePool};
+use sqlx::{FromRow, SqliteConnection, SqlitePool};
 use std::collections::HashSet;
 use unicode_normalization::UnicodeNormalization;
 
@@ -153,6 +153,23 @@ impl Monitor {
         .await
     }
 
+    /// Gives a push monitor this token unless another monitor holds it; returns whether it did.
+    pub async fn set_push_token(
+        conn: &mut SqliteConnection,
+        id: i64,
+        token: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE monitors SET push_token = ?1 WHERE id = ?2 AND kind = 'push'
+             AND NOT EXISTS (SELECT 1 FROM monitors WHERE push_token = ?1)",
+        )
+        .bind(token)
+        .bind(id)
+        .execute(conn)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
     /// Every stored name's key, to pick names that are free.
     pub async fn name_keys(pool: &SqlitePool) -> Result<HashSet<String>, sqlx::Error> {
         let keys: Vec<String> = sqlx::query_scalar("SELECT name_key FROM monitors")
@@ -225,8 +242,9 @@ impl Monitor {
         Ok(ids)
     }
 
-    async fn insert(
-        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    /// The monitor and its initial state, within the caller's transaction.
+    pub async fn insert(
+        conn: &mut SqliteConnection,
         input: &MonitorInput,
     ) -> Result<i64, sqlx::Error> {
         let now = now_ms();
@@ -265,15 +283,15 @@ impl Monitor {
         .bind((input.kind == PUSH).then(random_token))
         .bind(input.latency_warn_ms)
         .bind(input.latency_alerts)
-        .execute(&mut **tx)
+        .execute(&mut *conn)
         .await?
         .last_insert_rowid();
 
         sqlx::query("INSERT INTO monitor_state (monitor_id) VALUES (?)")
             .bind(id)
-            .execute(&mut **tx)
+            .execute(&mut *conn)
             .await?;
-        Channel::set_for_monitor(tx, id, &input.channel_ids).await?;
+        Channel::set_for_monitor(conn, id, &input.channel_ids).await?;
         Ok(id)
     }
 

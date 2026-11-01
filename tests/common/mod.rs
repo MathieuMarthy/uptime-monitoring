@@ -84,6 +84,14 @@ pub async fn test_app() -> (TestApp, SqlitePool) {
     logged_in(AppState::new(pool.clone()), pool).await
 }
 
+/// Like `test_app`, on a database file at this SQLx URL.
+pub async fn test_app_on(database_url: &str) -> (TestApp, SqlitePool) {
+    let pool = uptime_monitoring::db::init_pool(database_url)
+        .await
+        .expect("file pool");
+    logged_in(AppState::new(pool.clone()), pool).await
+}
+
 /// Like `test_app`, with the check engine running: monitor routes really trigger checks.
 pub async fn test_app_with_engine() -> (TestApp, SqlitePool) {
     let pool = pool().await;
