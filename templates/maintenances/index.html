@@ -6,18 +6,18 @@
 
 {% macro rows(list) %}
 <div class="table-scroll">
-    <table class="data-table">
+    <table class="data-table data-table-stack">
         <thead>
         <tr><th>Title</th><th>When</th><th>Monitors</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr>
         </thead>
         <tbody>
         {% for m in list %}
         <tr>
-            <td>{{ m.title }}{% if m.public %} <span class="text-muted">(public)</span>{% endif %}</td>
-            <td>{{ m.schedule }}</td>
-            <td>{{ m.monitors }}</td>
-            <td>{{ m.status }}</td>
-            <td><div class="table-actions">
+            <td class="stack-title">{{ m.title }}{% if m.public %} <span class="text-muted">(public)</span>{% endif %}</td>
+            <td data-label="When">{{ m.schedule }}</td>
+            <td data-label="Monitors">{{ m.monitors }}</td>
+            <td data-label="Status">{{ m.status }}</td>
+            <td class="stack-actions"><div class="table-actions">
                 <a class="button-secondary button-small" href="/maintenances/{{ m.id }}/edit">Edit</a>
             </div></td>
         </tr>

@@ -273,7 +273,7 @@ h1, h2, h3 {
     }
 
     .site-nav a {
-        padding: 7px 2px;
+        padding: 9px 2px;
         text-align: center;
         white-space: nowrap;
     }
@@ -749,6 +749,29 @@ body:has(> .site-footer) > main {
     color: var(--on-ink);
 }
 
+/* Phones: a segmented control fills the width with equal cells; the 1px gaps draw the dividers. */
+@media (max-width: 719.98px) {
+    .segmented {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
+        gap: 1px;
+        width: 100%;
+        background: var(--rule-strong);
+        font-size: 14px;
+    }
+
+    .segmented a {
+        padding: 9px 2px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .segmented a + a {
+        border-left: none;
+    }
+}
+
 /* Search and plain fields */
 .search-bar,
 .field {
@@ -811,6 +834,65 @@ body:has(> .site-footer) > main {
     flex-wrap: wrap;
     gap: 8px;
     justify-content: flex-end;
+}
+
+/* Phones: a stacked table shows each row as a card, one value per line under its column name
+   (`data-label`); the `stack-title` cell heads the card, the `stack-actions` cell ends it. */
+@media (max-width: 719.98px) {
+    .data-table-stack thead {
+        display: none;
+    }
+
+    .data-table-stack,
+    .data-table-stack tbody,
+    .data-table-stack tr {
+        display: block;
+    }
+
+    .data-table-stack tr {
+        padding: 12px 16px;
+    }
+
+    .data-table-stack tr + tr {
+        border-top: 1px solid var(--rule-soft);
+    }
+
+    .data-table.data-table-stack td {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 2px 0;
+        border-top: none;
+        text-align: right;
+        overflow-wrap: anywhere;
+    }
+
+    .data-table-stack td[data-label]::before {
+        content: attr(data-label);
+        flex: none;
+        color: var(--muted);
+        font-size: 13px;
+        text-align: left;
+    }
+
+    .data-table-stack td[data-label]:empty {
+        display: none;
+    }
+
+    .data-table.data-table-stack .stack-title {
+        padding-bottom: 4px;
+        font-weight: 600;
+        text-align: left;
+    }
+
+    .data-table.data-table-stack .stack-actions {
+        display: block;
+        padding-top: 8px;
+    }
+
+    .data-table-stack .table-actions {
+        justify-content: flex-start;
+    }
 }
 
 /* Banners */

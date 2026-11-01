@@ -319,3 +319,33 @@
 .filter-form [data-submit][hidden] {
     display: none;
 }
+
+/* Phones: the range on its own line, the two add buttons side by side under it, then the state
+   chips on one line and the search next to the group. */
+@media (max-width: 719.98px) {
+    .page-head > .toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        width: 100%;
+    }
+
+    .page-head > .toolbar .segmented {
+        grid-column: 1 / -1;
+    }
+
+    .filter-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-auto-flow: column;
+        grid-auto-columns: auto;
+        width: 100%;
+    }
+
+    .filter-form .search-bar {
+        width: 100%;
+    }
+
+    .filter-count {
+        margin-left: 2px;
+    }
+}

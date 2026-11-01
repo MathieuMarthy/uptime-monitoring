@@ -202,18 +202,18 @@
             <p class="empty-state">No check yet.</p>
             {% else %}
             <div class="table-scroll">
-                <table class="data-table">
+                <table class="data-table data-table-stack">
                     <thead>
                     <tr><th>Time</th><th>Result</th><th>HTTP status</th><th class="num">Response</th><th>Error</th></tr>
                     </thead>
                     <tbody>
                     {% for check in checks %}
                     <tr>
-                        <td>{{ check.time }}</td>
-                        {% if check.ok %}<td class="text-green">OK</td>{% else %}<td class="text-red">Failed</td>{% endif %}
-                        <td>{% if let Some(code) = check.status_code %}{{ code }}{% else %}—{% endif %}</td>
-                        <td class="num">{% if let Some(latency) = check.latency_ms %}{{ latency }} ms{% else %}—{% endif %}</td>
-                        <td>{% if let Some(error) = check.error %}{{ error }}{% endif %}</td>
+                        <td class="stack-title">{{ check.time }}</td>
+                        {% if check.ok %}<td data-label="Result" class="text-green">OK</td>{% else %}<td data-label="Result" class="text-red">Failed</td>{% endif %}
+                        <td data-label="HTTP status">{% if let Some(code) = check.status_code %}{{ code }}{% else %}—{% endif %}</td>
+                        <td data-label="Response" class="num">{% if let Some(latency) = check.latency_ms %}{{ latency }} ms{% else %}—{% endif %}</td>
+                        <td data-label="Error">{% if let Some(error) = check.error %}{{ error }}{% endif %}</td>
                     </tr>
                     {% endfor %}
                     </tbody>

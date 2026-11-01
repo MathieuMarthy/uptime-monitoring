@@ -85,6 +85,16 @@ async fn activity_needs_a_session() {
 }
 
 #[tokio::test]
+async fn activity_filters_apply_on_change() {
+    let (app, _, _) = app_with_history().await;
+    let r = get(&app, "/activity").await;
+    assert!(r.body.contains("data-auto-submit"));
+    assert!(r.body.contains("/static/js/auto-submit.js"));
+    let js = get(&app, "/static/js/auto-submit.js").await;
+    assert_eq!(js.status, 200);
+}
+
+#[tokio::test]
 async fn activity_lists_events_latest_first_with_their_details() {
     let (app, _, _) = app_with_history().await;
     let r = get(&app, "/activity").await;

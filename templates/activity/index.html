@@ -9,6 +9,7 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/open-target.js" defer></script>
+<script src="/static/js/auto-submit.js" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -26,7 +27,7 @@
             <a href="{{ kind.url }}" {% if kind.current %}aria-current="true"{% endif %}>{{ kind.label }}</a>
             {% endfor %}
         </nav>
-        <form class="activity-form" action="/activity" method="GET">
+        <form class="activity-form" action="/activity" method="GET" data-auto-submit>
             {% if let Some(kind) = filter.kind.param() %}<input type="hidden" name="type" value="{{ kind }}">{% endif %}
             <label class="visually-hidden" for="activity-monitor">Monitor</label>
             <select class="field" id="activity-monitor" name="monitor">
@@ -41,7 +42,7 @@
                 <option value="{{ days }}" {% if *days == filter.days %}selected{% endif %}>Last {{ days }} days</option>
                 {% endfor %}
             </select>
-            <button class="button-secondary" type="submit">Show</button>
+            <button class="button-secondary" type="submit" data-submit>Show</button>
         </form>
     </div>
 

@@ -23,23 +23,23 @@
         <p class="empty-state">No notification channel yet. Add a webhook, Discord, ntfy or Telegram channel to receive alerts.</p>
         {% else %}
         <div class="table-scroll">
-            <table class="data-table">
+            <table class="data-table data-table-stack">
                 <thead>
                 <tr><th>Name</th><th>Type</th><th>Monitors</th><th>Status</th><th>Last delivery</th><th><span class="visually-hidden">Actions</span></th></tr>
                 </thead>
                 <tbody>
                 {% for channel in channels %}
                 <tr>
-                    <td>{{ channel.name }}</td>
-                    <td>{{ channel.kind }}</td>
-                    <td>{{ channel.monitors }}</td>
-                    {% if channel.enabled %}<td class="text-green">Enabled</td>{% else %}<td class="text-muted">Disabled</td>{% endif %}
+                    <td class="stack-title">{{ channel.name }}</td>
+                    <td data-label="Type">{{ channel.kind }}</td>
+                    <td data-label="Monitors">{{ channel.monitors }}</td>
+                    {% if channel.enabled %}<td data-label="Status" class="text-green">Enabled</td>{% else %}<td data-label="Status" class="text-muted">Disabled</td>{% endif %}
                     {% match channel.last %}
                     {% when Some with ((time, ok)) %}
-                    <td>{{ time }} {% if *ok %}<span class="text-green">Sent</span>{% else %}<span class="text-red">Failed</span>{% endif %}</td>
-                    {% when None %}<td class="text-muted">—</td>
+                    <td data-label="Last delivery">{{ time }} {% if *ok %}<span class="text-green">Sent</span>{% else %}<span class="text-red">Failed</span>{% endif %}</td>
+                    {% when None %}<td data-label="Last delivery" class="text-muted">—</td>
                     {% endmatch %}
-                    <td><div class="table-actions">
+                    <td class="stack-actions"><div class="table-actions">
                         <a class="button-secondary button-small" href="/alerts/{{ channel.id }}/edit">Edit</a>
                     </div></td>
                 </tr>
@@ -58,19 +58,19 @@
         <p class="empty-state">No alert sent yet.</p>
         {% else %}
         <div class="table-scroll">
-            <table class="data-table">
+            <table class="data-table data-table-stack">
                 <thead>
                 <tr><th>Time</th><th>Channel</th><th>Monitor</th><th>Event</th><th>Result</th><th>Error</th></tr>
                 </thead>
                 <tbody>
                 {% for delivery in deliveries %}
                 <tr>
-                    <td>{{ delivery.time }}</td>
-                    <td>{{ delivery.channel }}</td>
-                    <td>{{ delivery.monitor }}</td>
-                    <td>{{ delivery.event }}</td>
-                    {% if delivery.ok %}<td class="text-green">Sent</td>{% else %}<td class="text-red">Failed</td>{% endif %}
-                    <td>{{ delivery.error }}</td>
+                    <td class="stack-title">{{ delivery.time }}</td>
+                    <td data-label="Channel">{{ delivery.channel }}</td>
+                    <td data-label="Monitor">{{ delivery.monitor }}</td>
+                    <td data-label="Event">{{ delivery.event }}</td>
+                    {% if delivery.ok %}<td data-label="Result" class="text-green">Sent</td>{% else %}<td data-label="Result" class="text-red">Failed</td>{% endif %}
+                    <td data-label="Error">{{ delivery.error }}</td>
                 </tr>
                 {% endfor %}
                 </tbody>

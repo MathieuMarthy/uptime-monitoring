@@ -57,6 +57,11 @@ async fn alerts_page_lists_channels() {
     let r = get(&app, "/alerts").await;
     assert!(r.body.contains("Ops hook"));
     assert!(r.body.contains("webhook"));
+    // Phones stack each row as a card: every value carries its column name.
+    assert!(r.body.contains(r#"class="data-table data-table-stack""#));
+    assert!(r.body.contains(r#"<td data-label="Type">webhook</td>"#));
+    // The section tabs use a short label where the full one does not fit.
+    assert!(r.body.contains(r#"<span class="nav-short" aria-hidden="true">Pages</span>"#));
 }
 
 #[tokio::test]

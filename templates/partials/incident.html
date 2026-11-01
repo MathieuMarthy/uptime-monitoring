@@ -28,15 +28,15 @@
         <div class="event-part">
             <h3>Failed checks</h3>
             <div class="table-scroll event-table">
-                <table class="data-table">
+                <table class="data-table data-table-stack">
                     <thead><tr><th>Time</th><th>HTTP status</th><th class="num">Response</th><th>Error</th></tr></thead>
                     <tbody>
                     {% for failure in incident.failures %}
                     <tr>
-                        <td>{{ failure.time }}</td>
-                        <td>{% if let Some(code) = failure.status_code %}{{ code }}{% else %}—{% endif %}</td>
-                        <td class="num">{% if let Some(ms) = failure.latency_ms %}{{ ms }} ms{% else %}—{% endif %}</td>
-                        <td class="text-red">{{ failure.error }}</td>
+                        <td class="stack-title">{{ failure.time }}</td>
+                        <td data-label="HTTP status">{% if let Some(code) = failure.status_code %}{{ code }}{% else %}—{% endif %}</td>
+                        <td data-label="Response" class="num">{% if let Some(ms) = failure.latency_ms %}{{ ms }} ms{% else %}—{% endif %}</td>
+                        <td data-label="Error" class="text-red">{{ failure.error }}</td>
                     </tr>
                     {% endfor %}
                     </tbody>
