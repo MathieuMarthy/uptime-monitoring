@@ -95,7 +95,10 @@ impl ChannelForm {
             ChannelConfig::Telegram(c) => form.telegram_chat_id = c.chat_id.clone(),
             ChannelConfig::Email(c) => {
                 form.email_host = c.host.clone();
-                form.email_port = c.port.to_string();
+                // Blank keeps following the security when it changes.
+                if c.port != c.security.default_port() {
+                    form.email_port = c.port.to_string();
+                }
                 form.email_security = c.security.as_str().to_string();
                 form.email_username = c.username.clone().unwrap_or_default();
                 form.email_from = c.from.clone();
@@ -276,13 +279,14 @@ impl ChannelForm {
         existing: Option<&ChannelConfig>,
         errors: &mut FieldErrors,
     ) -> Option<EmailConfig> {
-        let host = self.email_host.trim().trim_end_matches('.');
-        if !is_host(host) {
+        let host = ascii_host(self.email_host.trim().trim_end_matches('.'));
+        if host.is_none() {
             errors.insert(
                 "email_host",
                 "SMTP server is a host name or an IP address, e.g. smtp.example.com.".to_string(),
             );
         }
+        let host = host.unwrap_or_default();
 
         let security = match self.email_security.as_str() {
             "starttls" => SmtpSecurity::Starttls,
@@ -381,15 +385,16 @@ impl ChannelForm {
     }
 }
 
-/// A host name or an IP address, without scheme or port.
-fn is_host(host: &str) -> bool {
-    if host.parse::<std::net::IpAddr>().is_ok() {
-        return true;
+/// A host name (lowercase, international names in punycode) or an IP address, without scheme
+/// or port; `None` if it is neither.
+fn ascii_host(host: &str) -> Option<String> {
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return Some(ip.to_string());
     }
-    !host.is_empty()
-        && host.len() <= 253
-        && !host.contains(['/', ':', '@'])
-        && url::Host::parse(host).is_ok()
+    if host.is_empty() || host.len() > 253 || host.contains(['/', ':', '@']) {
+        return None;
+    }
+    url::Host::parse(host).ok().map(|h| h.to_string())
 }
 
 /// `address` or `Name <address>`, on one line.
@@ -757,6 +762,20 @@ mod tests {
         assert_eq!(f.email_password, "");
         assert_eq!(f.email_username, "up");
         assert_eq!(f.email_to, "ops@example.com, Dev <dev@example.com>");
-        assert_eq!(f.email_port, "587");
+        assert_eq!(f.email_port, "", "the default port stays implicit");
+        let mut custom = email_config(None, None);
+        custom.port = 2525;
+        let f = ChannelForm::from_config("Ops", &ChannelConfig::Email(custom), true, true);
+        assert_eq!(f.email_port, "2525");
+    }
+
+    #[test]
+    fn email_host_is_stored_in_ascii() {
+        let mut f = email_form();
+        f.email_host = "Relais.Exémple.fr".to_string();
+        let ChannelConfig::Email(c) = f.validate(None).unwrap().config else {
+            panic!()
+        };
+        assert_eq!(c.host, "relais.xn--exmple-cva.fr");
     }
 }

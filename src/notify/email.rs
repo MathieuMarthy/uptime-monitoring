@@ -64,13 +64,13 @@ pub(crate) async fn send(
         message,
         retry: false,
     })?;
-    let addr = guard
+    let addrs = guard
         .resolve_host(&config.host)
         .await
         .map_err(|e| SendError {
             retry: matches!(e, GuardError::Dns(_)),
             message: e.to_string(),
-        })?[0];
+        })?;
     let tls = match config.security {
         SmtpSecurity::None => Tls::None,
         security => {
@@ -85,26 +85,44 @@ pub(crate) async fn send(
             }
         }
     };
-    let mut transport =
-        AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(addr.ip().to_string())
-            .port(config.port)
-            .tls(tls)
-            .timeout(Some(SEND_TIMEOUT));
-    if let (Some(username), Some(password)) = (&config.username, &config.password) {
-        transport = transport.credentials(Credentials::new(username.clone(), password.clone()));
-    }
-    let transport = transport.build();
-    match tokio::time::timeout(MAIL_TIMEOUT, transport.send(mail)).await {
-        Ok(Ok(_)) => Ok(()),
+    // Like a resolver's own loop: the next address only when this one never answered.
+    let attempts = async {
+        let mut last = None;
+        for addr in &addrs {
+            let mut transport =
+                AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(addr.ip().to_string())
+                    .port(config.port)
+                    .tls(tls.clone())
+                    .timeout(Some(SEND_TIMEOUT));
+            if let (Some(username), Some(password)) = (&config.username, &config.password) {
+                transport =
+                    transport.credentials(Credentials::new(username.clone(), password.clone()));
+            }
+            match transport.build().send(mail.clone()).await {
+                Ok(_) => return Ok(()),
+                Err(e) if never_answered(&e) => last = Some(e),
+                Err(e) => return Err(e),
+            }
+        }
+        Err(last.expect("the guard returns at least one address"))
+    };
+    match tokio::time::timeout(MAIL_TIMEOUT, attempts).await {
+        Ok(Ok(())) => Ok(()),
         Ok(Err(e)) => Err(SendError {
             message: truncate(&error_chain(&e), ERROR_MAX_CHARS),
-            retry: !e.is_permanent(),
+            // A refusal (5xx), a certificate or a missing STARTTLS or AUTH will not change.
+            retry: !(e.is_permanent() || e.is_tls() || e.is_client()),
         }),
         Err(_) => Err(SendError {
             message: "timed out".to_string(),
             retry: true,
         }),
     }
+}
+
+/// The server never answered: refused, unreachable or silent.
+fn never_answered(e: &lettre::transport::smtp::Error) -> bool {
+    !(e.is_response() || e.is_tls() || e.is_client())
 }
 
 #[cfg(test)]

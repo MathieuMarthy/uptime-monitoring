@@ -124,6 +124,9 @@ fn channel(notification: &Value, name: &str) -> Result<ChannelExport, String> {
             }),
         ),
         "smtp" => {
+            if flag(&config, "smtpIgnoreTLSError") == Some(true) {
+                return Err("SMTP without certificate checks is not supported.".into());
+            }
             // Blind copies would become visible: only To and Cc are kept.
             let to: Vec<String> = ["smtpTo", "smtpCC"]
                 .iter()
@@ -240,4 +243,23 @@ fn monitor(
         .unwrap_or(false)
         .then_some(TLS_WARN_DAYS);
     Ok(Some(monitor))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn smtp(extra: &str) -> Value {
+        let config = format!(
+            r#"{{"type":"smtp","smtpHost":"mail.example.com","smtpFrom":"up@example.com","smtpTo":"ops@example.com"{extra}}}"#
+        );
+        json!({"name": "Mail", "config": config})
+    }
+
+    #[test]
+    fn smtp_without_tls_checks_is_skipped() {
+        assert!(channel(&smtp(""), "Mail").is_ok());
+        let error = channel(&smtp(r#","smtpIgnoreTLSError":true"#), "Mail").unwrap_err();
+        assert!(error.contains("certificate"), "{error}");
+    }
 }

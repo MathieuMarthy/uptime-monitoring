@@ -296,11 +296,14 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `click` and the last line of the Telegram text (`link` is `null` without it).
 - **E-mail** (`notify/email.rs`, `lettre`, rustls with ring, no connection pool). Through the user's SMTP relay
   only, never straight to MX servers (port 25 is often blocked, and unsigned mail lands in spam). The relay's name
-  goes through `Guard::resolve_host` and the connection goes to the first address allowed, while TLS checks the
-  certificate against the name. Security: `starttls` (required, 587), `tls` (465) or `none` (25, refused by the form
+  (stored lowercase, international names in punycode) goes through `Guard::resolve_host`; each allowed address is
+  tried in turn until one answers, while TLS checks the certificate against the name. EHLO sends lettre's default,
+  the `[127.0.0.1]` address literal. Security: `starttls` (required, 587), `tls` (465) or `none` (25, refused by the form
   with credentials). Plain-text UTF-8 mail: subject = title (control characters as spaces), body = text then link,
   one mail to every recipient (To, up to 10), `Message-ID` on the sender's domain. Each command times out after
-  10 s, the whole delivery after 30 s; SMTP 5xx is permanent (not retried), 4xx, connection and DNS errors are.
+  10 s, the whole delivery after 30 s; SMTP 5xx, TLS errors (certificate, no STARTTLS) and client errors (no
+  AUTH mechanism) are not retried; 4xx, connection, timeout and DNS errors are. The form leaves the port blank when
+  it is the security's default, so changing the security changes the port.
 - **UI.** `/alerts` lists channels (monitor count, last delivery) and the last 50 deliveries. The channel form's
   *Send Test* button (`…/new/test`, `…/{id}/edit/test`) sends the channel as typed, once, without saving or logging
   it, and shows the form again with the result; *Group simultaneous alerts* (`group_alerts`, on by default) is
@@ -485,7 +488,8 @@ exports, copies and imports (below).
   interval capped by the interval, timeout (default 80 % of the interval) capped by 120 s and the interval,
   `maxredirects = 0` → no redirects, `expiryNotification` → 14-day certificate warning, `active = 0` → paused.
   Notifications: webhook, Discord, ntfy (token or none; user/password skipped), Telegram, SMTP (`smtpSecure` → `tls`,
-  else `starttls`; To and Cc kept, Bcc dropped since it would become visible); others skipped. Twin
+  else `starttls`, which is then required; To and Cc kept, Bcc dropped since it would become visible;
+  `smtpIgnoreTLSError` skipped); others skipped. Twin
   names get ` (2)`, ` (3)`…, so their monitors stay linked to the right one.
 
 ## Deployment

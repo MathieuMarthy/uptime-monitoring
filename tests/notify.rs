@@ -791,3 +791,14 @@ async fn email_respects_the_guard() {
     Notifier::default().send_test(&config).await.unwrap();
     assert!(next_mail(&mut rx).await.data.contains("Subject: "));
 }
+
+#[tokio::test]
+async fn email_tries_every_address_of_the_relay() {
+    // `localhost` usually resolves to ::1 first; the server only listens on 127.0.0.1.
+    let (port, mut rx, _) = smtp_server(vec![]).await;
+    let mut config = email_config(port);
+    config["host"] = serde_json::json!("localhost");
+    let config = ChannelConfig::parse("email", &config.to_string()).unwrap();
+    Notifier::default().send_test(&config).await.unwrap();
+    next_mail(&mut rx).await;
+}
