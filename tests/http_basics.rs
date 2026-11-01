@@ -49,3 +49,24 @@ async fn memory_pool_keeps_schema_across_requests() {
         .expect("schema still present");
     assert!(count >= 1);
 }
+
+#[tokio::test]
+async fn admin_footer_links_the_repo_and_bug_reports() {
+    let (app, _) = common::test_app().await;
+    let r = common::get(&app, "/").await;
+    assert_eq!(r.status, 200);
+    let repo = "https://github.com/MathieuMarthy/uptime-monitoring";
+    assert!(r.body.contains(&format!(r#"href="{repo}""#)), "{}", r.body);
+    assert!(r.body.contains(&format!(
+        "{repo}/issues/new?labels=bug&amp;body=Version%3A%20{}",
+        env!("CARGO_PKG_VERSION")
+    )));
+    assert!(r.body.contains(&format!("v{}", env!("CARGO_PKG_VERSION"))));
+}
+
+#[tokio::test]
+async fn login_page_has_no_admin_footer() {
+    let (app, _) = common::app_with_admin().await;
+    let r = common::get(&app, "/login").await;
+    assert!(!r.body.contains("issues/new"));
+}

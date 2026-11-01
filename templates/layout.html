@@ -41,4 +41,11 @@
 <main>
     {% block content %}{% endblock %}
 </main>
+
+<footer class="site-footer">
+    <span>Uptime Monitoring v{{ crate::VERSION }}</span>
+    <a href="{{ crate::REPO_URL }}" rel="noopener" target="_blank">GitHub</a>
+    <a href="{{ crate::REPO_URL }}/issues/new?labels=bug&amp;body=Version%3A%20{{ crate::VERSION }}" rel="noopener"
+       target="_blank">Report a bug</a>
+</footer>
 {% endblock %}

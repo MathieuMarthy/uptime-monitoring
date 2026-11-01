@@ -325,6 +325,7 @@ async fn dashboard_shows_uptime_and_hourly_heartbeat() {
 
     let body = get(&app, "/").await.body;
     let (api, idle) = body.split_once("Idle").unwrap();
+    let idle = idle.split_once("<footer").unwrap().0;
     assert!(api.contains("75.00%"), "{api}");
     assert_eq!(api.matches("tick tick-down").count(), 1);
     assert_eq!(api.matches("tick tick-none").count(), 23);

@@ -28,6 +28,12 @@ use crate::state::AppState;
 /// Largest legitimate form: a 64 KiB request body plus the other fields.
 pub const MAX_BODY_BYTES: usize = 128 * 1024;
 
+/// Version shown in the admin footer and sent with bug reports.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Source repository, linked from the admin footer.
+pub const REPO_URL: &str = "https://github.com/MathieuMarthy/uptime-monitoring";
+
 pub fn app(state: AppState) -> Router {
     routes::all(&state)
         .merge(assets::router())

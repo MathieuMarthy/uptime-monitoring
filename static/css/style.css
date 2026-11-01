@@ -315,6 +315,37 @@ main {
     width: 100%;
 }
 
+/* Admin pages: the footer sits at the bottom of the screen at least. */
+body:has(> .site-footer) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+}
+
+body:has(> .site-footer) > main {
+    flex: 1;
+}
+
+.site-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 24px;
+    padding: 16px max(16px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px))
+        max(16px, env(safe-area-inset-left, 0px));
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.site-footer a {
+    color: var(--muted);
+}
+
+.site-footer a:hover {
+    color: var(--ink);
+}
+
 .page {
     max-width: 1200px;
     margin: 0 auto;
