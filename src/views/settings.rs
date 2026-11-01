@@ -1,6 +1,7 @@
 use crate::forms::monitor::FieldErrors;
 use crate::forms::settings::{DataForm, timezones};
 use crate::models::{Settings, StorageUse};
+use crate::transfer::import::Report;
 use askama::Template;
 use askama_web::WebTemplate;
 
@@ -21,6 +22,16 @@ pub struct SettingsTemplate {
     pub saved: Option<&'static str>,
     pub storage: StorageUse,
     pub totp_enabled: bool,
+    /// The import text sent back with its error.
+    pub document: String,
+}
+
+/// What an import added and skipped.
+#[derive(Template, WebTemplate)]
+#[template(path = "settings/import.html")]
+pub struct ImportTemplate {
+    pub csrf_token: String,
+    pub report: Report,
 }
 
 /// Turning two-factor authentication on: a new secret, as text and QR code, and its first code.
@@ -52,6 +63,7 @@ impl SettingsTemplate {
             saved: None,
             storage,
             totp_enabled: false,
+            document: String::new(),
         }
     }
 

@@ -8,6 +8,7 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/settings.js" defer></script>
+<script src="/static/js/import.js" defer></script>
 {% endblock %}
 
 {% macro field_error(field) %}
@@ -178,6 +179,25 @@
                 <a class="button-secondary" href="/settings/backup" download>Download database</a>
             </div>
         </div>
+        <form action="/settings/import" method="POST" class="form-section" id="import-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <h2 class="section-title">Import</h2>
+            <div class="form-group">
+                <label class="form-label" for="import-file">Configuration file</label>
+                <input class="form-input" id="import-file" type="file" accept=".json,application/json">
+                <label class="form-label" for="document">Or paste its content</label>
+                <textarea class="form-textarea" id="document" name="document" required
+                          placeholder='{"format": "uptime-monitoring", …}'>{{ document }}</textarea>
+                <span class="form-hint">An export of this application, or an Uptime Kuma backup (Settings › Backup
+                    › Export): its HTTP, keyword and push monitors and its webhook, Discord, ntfy and Telegram
+                    notifications. Only adds: a monitor, channel, page or window whose name is taken is skipped.
+                    Imported monitors start at once, unless they were paused.</span>
+                {% call field_error("document") %}{% endcall %}
+            </div>
+            <div class="form-actions-left">
+                <button class="button-primary" type="submit">Import</button>
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}

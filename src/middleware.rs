@@ -1,10 +1,10 @@
 //! Request guards shared by every route: session and CSRF checks, security headers.
 
-use crate::MAX_BODY_BYTES;
 use crate::auth::{SESSION_COOKIE, cookie, secrets_match};
 use crate::error::AppError;
 use crate::models::Session;
 use crate::state::AppState;
+use crate::{IMPORT_MAX_BODY_BYTES, IMPORT_PATH, MAX_BODY_BYTES};
 use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::{HeaderValue, Method, StatusCode, header};
@@ -57,8 +57,13 @@ async fn check_csrf(request: Request, expected: &str) -> Result<Request, AppErro
     if !is_form {
         return Err(AppError::InvalidRequest(StatusCode::UNSUPPORTED_MEDIA_TYPE));
     }
+    let limit = if request.uri().path() == IMPORT_PATH {
+        IMPORT_MAX_BODY_BYTES
+    } else {
+        MAX_BODY_BYTES
+    };
     let (parts, body) = request.into_parts();
-    let bytes = axum::body::to_bytes(body, MAX_BODY_BYTES)
+    let bytes = axum::body::to_bytes(body, limit)
         .await
         .map_err(|_| AppError::InvalidRequest(StatusCode::PAYLOAD_TOO_LARGE))?;
     let valid = form_urlencoded::parse(&bytes)

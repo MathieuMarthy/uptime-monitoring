@@ -10,9 +10,11 @@ use crate::routes::auth::{ClientIp, INVALID_CODE, totp_code_ok, with_password_ha
 use crate::routes::form_or_invalid;
 use crate::state::AppState;
 use crate::time::now_ms;
-use crate::transfer::Export;
-use crate::views::settings::{SettingsTemplate, TotpSetupTemplate};
+use crate::transfer::{Export, import};
+use crate::views::settings::{ImportTemplate, SettingsTemplate, TotpSetupTemplate};
+use crate::{IMPORT_MAX_BODY_BYTES, IMPORT_PATH};
 use axum::body::Body;
+use axum::extract::DefaultBodyLimit;
 use axum::extract::rejection::{FormRejection, QueryRejection};
 use axum::extract::{Query, State};
 use axum::http::{StatusCode, header};
@@ -33,6 +35,44 @@ pub fn router() -> Router<AppState> {
         .route("/settings/totp/disable", post(disable_totp))
         .route("/settings/export", get(export))
         .route("/settings/backup", get(backup))
+        .route(
+            IMPORT_PATH,
+            post(import).layer(DefaultBodyLimit::max(IMPORT_MAX_BODY_BYTES)),
+        )
+}
+
+#[derive(Deserialize)]
+struct ImportForm {
+    #[serde(default)]
+    document: String,
+}
+
+/// Adds the monitors, channels, pages and windows of an export or an Uptime Kuma backup.
+async fn import(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+    form: Result<Form<ImportForm>, FormRejection>,
+) -> Result<Response, AppError> {
+    let form = form_or_invalid(form)?;
+    let (export, mut report) = match import::parse(&form.document) {
+        Ok(parsed) => parsed,
+        Err(message) => {
+            let mut page = page(&state, session.csrf_token).await?;
+            page.errors.insert("document", message);
+            page.document = form.document;
+            return Ok(page.into_response());
+        }
+    };
+    let tz = Settings::load(&state.db).await?.tz();
+    import::apply(&state.db, &tz, &export, &mut report).await?;
+    state.engine.reload_staggered(&report.monitor_ids);
+    state.maintenances.reload(&state.db).await?;
+    state.public_pages.clear();
+    Ok(ImportTemplate {
+        csrf_token: session.csrf_token,
+        report,
+    }
+    .into_response())
 }
 
 /// A copy of the whole database, streamed from disk.

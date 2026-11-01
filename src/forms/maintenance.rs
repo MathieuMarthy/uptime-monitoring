@@ -246,7 +246,7 @@ fn parse_local(tz: &TimeZone, value: &str) -> Option<i64> {
     )
 }
 
-fn format_local(tz: &TimeZone, ms: i64) -> String {
+pub fn format_local(tz: &TimeZone, ms: i64) -> String {
     Timestamp::from_millisecond(ms)
         .map(|t| {
             Zoned::new(t, tz.clone())

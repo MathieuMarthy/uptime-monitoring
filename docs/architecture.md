@@ -42,7 +42,11 @@ uptime-monitoring/
 │   ├── maintenance.rs            # Hourly upkeep: daily rollups, then purges
 │   ├── page_cache.rs             # Rendered public pages, kept 60 s
 │   ├── assets.rs                 # /static/* served from embedded files
-│   ├── db.rs                     # SQLite pool (WAL, foreign keys) + migrations
+│   ├── db.rs                     # SQLite pool (WAL, foreign keys) + migrations; backup() (VACUUM INTO)
+│   ├── transfer/                 # Configuration export and import
+│   │   ├── mod.rs                # Export: the JSON document, entities linked by name; Export::load
+│   │   ├── import.rs             # parse() (detects the format), apply(): adds through the admin forms
+│   │   └── kuma.rs               # Uptime Kuma 1.x backup → Export
 │   ├── state.rs                  # AppState: pool, setup token, login limiter, hashing semaphore, engine handle,
 │   │                             # guard, notifier, public page cache, PUBLIC_URL, form-test semaphore,
 │   │                             # maintenance windows
@@ -431,7 +435,8 @@ alerts follow the checks retention: older incidents only show their facts.
 ## Settings
 
 `/settings` holds four forms, each posted and validated on its own (`/settings/general`, `/settings/data`,
-`/settings/password`, `/settings/totp/disable`); success redirects to `/settings?saved=…`.
+`/settings/password`, `/settings/totp/disable`); success redirects to `/settings?saved=…`. A Backup section
+exports, copies and imports (below).
 
 - **General.** The timezone, chosen among the names of the embedded tz database.
 - **Data and security.** Raw checks retention (2–365 days) and history retention (blank = forever, otherwise at least
@@ -447,6 +452,30 @@ alerts follow the checks retention: older incidents only show their facts.
   as one SVG path from the `qrcode` crate) in a hidden field. The secret is stored only when a code of it is posted
   back with the current password; every other session then ends, in the same transaction. On: turning it off takes
   the current password and a code. Both count toward the login limit like a password change.
+
+### Backup and import
+
+- **Export** (`GET /settings/export`). A JSON file (`format: "uptime-monitoring"`, `version: 1`) of the channels,
+  monitors, public pages and maintenance windows, as stored, secrets included (push tokens, channel tokens). Links go
+  by name: a monitor lists its channels' names, a page and a window their monitors' names. No account, settings or
+  history.
+- **Database copy** (`GET /settings/backup`). `VACUUM INTO` a file next to the database (in the temporary directory
+  for an in-memory one, where it lands in memory instead: tests use a file), opened then unlinked at once, and
+  streamed in 64 KiB chunks. One copy at a time.
+- **Import** (`POST /settings/import`, field `document`; `static/js/import.js` loads a chosen file into it). The only
+  form allowed above `MAX_BODY_BYTES`: up to 8 MiB, also in the CSRF check. The format is detected: an export, or an
+  Uptime Kuma 1.x backup (`monitorList`), converted to an export first. Import only adds, in one transaction: an
+  entry whose name (channel: ASCII case-insensitive, like `COLLATE NOCASE`; monitor: name key; page: slug;
+  window: title key) is taken is skipped, and every entry goes through its admin form's validation, so an invalid
+  one is skipped with the form's messages. Links resolve against existing and imported entries. A push token is
+  kept unless malformed or taken; otherwise the monitor gets a new URL and the result page says so. One-off
+  windows keep their exact times (the form only checks them, in minutes). Then the engine starts the new monitors
+  (staggered), windows reload and the public page cache is cleared.
+- **Kuma mapping.** `http` and `keyword` monitors (not inverted) → HTTP, `push` → push with a new token, `group`
+  → the group name of its children, other types skipped. `maxretries + 1` → failure threshold (1–10), retry
+  interval capped by the interval, timeout (default 80 % of the interval) capped by 120 s and the interval,
+  `maxredirects = 0` → no redirects, `expiryNotification` → 14-day certificate warning, `active = 0` → paused.
+  Notifications: webhook, Discord, ntfy (token or none; user/password skipped), Telegram; others skipped.
 
 ## Deployment
 

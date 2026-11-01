@@ -29,6 +29,10 @@ use crate::state::AppState;
 /// Largest legitimate form: a 64 KiB request body plus the other fields.
 pub const MAX_BODY_BYTES: usize = 128 * 1024;
 
+/// The import form takes a whole configuration file, URL-encoded.
+pub const IMPORT_PATH: &str = "/settings/import";
+pub const IMPORT_MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+
 /// Version shown in the admin footer and sent with bug reports.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

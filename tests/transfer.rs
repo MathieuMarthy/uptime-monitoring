@@ -14,9 +14,10 @@ async fn seed(pool: &SqlitePool) {
                                created_at, updated_at)
          VALUES ('API', 'api', 'Web', 'https://api.example.com/health', 'POST', '{\"X-Key\":\"1\"}',
                  '200-299,301', 120, 30, 15, 2, 800, 0, 0)",
-        "INSERT INTO monitors (name, name_key, kind, url, push_token, grace_s, paused, created_at, updated_at)
+        "INSERT INTO monitors (name, name_key, kind, url, push_token, grace_s, paused, retry_interval_s,
+                               tls_expiry_warn_days, created_at, updated_at)
          VALUES ('Backup job', 'backup job', 'push', '',
-                 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 300, 1, 0, 0)",
+                 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 300, 1, 60, NULL, 0, 0)",
         "INSERT INTO monitor_state (monitor_id) VALUES (1), (2)",
         "INSERT INTO monitor_channels (monitor_id, channel_id) VALUES (2, 1)",
         "INSERT INTO status_pages (slug, title, description, published, created_at, updated_at)
@@ -110,7 +111,6 @@ async fn settings_page_links_to_export_and_backup() {
     let r = get(&app, "/settings").await;
     assert!(r.body.contains(r#"href="/settings/export""#));
     assert!(r.body.contains(r#"href="/settings/backup""#));
-    let _ = post_form;
 }
 
 #[tokio::test]
@@ -144,4 +144,227 @@ async fn backup_streams_a_copy_and_leaves_no_file_behind() {
     assert_eq!(left, Vec::<String>::new());
     pool.close().await;
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+async fn import(app: &common::TestApp, document: &str) -> common::TestResponse {
+    let body = format!(
+        "document={}",
+        form_urlencoded::byte_serialize(document.as_bytes()).collect::<String>()
+    );
+    post_form(app, "/settings/import", &body).await
+}
+
+/// The export without what differs between two instances.
+fn comparable(mut doc: Value) -> Value {
+    doc["exported_at"] = Value::Null;
+    doc
+}
+
+#[tokio::test]
+async fn import_of_an_export_rebuilds_the_configuration() {
+    let (source, pool) = common::test_app().await;
+    seed(&pool).await;
+    let exported = export(&source).await;
+
+    let (target, _) = common::test_app().await;
+    let r = import(&target, &exported.to_string()).await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(r.body.contains("5 added"), "{}", r.body);
+    assert_eq!(comparable(export(&target).await), comparable(exported));
+}
+
+#[tokio::test]
+async fn import_only_adds_and_skips_what_exists() {
+    let (app, pool) = common::test_app().await;
+    seed(&pool).await;
+    let before = export(&app).await;
+    let mut doc = before.clone();
+    doc["monitors"][0]["url"] = json!("https://changed.example.com");
+    doc["monitors"][1]["name"] = json!("NEW job");
+    doc["monitors"][1]["push_token"] = json!("a".repeat(64));
+
+    let r = import(&app, &doc.to_string()).await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(r.body.contains("1 added"), "{}", r.body);
+    assert!(r.body.contains("API"), "{}", r.body);
+    assert!(r.body.contains("already exists"), "{}", r.body);
+
+    let after = export(&app).await;
+    let monitors = after["monitors"].as_array().unwrap();
+    assert_eq!(monitors.len(), 3);
+    assert_eq!(monitors[0]["url"], "https://api.example.com/health");
+    let new_job = &monitors[2];
+    assert_eq!(new_job["name"], "NEW job");
+    assert_eq!(new_job["channels"], json!(["Ops"]));
+    // The token belongs to the existing monitor: the new one gets its own.
+    assert_ne!(new_job["push_token"], json!("a".repeat(64)));
+    assert_eq!(after["channels"], before["channels"]);
+    assert_eq!(after["status_pages"], before["status_pages"]);
+}
+
+#[tokio::test]
+async fn import_skips_invalid_entries_with_their_reason() {
+    let (app, pool) = common::test_app().await;
+    let doc = json!({
+        "format": "uptime-monitoring", "version": 1,
+        "monitors": [
+            {"name": "Good", "url": "https://good.example.com"},
+            {"name": "Bad", "url": "not a url"},
+            {"name": "Slow", "url": "https://slow.example.com", "interval_s": 1}
+        ]
+    });
+    let r = import(&app, &doc.to_string()).await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(r.body.contains("1 added"), "{}", r.body);
+    assert!(r.body.contains("Bad"), "{}", r.body);
+    assert!(r.body.contains("Slow"), "{}", r.body);
+    let names: Vec<String> = sqlx::query_scalar("SELECT name FROM monitors")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(names, ["Good"]);
+}
+
+#[tokio::test]
+async fn import_rejects_an_unknown_document() {
+    let (app, pool) = common::test_app().await;
+    for document in [
+        "not json",
+        "{\"hello\": 1}",
+        "{\"format\":\"uptime-monitoring\",\"version\":99}",
+    ] {
+        let r = import(&app, document).await;
+        assert_eq!(r.status, 200, "{}", r.body);
+        assert!(r.body.contains("field-error"), "{document}: {}", r.body);
+    }
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM monitors")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn import_accepts_documents_larger_than_a_form() {
+    let (app, pool) = common::test_app().await;
+    let monitors: Vec<Value> = (0..400)
+        .map(|i| {
+            json!({"name": format!("Site {i}"), "url": format!("https://site{i}.example.com/"),
+                   "body": "x".repeat(500), "method": "POST"})
+        })
+        .collect();
+    let doc = json!({"format": "uptime-monitoring", "version": 1, "monitors": monitors});
+    let r = import(&app, &doc.to_string()).await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM monitors")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 400);
+}
+
+const KUMA_BACKUP: &str = r#"{
+  "version": "1.23.11",
+  "notificationList": [
+    {"id": 1, "name": "Discord ops", "active": 1, "isDefault": 0,
+     "config": "{\"name\":\"Discord ops\",\"type\":\"discord\",\"discordWebhookUrl\":\"https://discord.com/api/webhooks/1/abc\"}"},
+    {"id": 2, "name": "Phone", "active": 1, "isDefault": 0,
+     "config": "{\"type\":\"ntfy\",\"ntfyserverurl\":\"https://ntfy.example.com\",\"ntfytopic\":\"alerts\",\"ntfyAuthenticationMethod\":\"accessToken\",\"ntfyaccesstoken\":\"tk_abc\"}"},
+    {"id": 3, "name": "Bot", "active": 0, "isDefault": 0,
+     "config": "{\"type\":\"telegram\",\"telegramBotToken\":\"123:ABC\",\"telegramChatID\":\"-100\"}"},
+    {"id": 4, "name": "Mail", "active": 1, "isDefault": 0,
+     "config": "{\"type\":\"smtp\",\"smtpHost\":\"mail.example.com\"}"}
+  ],
+  "monitorList": [
+    {"id": 10, "name": "Production", "type": "group", "parent": null, "active": 1,
+     "notificationIDList": {}},
+    {"id": 11, "name": "Website", "type": "http", "url": "https://www.example.com", "method": "GET",
+     "interval": 60, "retryInterval": 30, "maxretries": 2, "timeout": 48, "active": 1,
+     "ignoreTls": 0, "maxredirects": 10, "accepted_statuscodes": ["200-299", "301"],
+     "expiryNotification": 1, "parent": 10, "headers": "{\"X-Test\": \"1\"}", "body": null,
+     "notificationIDList": {"1": true, "4": true}},
+    {"id": 12, "name": "Search", "type": "keyword", "url": "https://search.example.com",
+     "method": "POST", "body": "{}", "keyword": "results", "invertKeyword": false,
+     "interval": 300, "retryInterval": 600, "maxretries": 0, "timeout": 24, "active": 0,
+     "ignoreTls": 1, "maxredirects": 0, "accepted_statuscodes": ["200-299"],
+     "expiryNotification": 0, "parent": null, "notificationIDList": {"2": true, "3": true}},
+    {"id": 13, "name": "Cron", "type": "push", "pushToken": "kuma123", "interval": 3600,
+     "retryInterval": 3600, "maxretries": 0, "active": 1, "parent": null,
+     "notificationIDList": {}},
+    {"id": 14, "name": "Router", "type": "ping", "hostname": "10.0.0.1", "interval": 60,
+     "active": 1, "parent": null, "notificationIDList": {}},
+    {"id": 15, "name": "Not here", "type": "keyword", "url": "https://x.example.com",
+     "keyword": "error", "invertKeyword": true, "interval": 60, "active": 1, "parent": null,
+     "notificationIDList": {}}
+  ]
+}"#;
+
+#[tokio::test]
+async fn import_of_an_uptime_kuma_backup() {
+    let (app, _) = common::test_app().await;
+    let r = import(&app, KUMA_BACKUP).await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(r.body.contains("6 added"), "{}", r.body);
+    for skipped in ["Mail", "Router", "Not here"] {
+        assert!(r.body.contains(skipped), "{skipped}: {}", r.body);
+    }
+
+    let doc = export(&app).await;
+    assert_eq!(
+        doc["channels"],
+        json!([
+            {"name": "Bot", "kind": "telegram", "enabled": false, "group_alerts": true,
+             "config": {"token": "123:ABC", "chat_id": "-100"}},
+            {"name": "Discord ops", "kind": "discord", "enabled": true, "group_alerts": true,
+             "config": {"url": "https://discord.com/api/webhooks/1/abc"}},
+            {"name": "Phone", "kind": "ntfy", "enabled": true, "group_alerts": true,
+             "config": {"server": "https://ntfy.example.com", "topic": "alerts", "token": "tk_abc"}}
+        ])
+    );
+    let monitors = doc["monitors"].as_array().unwrap();
+    let names: Vec<&str> = monitors
+        .iter()
+        .map(|m| m["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Cron", "Search", "Website"]);
+
+    let cron = &monitors[0];
+    assert_eq!(cron["kind"], "push");
+    assert_eq!(cron["interval_s"], 3600);
+    assert_eq!(cron["failure_threshold"], 1);
+    assert_eq!(cron["push_token"].as_str().unwrap().len(), 64);
+
+    let search = &monitors[1];
+    assert_eq!(search["method"], "POST");
+    assert_eq!(search["keyword"], "results");
+    assert_eq!(search["body"], "{}");
+    assert_eq!(search["retry_interval_s"], 300);
+    assert_eq!(search["timeout_s"], 24);
+    assert_eq!(search["failure_threshold"], 1);
+    assert_eq!(search["ignore_tls_errors"], true);
+    assert_eq!(search["follow_redirects"], false);
+    assert_eq!(search["tls_expiry_warn_days"], Value::Null);
+    assert_eq!(search["paused"], true);
+    assert_eq!(search["channels"], json!(["Bot", "Phone"]));
+
+    let website = &monitors[2];
+    assert_eq!(website["group"], "Production");
+    assert_eq!(website["url"], "https://www.example.com");
+    assert_eq!(website["accepted_statuses"], "200-299,301");
+    assert_eq!(website["headers"], "{\"X-Test\": \"1\"}");
+    assert_eq!(website["interval_s"], 60);
+    assert_eq!(website["retry_interval_s"], 30);
+    assert_eq!(website["timeout_s"], 48);
+    assert_eq!(website["failure_threshold"], 3);
+    assert_eq!(website["tls_expiry_warn_days"], 14);
+    assert_eq!(website["paused"], false);
+    assert_eq!(website["channels"], json!(["Discord ops"]));
+}
+
+#[tokio::test]
+async fn settings_page_has_the_import_form() {
+    let (app, _) = common::test_app().await;
+    let r = get(&app, "/settings").await;
+    assert!(r.body.contains(r#"action="/settings/import""#));
+    assert!(r.body.contains(r#"name="document""#));
 }
