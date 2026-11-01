@@ -60,7 +60,7 @@ uptime-monitoring/
 │   ├── notify/                   # Alerts
 │   │   ├── mod.rs                # Notifier: queue, dispatcher, retries, delivery log
 │   │   ├── message.rs            # Title and text of an event, whatever the channel
-│   │   ├── channel.rs            # Webhook / Discord / ntfy / Telegram / e-mail config, HTTP request
+│   │   ├── channel.rs            # Channel configs; each gives an HTTP request or an e-mail (Outgoing)
 │   │   └── email.rs              # E-mail: the mail and its SMTP delivery
 │   ├── models/                   # Entities and their SQL queries
 │   │   ├── admin.rs              # The single admin account
@@ -297,8 +297,10 @@ proxy, every client shares the proxy's IP and the limit becomes global.
 - **E-mail** (`notify/email.rs`, `lettre`, rustls with ring, no connection pool). Through the user's SMTP relay
   only, never straight to MX servers (port 25 is often blocked, and unsigned mail lands in spam). The relay's name
   (stored lowercase, international names in punycode) goes through `Guard::resolve_host`; each allowed address is
-  tried in turn until one answers, while TLS checks the certificate against the name. EHLO sends lettre's default,
-  the `[127.0.0.1]` address literal. Security: `starttls` (required, 587), `tls` (465) or `none` (25, refused by the form
+  tried in turn until one answers, while TLS checks the certificate against the name. EHLO sends the host of `PUBLIC_URL`,
+  else the `[127.0.0.1]` address literal. The TLS settings of each relay (rustls config and platform verifier) are
+  built once and kept in `email::Mailer`, at most 32 relays. Recipients are split on commas outside quotes and angle
+  brackets (`"Doe, John" <john@example.com>` stays whole), in the form and the Kuma import. Security: `starttls` (required, 587), `tls` (465) or `none` (25, refused by the form
   with credentials). Plain-text UTF-8 mail: subject = title (control characters as spaces), body = text then link,
   one mail to every recipient (To, up to 10), `Message-ID` on the sender's domain. Each command times out after
   10 s, the whole delivery after 30 s; SMTP 5xx, TLS errors (certificate, no STARTTLS) and client errors (no

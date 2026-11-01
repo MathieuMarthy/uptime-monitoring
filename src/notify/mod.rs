@@ -11,7 +11,7 @@ pub mod message;
 
 use crate::engine::guard::Guard;
 use crate::models::{Channel, Delivery, NotificationLog, Settings};
-use crate::notify::channel::ChannelConfig;
+use crate::notify::channel::{ChannelConfig, Outgoing};
 use crate::notify::message::Message;
 use crate::time::now_ms;
 use jiff::tz::TimeZone;
@@ -123,6 +123,7 @@ impl Notifier {
             public_url,
             retry_delays,
             client: OnceLock::new(),
+            mailer: email::Mailer::default(),
         });
         let (queue, receiver) = mpsc::channel(QUEUE_SIZE);
         tokio::spawn(dispatch(pool, sender.clone(), receiver, group_window));
@@ -175,6 +176,7 @@ struct Sender {
     retry_delays: Vec<Duration>,
     /// Built on first use.
     client: OnceLock<Client>,
+    mailer: email::Mailer,
 }
 
 impl Default for Sender {
@@ -184,6 +186,7 @@ impl Default for Sender {
             public_url: None,
             retry_delays: RETRY_DELAYS.to_vec(),
             client: OnceLock::new(),
+            mailer: email::Mailer::default(),
         }
     }
 }
@@ -244,18 +247,18 @@ impl Sender {
         notification: &Notification,
         message: &Message,
     ) -> Result<(), SendError> {
-        if let ChannelConfig::Email(c) = config {
-            return email::send(&self.guard, c, message).await;
-        }
+        let request = match config.delivery(self.client(), notification, message) {
+            Outgoing::Http(request) => request,
+            Outgoing::Email(c) => {
+                let public_url = self.public_url.as_deref();
+                return self.mailer.send(&self.guard, public_url, c, message).await;
+            }
+        };
         // The guard checks the URL actually requested; a URL that does not parse fails here.
-        let request = config
-            .request(self.client(), notification, message)
-            .expect("every channel but e-mail sends an HTTP request")
-            .build()
-            .map_err(|_| SendError {
-                message: "invalid URL".to_string(),
-                retry: false,
-            })?;
+        let request = request.build().map_err(|_| SendError {
+            message: "invalid URL".to_string(),
+            retry: false,
+        })?;
         self.guard.check_url(request.url()).map_err(|e| SendError {
             message: e.to_string(),
             retry: false,

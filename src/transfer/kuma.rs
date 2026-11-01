@@ -131,13 +131,7 @@ fn channel(notification: &Value, name: &str) -> Result<ChannelExport, String> {
             let to: Vec<String> = ["smtpTo", "smtpCC"]
                 .iter()
                 .filter_map(|key| text(&config, key))
-                .flat_map(|list| {
-                    list.split(',')
-                        .map(str::trim)
-                        .filter(|t| !t.is_empty())
-                        .map(str::to_string)
-                        .collect::<Vec<_>>()
-                })
+                .flat_map(|list| crate::notify::email::split_addresses(&list))
                 .collect();
             let secure = flag(&config, "smtpSecure").unwrap_or(false);
             let mut email = json!({

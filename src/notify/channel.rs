@@ -146,70 +146,72 @@ impl ChannelConfig {
         .to_string()
     }
 
-    /// Where the request goes. Telegram's URL carries the bot token.
-    fn url(&self) -> Option<String> {
-        Some(match self {
-            Self::Webhook(c) | Self::Discord(c) => c.url.clone(),
-            Self::Ntfy(c) => c.server.clone(),
-            Self::Telegram(c) => format!(
-                "{}/bot{}/sendMessage",
-                c.server.trim_end_matches('/'),
-                c.token
-            ),
-            Self::Email(_) => return None,
-        })
-    }
-
-    /// The HTTP request of this channel; `None` for e-mail, which goes over SMTP.
-    pub fn request(
+    /// How this channel sends a message: an HTTP request, or a mail through SMTP.
+    pub fn delivery(
         &self,
         client: &Client,
         notification: &Notification,
         message: &Message,
-    ) -> Option<RequestBuilder> {
-        let url = self.url()?;
-        let mut body = match self {
-            Self::Webhook(_) => json!({
-                "event": notification.event.as_str(),
-                "monitor": notification.monitor.as_ref().map(|m| json!({
-                    "id": m.id,
-                    "name": m.name,
-                    "url": m.url,
-                    "link": message.link,
-                })),
-                "title": message.title,
-                "message": message.text,
-                "at": notification.at,
-            }),
-            Self::Discord(_) => json!({
-                "username": "Uptime Monitoring",
-                "embeds": [{
+    ) -> Outgoing<'_> {
+        let link = message.link.as_ref();
+        // Telegram's URL carries the bot token.
+        let (url, body) = match self {
+            Self::Webhook(c) => (
+                c.url.clone(),
+                json!({
+                    "event": notification.event.as_str(),
+                    "monitor": notification.monitor.as_ref().map(|m| json!({
+                        "id": m.id,
+                        "name": m.name,
+                        "url": m.url,
+                        "link": link,
+                    })),
+                    "title": message.title,
+                    "message": message.text,
+                    "at": notification.at,
+                }),
+            ),
+            Self::Discord(c) => {
+                let mut embed = json!({
                     "title": message.title,
                     "description": message.text,
                     "color": discord_color(message.severity),
-                }],
-            }),
-            Self::Ntfy(c) => json!({
-                "topic": c.topic,
-                "title": message.title,
-                "message": message.text,
-                "priority": if message.severity == Severity::Critical { 4 } else { 3 },
-                "tags": [ntfy_tag(message.severity)],
-            }),
-            Self::Telegram(c) => json!({
-                "chat_id": c.chat_id,
-                "text": telegram_text(message),
-                "link_preview_options": { "is_disabled": true },
-            }),
-            Self::Email(_) => return None,
-        };
-        if let Some(link) = &message.link {
-            match self {
-                Self::Webhook(_) | Self::Telegram(_) | Self::Email(_) => {}
-                Self::Discord(_) => body["embeds"][0]["url"] = json!(link),
-                Self::Ntfy(_) => body["click"] = json!(link),
+                });
+                if let Some(link) = link {
+                    embed["url"] = json!(link);
+                }
+                (
+                    c.url.clone(),
+                    json!({ "username": "Uptime Monitoring", "embeds": [embed] }),
+                )
             }
-        }
+            Self::Ntfy(c) => {
+                let mut body = json!({
+                    "topic": c.topic,
+                    "title": message.title,
+                    "message": message.text,
+                    "priority": if message.severity == Severity::Critical { 4 } else { 3 },
+                    "tags": [ntfy_tag(message.severity)],
+                });
+                if let Some(link) = link {
+                    body["click"] = json!(link);
+                }
+                (c.server.clone(), body)
+            }
+            Self::Telegram(c) => (
+                format!(
+                    "{}/bot{}/sendMessage",
+                    c.server.trim_end_matches('/'),
+                    c.token
+                ),
+                json!({
+                    "chat_id": c.chat_id,
+                    "text": telegram_text(message),
+                    "link_preview_options": { "is_disabled": true },
+                }),
+            ),
+            Self::Email(c) => return Outgoing::Email(c),
+        };
         let mut request = client
             .post(url)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
@@ -220,8 +222,18 @@ impl ChannelConfig {
         {
             request = request.bearer_auth(token);
         }
-        Some(request)
+        Outgoing::Http(request)
     }
+}
+
+/// What a channel sends.
+#[allow(
+    clippy::large_enum_variant,
+    reason = "built and matched once per send, never stored"
+)]
+pub enum Outgoing<'a> {
+    Http(RequestBuilder),
+    Email(&'a EmailConfig),
 }
 
 fn discord_color(severity: Severity) -> u32 {

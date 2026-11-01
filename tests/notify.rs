@@ -605,6 +605,8 @@ async fn channels_without_grouping_send_at_once() {
 
 /// One mail as an SMTP server received it.
 struct Mail {
+    /// The name given with EHLO.
+    ehlo: String,
     from: String,
     to: Vec<String>,
     data: String,
@@ -630,6 +632,7 @@ async fn smtp_server(codes: Vec<u16>) -> (u16, mpsc::UnboundedReceiver<Mail>, Ar
                 let mut lines = BufReader::new(read).lines();
                 write.write_all(b"220 test ESMTP\r\n").await.unwrap();
                 let mut mail = Mail {
+                    ehlo: String::new(),
                     from: String::new(),
                     to: vec![],
                     data: String::new(),
@@ -637,6 +640,7 @@ async fn smtp_server(codes: Vec<u16>) -> (u16, mpsc::UnboundedReceiver<Mail>, Ar
                 while let Ok(Some(line)) = lines.next_line().await {
                     let upper = line.to_ascii_uppercase();
                     let reply = if upper.starts_with("EHLO") {
+                        mail.ehlo = line[5..].to_string();
                         "250-test\r\n250 8BITMIME\r\n".to_string()
                     } else if upper.starts_with("MAIL FROM:") {
                         mail.from = line[10..].to_string();
@@ -653,9 +657,11 @@ async fn smtp_server(codes: Vec<u16>) -> (u16, mpsc::UnboundedReceiver<Mail>, Ar
                             mail.data.push_str(&data);
                             mail.data.push('\n');
                         }
+                        let ehlo = mail.ehlo.clone();
                         let _ = tx.send(std::mem::replace(
                             &mut mail,
                             Mail {
+                                ehlo,
                                 from: String::new(),
                                 to: vec![],
                                 data: String::new(),
@@ -709,6 +715,7 @@ async fn email_sends_a_plain_text_mail_to_every_recipient() {
 
     notifier_with_public_url(&pool, Some("https://up.example.com")).notify(down(&m));
     let mail = next_mail(&mut rx).await;
+    assert_eq!(mail.ehlo, "up.example.com", "the public name");
     assert_eq!(mail.from, "<up@example.com>");
     assert_eq!(mail.to, ["<ops@example.com>", "<dev@example.com>"]);
     assert!(mail.data.contains("Subject: API is down"), "{}", mail.data);
@@ -789,7 +796,12 @@ async fn email_respects_the_guard() {
     assert_eq!(connections.load(Ordering::SeqCst), 0);
 
     Notifier::default().send_test(&config).await.unwrap();
-    assert!(next_mail(&mut rx).await.data.contains("Subject: "));
+    let mail = next_mail(&mut rx).await;
+    assert!(mail.data.contains("Subject: "));
+    assert_eq!(
+        mail.ehlo, "[127.0.0.1]",
+        "an address literal without PUBLIC_URL"
+    );
 }
 
 #[tokio::test]

@@ -359,13 +359,7 @@ impl ChannelForm {
             );
         }
 
-        let to: Vec<String> = self
-            .email_to
-            .split(',')
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .map(str::to_string)
-            .collect();
+        let to = crate::notify::email::split_addresses(&self.email_to);
         if to.is_empty() || to.len() > MAX_RECIPIENTS || !to.iter().all(|t| is_mailbox(t)) {
             errors.insert(
                 "email_to",
@@ -673,6 +667,8 @@ mod tests {
             assert!(errors.contains_key(key), "{key}");
         }
         f = email_form();
+        f.email_to = r#""Doe, John" <john@example.com>"#.to_string();
+        assert!(f.validate(None).is_ok(), "a comma in a quoted name");
         f.email_to = " , ".to_string();
         assert!(f.validate(None).unwrap_err().contains_key("email_to"));
         f.email_to = ["a@example.com"; 11].join(",");
