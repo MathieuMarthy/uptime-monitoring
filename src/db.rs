@@ -38,10 +38,10 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
 /// A consistent copy of the database, taken while it runs, opened and already unlinked: the file
 /// is gone once the handle is dropped. Written next to the database (a mounted volume has room
 /// for it), in the temporary directory for an in-memory one.
-pub async fn backup(pool: &SqlitePool) -> Result<tokio::fs::File, BackupError> {
-    // One copy at a time: each one takes the size of the database on disk.
+pub async fn backup(pool: &SqlitePool) -> Result<Backup, BackupError> {
+    // One copy at a time, until it is read: each one takes the size of the database on disk.
     static RUNNING: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
-    let _permit = RUNNING.acquire().await.expect("never closed");
+    let permit = RUNNING.acquire().await.expect("never closed");
 
     let main_file: String =
         sqlx::query_scalar("SELECT file FROM pragma_database_list WHERE name = 'main'")
@@ -65,7 +65,16 @@ pub async fn backup(pool: &SqlitePool) -> Result<tokio::fs::File, BackupError> {
     };
     // Unlinked whatever happened; an open handle still reads it.
     let _ = tokio::fs::remove_file(&path).await;
-    file
+    Ok(Backup {
+        file: file?,
+        _permit: permit,
+    })
+}
+
+/// A database copy; the next one waits until this one is dropped.
+pub struct Backup {
+    pub file: tokio::fs::File,
+    _permit: tokio::sync::SemaphorePermit<'static>,
 }
 
 #[derive(Debug)]

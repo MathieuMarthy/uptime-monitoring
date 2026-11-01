@@ -142,7 +142,7 @@ pub struct MaintenanceExport {
 
 /// As stored: epoch milliseconds, or a weekday mask (bit 0 = Monday) and minutes after local
 /// midnight.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ScheduleExport {
     Once {

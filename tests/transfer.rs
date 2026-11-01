@@ -368,3 +368,103 @@ async fn settings_page_has_the_import_form() {
     assert!(r.body.contains(r#"action="/settings/import""#));
     assert!(r.body.contains(r#"name="document""#));
 }
+
+#[tokio::test]
+async fn import_keeps_windows_sharing_a_title_and_skips_exact_copies() {
+    let (app, pool) = common::test_app().await;
+    seed(&pool).await;
+    let window = |start: i64| {
+        json!({"title": "Nightly", "monitors": ["API"],
+               "schedule": {"kind": "weekly", "weekdays": 3, "local_start": start, "duration_min": 30}})
+    };
+    let doc = json!({"format": "uptime-monitoring", "version": 1,
+                     "maintenances": [window(150), window(300), window(300)]});
+    let r = import(&app, &doc.to_string()).await;
+    assert!(r.body.contains("1 added, 2 skipped"), "{}", r.body);
+    let starts: Vec<i64> =
+        sqlx::query_scalar("SELECT local_start FROM maintenances ORDER BY local_start")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(starts, [150, 300]);
+}
+
+#[tokio::test]
+async fn import_keeps_one_off_windows_across_a_clock_change() {
+    let (app, pool) = common::test_app().await;
+    seed(&pool).await;
+    sqlx::query("UPDATE settings SET timezone = 'Europe/Paris'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    // 2026-10-25 00:50 to 01:10 UTC: 02:50 CEST to 02:10 CET.
+    let (starts_at, ends_at) = (1_792_889_400_000_i64, 1_792_890_600_000_i64);
+    let doc = json!({"format": "uptime-monitoring", "version": 1, "maintenances": [
+        {"title": "Fall back", "monitors": ["API"],
+         "schedule": {"kind": "once", "starts_at": starts_at, "ends_at": ends_at}}]});
+    let r = import(&app, &doc.to_string()).await;
+    assert!(r.body.contains("1 added"), "{}", r.body);
+    let stored: (i64, i64) =
+        sqlx::query_as("SELECT starts_at, ends_at FROM maintenances WHERE title = 'Fall back'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(stored, (starts_at, ends_at));
+}
+
+#[tokio::test]
+async fn import_tells_which_channels_a_monitor_lost() {
+    let (app, _) = common::test_app().await;
+    let doc = json!({"format": "uptime-monitoring", "version": 1, "monitors": [
+        {"name": "Site", "url": "https://site.example.com", "channels": ["Gone"]}]});
+    let r = import(&app, &doc.to_string()).await;
+    assert!(r.body.contains("1 added"), "{}", r.body);
+    assert!(r.body.contains("Gone"), "{}", r.body);
+}
+
+#[tokio::test]
+async fn import_says_when_a_document_is_malformed_rather_than_newer() {
+    let (app, _) = common::test_app().await;
+    let r = import(&app, r#"{"format":"uptime-monitoring","version":"1"}"#).await;
+    assert!(!r.body.contains("newer version"), "{}", r.body);
+    let r = import(&app, r#"{"format":"uptime-monitoring","version":2}"#).await;
+    assert!(r.body.contains("newer version"), "{}", r.body);
+}
+
+#[tokio::test]
+async fn kuma_notifications_sharing_a_name_stay_apart() {
+    let (app, _) = common::test_app().await;
+    let backup = json!({
+        "notificationList": [
+            {"id": 1, "name": "Ops", "config": "{\"type\":\"webhook\",\"webhookURL\":\"https://a.example.com\"}"},
+            {"id": 2, "name": "Ops", "config": "{\"type\":\"webhook\",\"webhookURL\":\"https://b.example.com\"}"},
+            {"id": 3, "name": "Topicless", "config": "{\"type\":\"ntfy\",\"ntfyserverurl\":\"https://ntfy.sh\"}"}
+        ],
+        "monitorList": [
+            {"id": 5, "name": "Site", "type": "http", "url": "https://site.example.com",
+             "notificationIDList": {"2": true}}
+        ]
+    });
+    let r = import(&app, &backup.to_string()).await;
+    assert!(r.body.contains("Topic is required"), "{}", r.body);
+    let doc = export(&app).await;
+    let channels: Vec<(&str, &str)> = doc["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            (
+                c["name"].as_str().unwrap(),
+                c["config"]["url"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        channels,
+        [
+            ("Ops", "https://a.example.com"),
+            ("Ops (2)", "https://b.example.com")
+        ]
+    );
+    assert_eq!(doc["monitors"][0]["channels"], json!(["Ops (2)"]));
+}

@@ -63,8 +63,7 @@ async fn import(
             return Ok(page.into_response());
         }
     };
-    let tz = Settings::load(&state.db).await?.tz();
-    import::apply(&state.db, &tz, &export, &mut report).await?;
+    import::apply(&state.db, &export, &mut report).await?;
     state.engine.reload_staggered(&report.monitor_ids);
     state.maintenances.reload(&state.db).await?;
     state.public_pages.clear();
@@ -80,11 +79,12 @@ async fn backup(State(state): State<AppState>) -> Result<Response, AppError> {
     let file = crate::db::backup(&state.db)
         .await
         .map_err(|e| AppError::Internal(Box::new(e)))?;
-    let chunks = futures_util::stream::try_unfold(file, |mut file| async move {
+    // The copy (and its permit) lives as long as the download.
+    let chunks = futures_util::stream::try_unfold(file, |mut backup| async move {
         let mut chunk = vec![0; 64 * 1024];
-        let read = file.read(&mut chunk).await?;
+        let read = backup.file.read(&mut chunk).await?;
         chunk.truncate(read);
-        Ok::<_, std::io::Error>((read > 0).then_some((chunk, file)))
+        Ok::<_, std::io::Error>((read > 0).then_some((chunk, backup)))
     });
     let name = format!("uptime-monitoring-{}.db", today(&state).await?);
     Ok(attachment(

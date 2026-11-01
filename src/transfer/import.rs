@@ -47,6 +47,7 @@ impl Skipped {
 }
 
 const EXISTS: &str = "already exists.";
+const VERSION_U64: u64 = VERSION as u64;
 
 /// Reads an export of this application or an Uptime Kuma backup. Kuma entries that cannot be
 /// converted are already in the report.
@@ -54,12 +55,15 @@ pub fn parse(text: &str) -> Result<(Export, Report), String> {
     let value: serde_json::Value =
         serde_json::from_str(text).map_err(|_| "This is not a JSON document.".to_string())?;
     if value.get("format").and_then(|f| f.as_str()) == Some(FORMAT) {
-        let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
-        if version == 0 || version > u64::from(VERSION) {
-            return Err(
-                "This file comes from a newer version of Uptime Monitoring: update first."
-                    .to_string(),
-            );
+        match value.get("version").and_then(|v| v.as_u64()) {
+            Some(1..=VERSION_U64) => {}
+            Some(version) if version > VERSION_U64 => {
+                return Err(
+                    "This file comes from a newer version of Uptime Monitoring: update first."
+                        .to_string(),
+                );
+            }
+            _ => return Err("This export has no valid version number.".to_string()),
         }
         let export = serde_json::from_value(value)
             .map_err(|e| format!("This export cannot be read: {e}."))?;
@@ -79,9 +83,9 @@ struct Existing {
     monitors: HashMap<String, i64>,
     /// Every monitor's id and group, for maintenance windows.
     groups: Vec<(i64, Option<String>)>,
-    push_tokens: HashSet<String>,
     slugs: HashSet<String>,
-    maintenances: HashSet<String>,
+    /// Windows by title key and schedule: titles repeat (quick maintenance is "Maintenance").
+    maintenances: HashSet<(String, ScheduleExport)>,
 }
 
 impl Existing {
@@ -98,10 +102,6 @@ impl Existing {
                 .iter()
                 .map(|m| (m.id, m.group_name.clone()))
                 .collect(),
-            push_tokens: monitors
-                .iter()
-                .filter_map(|m| m.push_token.clone())
-                .collect(),
             slugs: StatusPage::all(pool)
                 .await?
                 .into_iter()
@@ -110,16 +110,15 @@ impl Existing {
             maintenances: Maintenance::all(pool)
                 .await?
                 .into_iter()
-                .map(|(m, _)| name_key(&m.title))
+                .map(|(m, _)| window_key(&m.title, m.schedule().into()))
                 .collect(),
         })
     }
 }
 
-/// Adds what the document holds, in one transaction; `tz` reads maintenance times.
+/// Adds what the document holds, in one transaction.
 pub async fn apply(
     pool: &SqlitePool,
-    tz: &TimeZone,
     export: &Export,
     report: &mut Report,
 ) -> Result<(), sqlx::Error> {
@@ -135,7 +134,7 @@ pub async fn apply(
         add_page(&mut tx, page, &mut existing, report).await?;
     }
     for maintenance in &export.maintenances {
-        add_maintenance(&mut tx, tz, maintenance, &mut existing, report).await?;
+        add_maintenance(&mut tx, maintenance, &mut existing, report).await?;
     }
     tx.commit().await
 }
@@ -232,12 +231,14 @@ async fn add_monitor(
         report.skipped.push(skip(EXISTS));
         return Ok(());
     }
-    let channel_ids: Vec<i64> = monitor
-        .channels
-        .iter()
-        .filter_map(|name| existing.channels.get(&name.trim().to_ascii_lowercase()))
-        .copied()
-        .collect();
+    let mut channel_ids = Vec::new();
+    let mut missing = Vec::new();
+    for name in &monitor.channels {
+        match existing.channels.get(&name.trim().to_ascii_lowercase()) {
+            Some(&id) => channel_ids.push(id),
+            None => missing.push(format!("“{name}”")),
+        }
+    }
     let input = match monitor_form(monitor, &channel_ids).validate() {
         Ok(input) => input,
         Err(errors) => {
@@ -246,11 +247,17 @@ async fn add_monitor(
         }
     };
     let id = Monitor::insert(conn, &input).await?;
+    if !missing.is_empty() {
+        report.notices.push(format!(
+            "Monitor “{}” is not linked to the missing channel(s) {}.",
+            input.name,
+            missing.join(", ")
+        ));
+    }
     if input.kind == crate::forms::monitor::PUSH {
         let kept = match monitor.push_token.as_deref() {
-            Some(token) if is_push_token(token) && !existing.push_tokens.contains(token) => {
-                Monitor::set_push_token(conn, id, token).await?
-            }
+            // Kept unless another monitor holds it.
+            Some(token) if is_push_token(token) => Monitor::set_push_token(conn, id, token).await?,
             _ => false,
         };
         if !kept {
@@ -312,13 +319,12 @@ async fn add_page(
 
 async fn add_maintenance(
     conn: &mut SqliteConnection,
-    tz: &TimeZone,
     maintenance: &MaintenanceExport,
     existing: &mut Existing,
     report: &mut Report,
 ) -> Result<(), sqlx::Error> {
     let skip = |reason: &str| Skipped::new("Maintenance", &maintenance.title, reason);
-    let key = name_key(maintenance.title.trim());
+    let key = window_key(&maintenance.title, maintenance.schedule);
     if existing.maintenances.contains(&key) {
         report.skipped.push(skip(EXISTS));
         return Ok(());
@@ -332,8 +338,9 @@ async fn add_maintenance(
     };
     match maintenance.schedule {
         ScheduleExport::Once { starts_at, ends_at } => {
-            form.starts_at = format_local(tz, starts_at);
-            form.ends_at = format_local(tz, ends_at);
+            // In UTC: no clock change can turn a valid window around.
+            form.starts_at = format_local(&TimeZone::UTC, starts_at);
+            form.ends_at = format_local(&TimeZone::UTC, ends_at);
         }
         ScheduleExport::Weekly {
             weekdays,
@@ -355,7 +362,7 @@ async fn add_maintenance(
             form.other.insert(format!("monitor_{id}"), "on".to_string());
         }
     }
-    match form.validate(tz, &existing.groups) {
+    match form.validate(&TimeZone::UTC, &existing.groups) {
         Ok(mut input) => {
             // The form works in minutes; the export keeps the exact times.
             if let ScheduleExport::Once { starts_at, ends_at } = maintenance.schedule {
@@ -368,4 +375,8 @@ async fn add_maintenance(
         Err(errors) => report.skipped.push(skip(&reason(errors))),
     }
     Ok(())
+}
+
+fn window_key(title: &str, schedule: ScheduleExport) -> (String, ScheduleExport) {
+    (name_key(title.trim()), schedule)
 }

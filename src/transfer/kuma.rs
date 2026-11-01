@@ -6,7 +6,7 @@
 use super::import::{Report, Skipped};
 use super::{ChannelExport, Export, MonitorExport};
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Kuma's default certificate warning, the first of its 7, 14 and 21 days.
 const TLS_WARN_DAYS: i64 = 14;
@@ -42,9 +42,18 @@ pub fn convert(backup: &Value) -> (Export, Report) {
     let empty = Vec::new();
 
     let mut channel_names: HashMap<i64, String> = HashMap::new();
+    let mut taken: HashSet<String> = HashSet::new();
     let notifications = backup.get("notificationList").and_then(Value::as_array);
     for notification in notifications.unwrap_or(&empty) {
-        let name = text(notification, "name").unwrap_or_default();
+        // Kuma allows twin names; here a name is unique and links monitors to it.
+        let base = text(notification, "name").unwrap_or_default();
+        let mut name = base.clone();
+        for n in 2.. {
+            if taken.insert(name.to_ascii_lowercase()) {
+                break;
+            }
+            name = format!("{base} ({n})");
+        }
         match channel(notification, &name) {
             Ok(channel) => {
                 if let Some(id) = id(notification) {
@@ -85,10 +94,13 @@ fn channel(notification: &Value, name: &str) -> Result<ChannelExport, String> {
     };
     let kind = text(&config, "type").unwrap_or_default();
     let (kind, config) = match kind.as_str() {
-        "webhook" => ("webhook", json!({"url": text(&config, "webhookURL")})),
+        "webhook" => (
+            "webhook",
+            json!({"url": text(&config, "webhookURL").unwrap_or_default()}),
+        ),
         "discord" => (
             "discord",
-            json!({"url": text(&config, "discordWebhookUrl")}),
+            json!({"url": text(&config, "discordWebhookUrl").unwrap_or_default()}),
         ),
         "ntfy" => {
             let token = text(&config, "ntfyaccesstoken");
@@ -97,7 +109,7 @@ fn channel(notification: &Value, name: &str) -> Result<ChannelExport, String> {
             }
             let mut ntfy = json!({
                 "server": text(&config, "ntfyserverurl").unwrap_or_else(|| "https://ntfy.sh".into()),
-                "topic": text(&config, "ntfytopic"),
+                "topic": text(&config, "ntfytopic").unwrap_or_default(),
             });
             if let Some(token) = token {
                 ntfy["token"] = json!(token);
@@ -107,8 +119,8 @@ fn channel(notification: &Value, name: &str) -> Result<ChannelExport, String> {
         "telegram" => (
             "telegram",
             json!({
-                "token": text(&config, "telegramBotToken"),
-                "chat_id": text(&config, "telegramChatID"),
+                "token": text(&config, "telegramBotToken").unwrap_or_default(),
+                "chat_id": text(&config, "telegramChatID").unwrap_or_default(),
             }),
         ),
         "" => return Err("no notification type.".into()),

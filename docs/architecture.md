@@ -461,21 +461,22 @@ exports, copies and imports (below).
   history.
 - **Database copy** (`GET /settings/backup`). `VACUUM INTO` a file next to the database (in the temporary directory
   for an in-memory one, where it lands in memory instead: tests use a file), opened then unlinked at once, and
-  streamed in 64 KiB chunks. One copy at a time.
+  streamed in 64 KiB chunks. One copy at a time: the next one waits until the download ends.
 - **Import** (`POST /settings/import`, field `document`; `static/js/import.js` loads a chosen file into it). The only
   form allowed above `MAX_BODY_BYTES`: up to 8 MiB, also in the CSRF check. The format is detected: an export, or an
   Uptime Kuma 1.x backup (`monitorList`), converted to an export first. Import only adds, in one transaction: an
   entry whose name (channel: ASCII case-insensitive, like `COLLATE NOCASE`; monitor: name key; page: slug;
-  window: title key) is taken is skipped, and every entry goes through its admin form's validation, so an invalid
-  one is skipped with the form's messages. Links resolve against existing and imported entries. A push token is
+  window: title key and schedule, since titles repeat) is taken is skipped, and every entry goes through its admin form's validation, so an invalid
+  one is skipped with the form's messages. Links resolve against existing and imported entries; a monitor's missing channels are listed on the result page. A push token is
   kept unless malformed or taken; otherwise the monitor gets a new URL and the result page says so. One-off
-  windows keep their exact times (the form only checks them, in minutes). Then the engine starts the new monitors
+  windows keep their exact times (the form checks them in UTC, so a clock change cannot turn one around). Then the engine starts the new monitors
   (staggered), windows reload and the public page cache is cleared.
 - **Kuma mapping.** `http` and `keyword` monitors (not inverted) → HTTP, `push` → push with a new token, `group`
   → the group name of its children, other types skipped. `maxretries + 1` → failure threshold (1–10), retry
   interval capped by the interval, timeout (default 80 % of the interval) capped by 120 s and the interval,
   `maxredirects = 0` → no redirects, `expiryNotification` → 14-day certificate warning, `active = 0` → paused.
-  Notifications: webhook, Discord, ntfy (token or none; user/password skipped), Telegram; others skipped.
+  Notifications: webhook, Discord, ntfy (token or none; user/password skipped), Telegram; others skipped. Twin
+  names get ` (2)`, ` (3)`…, so their monitors stay linked to the right one.
 
 ## Deployment
 
