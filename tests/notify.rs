@@ -602,3 +602,192 @@ async fn channels_without_grouping_send_at_once() {
     titles.sort_by_key(|t| t.to_string());
     assert_eq!(titles, ["API is down", "Web is down"]);
 }
+
+/// One mail as an SMTP server received it.
+struct Mail {
+    from: String,
+    to: Vec<String>,
+    data: String,
+}
+
+/// A plain SMTP server that answers `MAIL FROM` with `codes` in turn (then 250), one per
+/// connection, and reports each accepted mail.
+async fn smtp_server(codes: Vec<u16>) -> (u16, mpsc::UnboundedReceiver<Mail>, Arc<AtomicUsize>) {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    let (tx, rx) = mpsc::unbounded_channel();
+    let connections = Arc::new(AtomicUsize::new(0));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let count = connections.clone();
+    tokio::spawn(async move {
+        loop {
+            let (stream, _) = listener.accept().await.unwrap();
+            let n = count.fetch_add(1, Ordering::SeqCst);
+            let code = codes.get(n).copied().unwrap_or(250);
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                let (read, mut write) = stream.into_split();
+                let mut lines = BufReader::new(read).lines();
+                write.write_all(b"220 test ESMTP\r\n").await.unwrap();
+                let mut mail = Mail {
+                    from: String::new(),
+                    to: vec![],
+                    data: String::new(),
+                };
+                while let Ok(Some(line)) = lines.next_line().await {
+                    let upper = line.to_ascii_uppercase();
+                    let reply = if upper.starts_with("EHLO") {
+                        "250-test\r\n250 8BITMIME\r\n".to_string()
+                    } else if upper.starts_with("MAIL FROM:") {
+                        mail.from = line[10..].to_string();
+                        format!("{code} {}\r\n", if code == 250 { "OK" } else { "refused" })
+                    } else if upper.starts_with("RCPT TO:") {
+                        mail.to.push(line[8..].to_string());
+                        "250 OK\r\n".to_string()
+                    } else if upper == "DATA" {
+                        write.write_all(b"354 go on\r\n").await.unwrap();
+                        while let Ok(Some(data)) = lines.next_line().await {
+                            if data == "." {
+                                break;
+                            }
+                            mail.data.push_str(&data);
+                            mail.data.push('\n');
+                        }
+                        let _ = tx.send(std::mem::replace(
+                            &mut mail,
+                            Mail {
+                                from: String::new(),
+                                to: vec![],
+                                data: String::new(),
+                            },
+                        ));
+                        "250 queued\r\n".to_string()
+                    } else if upper == "QUIT" {
+                        let _ = write.write_all(b"221 bye\r\n").await;
+                        break;
+                    } else {
+                        "250 OK\r\n".to_string()
+                    };
+                    if write.write_all(reply.as_bytes()).await.is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+    });
+    (port, rx, connections)
+}
+
+fn email_config(port: u16) -> serde_json::Value {
+    serde_json::json!({
+        "host": "127.0.0.1",
+        "port": port,
+        "security": "none",
+        "from": "Uptime <up@example.com>",
+        "to": ["ops@example.com", "dev@example.com"],
+    })
+}
+
+async fn next_mail(rx: &mut mpsc::UnboundedReceiver<Mail>) -> Mail {
+    tokio::time::timeout(Duration::from_secs(5), rx.recv())
+        .await
+        .expect("a mail within 5 s")
+        .unwrap()
+}
+
+#[tokio::test]
+async fn email_sends_a_plain_text_mail_to_every_recipient() {
+    let pool = common::test_app().await.1;
+    let (port, mut rx, _) = smtp_server(vec![]).await;
+    let m = monitor(&pool).await;
+    link(
+        &pool,
+        m.id,
+        channel(&pool, "email", email_config(port), true).await,
+    )
+    .await;
+
+    notifier_with_public_url(&pool, Some("https://up.example.com")).notify(down(&m));
+    let mail = next_mail(&mut rx).await;
+    assert_eq!(mail.from, "<up@example.com>");
+    assert_eq!(mail.to, ["<ops@example.com>", "<dev@example.com>"]);
+    assert!(mail.data.contains("Subject: API is down"), "{}", mail.data);
+    assert!(
+        mail.data.contains("From: Uptime <up@example.com>"),
+        "{}",
+        mail.data
+    );
+    assert!(
+        mail.data.contains("text/plain; charset=utf-8"),
+        "{}",
+        mail.data
+    );
+    assert!(mail.data.contains("HTTP 503"), "{}", mail.data);
+    assert!(
+        mail.data
+            .contains(&format!("https://up.example.com/monitors/{}", m.id)),
+        "{}",
+        mail.data
+    );
+    assert_eq!(wait_for_log(&pool, 1).await[0].error, None);
+}
+
+#[tokio::test]
+async fn email_retries_transient_refusals_but_not_permanent_ones() {
+    let pool = common::test_app().await.1;
+    let (port, mut rx, _) = smtp_server(vec![451]).await;
+    let m = monitor(&pool).await;
+    link(
+        &pool,
+        m.id,
+        channel(&pool, "email", email_config(port), true).await,
+    )
+    .await;
+    notifier(&pool).notify(down(&m));
+    next_mail(&mut rx).await;
+    let log = wait_for_log(&pool, 1).await;
+    assert!(
+        log[0].ok,
+        "the second attempt succeeded: {:?}",
+        log[0].error
+    );
+
+    sqlx::query("DELETE FROM monitor_channels")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (port, _rx, connections) = smtp_server(vec![550]).await;
+    link(
+        &pool,
+        m.id,
+        channel(&pool, "email", email_config(port), true).await,
+    )
+    .await;
+    notifier(&pool).notify(down(&m));
+    let log = wait_for_log(&pool, 2).await;
+    assert!(!log[0].ok);
+    let error = log[0].error.as_deref().unwrap();
+    assert!(error.contains("550"), "{error}");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(
+        connections.load(Ordering::SeqCst),
+        1,
+        "no retry after a 550"
+    );
+}
+
+#[tokio::test]
+async fn email_respects_the_guard() {
+    let (port, mut rx, connections) = smtp_server(vec![]).await;
+    let pool = common::test_app().await.1;
+    let config: ChannelConfig =
+        ChannelConfig::parse("email", &email_config(port).to_string()).unwrap();
+
+    let blocking = Notifier::start(pool, Guard::new(true), None);
+    let error = blocking.send_test(&config).await.unwrap_err();
+    assert!(error.contains("127.0.0.1"), "{error}");
+    assert_eq!(connections.load(Ordering::SeqCst), 0);
+
+    Notifier::default().send_test(&config).await.unwrap();
+    assert!(next_mail(&mut rx).await.data.contains("Subject: "));
+}

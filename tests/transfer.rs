@@ -273,7 +273,9 @@ const KUMA_BACKUP: &str = r#"{
     {"id": 3, "name": "Bot", "active": 0, "isDefault": 0,
      "config": "{\"type\":\"telegram\",\"telegramBotToken\":\"123:ABC\",\"telegramChatID\":\"-100\"}"},
     {"id": 4, "name": "Mail", "active": 1, "isDefault": 0,
-     "config": "{\"type\":\"smtp\",\"smtpHost\":\"mail.example.com\"}"}
+     "config": "{\"type\":\"smtp\",\"smtpHost\":\"mail.example.com\",\"smtpPort\":465,\"smtpSecure\":true,\"smtpUsername\":\"up\",\"smtpPassword\":\"pw\",\"smtpFrom\":\"Kuma <up@example.com>\",\"smtpTo\":\"ops@example.com\",\"smtpCC\":\"dev@example.com\",\"smtpBCC\":\"\"}"},
+    {"id": 5, "name": "Pager", "active": 1, "isDefault": 0,
+     "config": "{\"type\":\"pushover\"}"}
   ],
   "monitorList": [
     {"id": 10, "name": "Production", "type": "group", "parent": null, "active": 1,
@@ -304,8 +306,8 @@ async fn import_of_an_uptime_kuma_backup() {
     let (app, _) = common::test_app().await;
     let r = import(&app, KUMA_BACKUP).await;
     assert_eq!(r.status, 200, "{}", r.body);
-    assert!(r.body.contains("6 added"), "{}", r.body);
-    for skipped in ["Mail", "Router", "Not here"] {
+    assert!(r.body.contains("7 added"), "{}", r.body);
+    for skipped in ["Pager", "Router", "Not here"] {
         assert!(r.body.contains(skipped), "{skipped}: {}", r.body);
     }
 
@@ -317,6 +319,10 @@ async fn import_of_an_uptime_kuma_backup() {
              "config": {"token": "123:ABC", "chat_id": "-100"}},
             {"name": "Discord ops", "kind": "discord", "enabled": true, "group_alerts": true,
              "config": {"url": "https://discord.com/api/webhooks/1/abc"}},
+            {"name": "Mail", "kind": "email", "enabled": true, "group_alerts": true,
+             "config": {"host": "mail.example.com", "port": 465, "security": "tls",
+                        "username": "up", "password": "pw", "from": "Kuma <up@example.com>",
+                        "to": ["ops@example.com", "dev@example.com"]}},
             {"name": "Phone", "kind": "ntfy", "enabled": true, "group_alerts": true,
              "config": {"server": "https://ntfy.example.com", "topic": "alerts", "token": "tk_abc"}}
         ])
@@ -358,7 +364,7 @@ async fn import_of_an_uptime_kuma_backup() {
     assert_eq!(website["failure_threshold"], 3);
     assert_eq!(website["tls_expiry_warn_days"], 14);
     assert_eq!(website["paused"], false);
-    assert_eq!(website["channels"], json!(["Discord ops"]));
+    assert_eq!(website["channels"], json!(["Discord ops", "Mail"]));
 }
 
 #[tokio::test]

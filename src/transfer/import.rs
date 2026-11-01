@@ -168,6 +168,7 @@ async fn add_channel(
     match &config {
         ChannelConfig::Ntfy(c) => form.ntfy_token = c.token.clone().unwrap_or_default(),
         ChannelConfig::Telegram(c) => form.telegram_token = c.token.clone(),
+        ChannelConfig::Email(c) => form.email_password = c.password.clone().unwrap_or_default(),
         ChannelConfig::Webhook(_) | ChannelConfig::Discord(_) => {}
     }
     match form.validate(None) {

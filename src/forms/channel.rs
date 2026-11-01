@@ -1,8 +1,10 @@
 use crate::forms::monitor::{FieldErrors, validate_url};
 use crate::forms::{has_visible_char, text_len};
 use crate::notify::channel::{
-    ChannelConfig, KINDS, NtfyConfig, TELEGRAM_API, TelegramConfig, WebhookConfig,
+    ChannelConfig, EmailConfig, KINDS, NtfyConfig, SmtpSecurity, TELEGRAM_API, TelegramConfig,
+    WebhookConfig,
 };
+use lettre::message::Mailbox;
 use serde::Deserialize;
 
 const NAME_MAX_CHARS: usize = 100;
@@ -12,6 +14,8 @@ const DISCORD_PREFIXES: [&str; 2] = [
     "https://discord.com/api/webhooks/",
     "https://discordapp.com/api/webhooks/",
 ];
+const ADDRESS_MAX_CHARS: usize = 254;
+const MAX_RECIPIENTS: usize = 10;
 pub const NTFY_DEFAULT_SERVER: &str = "https://ntfy.sh";
 
 /// Raw channel form, as submitted. The fields of every kind are sent; only those of the
@@ -31,6 +35,17 @@ pub struct ChannelForm {
     /// Blank keeps the stored bot token; it is never sent back to the browser.
     pub telegram_token: String,
     pub telegram_chat_id: String,
+    pub email_host: String,
+    /// Blank means the default port of the security.
+    pub email_port: String,
+    /// `starttls`, `tls` or `none`.
+    pub email_security: String,
+    pub email_username: String,
+    /// Blank keeps the stored password; it is never sent back to the browser.
+    pub email_password: String,
+    pub email_from: String,
+    /// Recipients separated by commas.
+    pub email_to: String,
     pub enabled: Option<String>,
     pub group_alerts: Option<String>,
 }
@@ -49,13 +64,15 @@ impl ChannelForm {
         Self {
             kind: "webhook".to_string(),
             ntfy_server: NTFY_DEFAULT_SERVER.to_string(),
+            email_security: SmtpSecurity::Starttls.as_str().to_string(),
             enabled: Some("on".to_string()),
             group_alerts: Some("on".to_string()),
             ..Self::default()
         }
     }
 
-    /// The form of a stored channel. The ntfy and Telegram tokens are left out.
+    /// The form of a stored channel. The ntfy and Telegram tokens and the SMTP password are left
+    /// out.
     pub fn from_config(
         name: &str,
         config: &ChannelConfig,
@@ -76,6 +93,14 @@ impl ChannelForm {
                 form.ntfy_topic = c.topic.clone();
             }
             ChannelConfig::Telegram(c) => form.telegram_chat_id = c.chat_id.clone(),
+            ChannelConfig::Email(c) => {
+                form.email_host = c.host.clone();
+                form.email_port = c.port.to_string();
+                form.email_security = c.security.as_str().to_string();
+                form.email_username = c.username.clone().unwrap_or_default();
+                form.email_from = c.from.clone();
+                form.email_to = c.to.join(", ");
+            }
         }
         form
     }
@@ -102,6 +127,7 @@ impl ChannelForm {
             "telegram" => self
                 .telegram(existing, &mut errors)
                 .map(ChannelConfig::Telegram),
+            "email" => self.email(existing, &mut errors).map(ChannelConfig::Email),
             _ => {
                 errors.insert("kind", format!("Choose one of: {}.", KINDS.join(", ")));
                 None
@@ -242,6 +268,135 @@ impl ChannelForm {
             _ => None,
         }
     }
+}
+
+impl ChannelForm {
+    fn email(
+        &self,
+        existing: Option<&ChannelConfig>,
+        errors: &mut FieldErrors,
+    ) -> Option<EmailConfig> {
+        let host = self.email_host.trim().trim_end_matches('.');
+        if !is_host(host) {
+            errors.insert(
+                "email_host",
+                "SMTP server is a host name or an IP address, e.g. smtp.example.com.".to_string(),
+            );
+        }
+
+        let security = match self.email_security.as_str() {
+            "starttls" => SmtpSecurity::Starttls,
+            "tls" => SmtpSecurity::Tls,
+            "none" => SmtpSecurity::None,
+            _ => {
+                errors.insert(
+                    "email_security",
+                    "Choose STARTTLS, TLS or none.".to_string(),
+                );
+                SmtpSecurity::Starttls
+            }
+        };
+
+        let port = self.email_port.trim();
+        let port = if port.is_empty() {
+            security.default_port()
+        } else {
+            match port.parse::<u16>() {
+                Ok(port) if port > 0 => port,
+                _ => {
+                    errors.insert(
+                        "email_port",
+                        "Port is a number from 1 to 65535.".to_string(),
+                    );
+                    0
+                }
+            }
+        };
+
+        let username = self.email_username.trim();
+        let typed = &self.email_password;
+        let (username, password) = if username.is_empty() {
+            (None, None)
+        } else {
+            let password = if !typed.is_empty() {
+                Some(typed.clone())
+            } else {
+                // Never sent to another server or account than the one it was given for.
+                match existing {
+                    Some(ChannelConfig::Email(c))
+                        if c.host == host && c.username.as_deref() == Some(username) =>
+                    {
+                        c.password.clone()
+                    }
+                    _ => None,
+                }
+            };
+            if password.is_none() {
+                errors.insert(
+                    "email_password",
+                    "Password is required with a username.".to_string(),
+                );
+            }
+            if security == SmtpSecurity::None {
+                errors.insert(
+                    "email_security",
+                    "A username and password are only sent over STARTTLS or TLS.".to_string(),
+                );
+            }
+            (Some(username.to_string()), password)
+        };
+
+        let from = self.email_from.trim();
+        if !is_mailbox(from) {
+            errors.insert(
+                "email_from",
+                "Sender is an address, e.g. uptime@example.com or Uptime <uptime@example.com>."
+                    .to_string(),
+            );
+        }
+
+        let to: Vec<String> = self
+            .email_to
+            .split(',')
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(str::to_string)
+            .collect();
+        if to.is_empty() || to.len() > MAX_RECIPIENTS || !to.iter().all(|t| is_mailbox(t)) {
+            errors.insert(
+                "email_to",
+                format!("Recipients: 1 to {MAX_RECIPIENTS} addresses separated by commas."),
+            );
+        }
+
+        errors.is_empty().then(|| EmailConfig {
+            host: host.to_string(),
+            port,
+            security,
+            username,
+            password,
+            from: from.to_string(),
+            to,
+        })
+    }
+}
+
+/// A host name or an IP address, without scheme or port.
+fn is_host(host: &str) -> bool {
+    if host.parse::<std::net::IpAddr>().is_ok() {
+        return true;
+    }
+    !host.is_empty()
+        && host.len() <= 253
+        && !host.contains(['/', ':', '@'])
+        && url::Host::parse(host).is_ok()
+}
+
+/// `address` or `Name <address>`, on one line.
+fn is_mailbox(text: &str) -> bool {
+    text.chars().count() <= ADDRESS_MAX_CHARS
+        && !text.chars().any(char::is_control)
+        && text.parse::<Mailbox>().is_ok()
 }
 
 /// `<bot id>:<secret>`. The token goes into the request path, so nothing else is allowed.
@@ -452,9 +607,134 @@ mod tests {
         );
     }
 
+    fn email_form() -> ChannelForm {
+        ChannelForm {
+            email_host: " smtp.example.com ".to_string(),
+            email_from: "Uptime <up@example.com>".to_string(),
+            email_to: "ops@example.com, Dev <dev@example.com>,".to_string(),
+            ..form("email")
+        }
+    }
+
+    fn email_config(username: Option<&str>, password: Option<&str>) -> EmailConfig {
+        EmailConfig {
+            host: "smtp.example.com".to_string(),
+            port: 587,
+            security: SmtpSecurity::Starttls,
+            username: username.map(str::to_string),
+            password: password.map(str::to_string),
+            from: "Uptime <up@example.com>".to_string(),
+            to: vec![
+                "ops@example.com".to_string(),
+                "Dev <dev@example.com>".to_string(),
+            ],
+        }
+    }
+
+    #[test]
+    fn email_defaults_the_port_and_splits_recipients() {
+        let input = email_form().validate(None).unwrap();
+        assert_eq!(input.config, ChannelConfig::Email(email_config(None, None)));
+
+        let mut f = email_form();
+        f.email_security = "tls".to_string();
+        let ChannelConfig::Email(c) = f.validate(None).unwrap().config else {
+            panic!()
+        };
+        assert_eq!((c.port, c.security), (465, SmtpSecurity::Tls));
+        f.email_port = "2525".to_string();
+        let ChannelConfig::Email(c) = f.validate(None).unwrap().config else {
+            panic!()
+        };
+        assert_eq!(c.port, 2525);
+    }
+
+    #[test]
+    fn email_checks_every_field() {
+        let mut f = email_form();
+        f.email_host = "https://smtp.example.com".to_string();
+        f.email_port = "70000".to_string();
+        f.email_security = "ssl".to_string();
+        f.email_from = "nobody".to_string();
+        f.email_to = "ops@example.com, oops".to_string();
+        let errors = f.validate(None).unwrap_err();
+        for key in [
+            "email_host",
+            "email_port",
+            "email_security",
+            "email_from",
+            "email_to",
+        ] {
+            assert!(errors.contains_key(key), "{key}");
+        }
+        f = email_form();
+        f.email_to = " , ".to_string();
+        assert!(f.validate(None).unwrap_err().contains_key("email_to"));
+        f.email_to = ["a@example.com"; 11].join(",");
+        assert!(f.validate(None).unwrap_err().contains_key("email_to"));
+        f = email_form();
+        f.email_from = "Evil\r\nBcc: x@example.com <up@example.com>".to_string();
+        assert!(f.validate(None).unwrap_err().contains_key("email_from"));
+        for host in ["192.0.2.1", "::1", "relais.exemple.fr"] {
+            f = email_form();
+            f.email_host = host.to_string();
+            assert!(f.validate(None).is_ok(), "{host}");
+        }
+    }
+
+    #[test]
+    fn email_password_is_kept_for_the_same_server_and_account_only() {
+        let mut f = email_form();
+        f.email_username = "up@example.com".to_string();
+        assert!(
+            f.validate(None).unwrap_err().contains_key("email_password"),
+            "required with a username"
+        );
+        let stored = ChannelConfig::Email(email_config(Some("up@example.com"), Some("old")));
+        assert_eq!(f.validate(Some(&stored)).unwrap().config, stored);
+
+        f.email_password = "new".to_string();
+        assert_eq!(
+            f.validate(Some(&stored)).unwrap().config,
+            ChannelConfig::Email(email_config(Some("up@example.com"), Some("new")))
+        );
+
+        f.email_password = String::new();
+        f.email_host = "smtp.other.com".to_string();
+        assert!(
+            f.validate(Some(&stored))
+                .unwrap_err()
+                .contains_key("email_password")
+        );
+        f.email_host = "smtp.example.com".to_string();
+        f.email_username = "other@example.com".to_string();
+        assert!(
+            f.validate(Some(&stored))
+                .unwrap_err()
+                .contains_key("email_password")
+        );
+
+        f.email_username = String::new();
+        assert_eq!(
+            f.validate(Some(&stored)).unwrap().config,
+            ChannelConfig::Email(email_config(None, None)),
+            "no username, no password"
+        );
+    }
+
+    #[test]
+    fn email_credentials_need_encryption() {
+        let mut f = email_form();
+        f.email_security = "none".to_string();
+        assert!(f.validate(None).is_ok());
+        f.email_username = "up".to_string();
+        f.email_password = "pw".to_string();
+        assert!(f.validate(None).unwrap_err().contains_key("email_security"));
+    }
+
     #[test]
     fn name_and_kind_are_required() {
-        let mut f = form("email");
+        let mut f = form("sms");
         f.name = " ".to_string();
         let errors = f.validate(None).unwrap_err();
         assert!(errors.contains_key("name"));
@@ -471,5 +751,12 @@ mod tests {
         let f = ChannelForm::from_config("Ops", &telegram_config("1:tk"), true, true);
         assert_eq!(f.telegram_token, "");
         assert_eq!(f.telegram_chat_id, "-1001");
+
+        let config = ChannelConfig::Email(email_config(Some("up"), Some("pw")));
+        let f = ChannelForm::from_config("Ops", &config, true, true);
+        assert_eq!(f.email_password, "");
+        assert_eq!(f.email_username, "up");
+        assert_eq!(f.email_to, "ops@example.com, Dev <dev@example.com>");
+        assert_eq!(f.email_port, "587");
     }
 }

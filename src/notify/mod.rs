@@ -6,6 +6,7 @@
 //! delivery's final result goes to `notification_log`, one row per monitor.
 
 pub mod channel;
+pub mod email;
 pub mod message;
 
 use crate::engine::guard::Guard;
@@ -35,8 +36,8 @@ const QUEUE_SIZE: usize = 1000;
 pub const GROUP_WINDOW: Duration = Duration::from_secs(15);
 /// Requests in flight at the same time, across all channels.
 const MAX_CONCURRENT_SENDS: usize = 5;
-const SEND_TIMEOUT: Duration = Duration::from_secs(10);
-const ERROR_MAX_CHARS: usize = 300;
+pub(crate) const SEND_TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const ERROR_MAX_CHARS: usize = 300;
 const USER_AGENT: &str = concat!("uptime-monitoring/", env!("CARGO_PKG_VERSION"));
 
 /// The monitor an alert is about, as it was when the event happened.
@@ -187,10 +188,10 @@ impl Default for Sender {
     }
 }
 
-struct SendError {
-    message: String,
+pub(crate) struct SendError {
+    pub message: String,
     /// Worth trying again: no response, a server error, or a rate limit.
-    retry: bool,
+    pub retry: bool,
 }
 
 impl Sender {
@@ -243,9 +244,13 @@ impl Sender {
         notification: &Notification,
         message: &Message,
     ) -> Result<(), SendError> {
+        if let ChannelConfig::Email(c) = config {
+            return email::send(&self.guard, c, message).await;
+        }
         // The guard checks the URL actually requested; a URL that does not parse fails here.
         let request = config
             .request(self.client(), notification, message)
+            .expect("every channel but e-mail sends an HTTP request")
             .build()
             .map_err(|_| SendError {
                 message: "invalid URL".to_string(),
@@ -502,7 +507,7 @@ async fn log_delivery(
 }
 
 /// `error sending request: … : connection refused`: reqwest's own text hides the cause.
-fn error_chain(error: &reqwest::Error) -> String {
+pub(crate) fn error_chain(error: &dyn Error) -> String {
     let mut text = error.to_string();
     let mut source = error.source();
     while let Some(e) = source {

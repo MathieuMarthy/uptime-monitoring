@@ -103,6 +103,8 @@ pub struct FormTemplate {
     pub has_token: bool,
     /// Editing a Telegram channel, whose bot token is stored.
     pub has_bot_token: bool,
+    /// Editing an e-mail channel that has a password.
+    pub has_password: bool,
     /// After "Send Test": sent, or why not.
     pub test_result: Option<Result<(), String>>,
 }

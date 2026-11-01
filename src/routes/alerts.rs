@@ -193,6 +193,7 @@ fn page(
         channel_id: id,
         has_token,
         has_bot_token: matches!(existing, Some(ChannelConfig::Telegram(_))),
+        has_password: matches!(existing, Some(ChannelConfig::Email(c)) if c.password.is_some()),
         test_result: None,
     }
 }

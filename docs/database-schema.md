@@ -115,8 +115,9 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
 ### Alerts
 
 - `notification_channels`: `id`, `name` (UNIQUE NOCASE), `kind` (`webhook` \| `discord` \| `ntfy` \|
-  `telegram`), `config` (JSON, validated per kind: `{url}` for webhook and Discord, `{server, topic, token?}` for
-  ntfy, `{token, chat_id, server?}` for Telegram, `server` absent for the public Bot API), `enabled`, `group_alerts`
+  `telegram` \| `email`), `config` (JSON, validated per kind: `{url}` for webhook and Discord, `{server, topic, token?}` for
+  ntfy, `{token, chat_id, server?}` for Telegram, `server` absent for the public Bot API, `{host, port, security, username?, password?, from, to: [..]}` for e-mail,
+  `security` = `starttls` \| `tls` \| `none`, `password` set with `username`), `enabled`, `group_alerts`
   (default 1; ignored for webhooks), `created_at`.
 - `monitor_channels`: `(monitor_id, channel_id)` PK, both FK cascade; index on `channel_id`.
 - `notification_log`: `id`, `channel_id`, `monitor_id` (both FK `SET NULL`), `event` (`down` \| `up` \|

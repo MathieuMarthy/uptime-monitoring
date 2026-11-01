@@ -19,7 +19,7 @@
 <div class="form-container">
     <div class="form-header">
         <h1 class="form-title">{% if self.is_edit() %}Edit Channel{% else %}Add a Notification Channel{% endif %}</h1>
-        <p class="form-subtitle">Where alerts are sent: any webhook, a Discord channel, an ntfy topic or a Telegram chat.</p>
+        <p class="form-subtitle">Where alerts are sent: any webhook, a Discord channel, an ntfy topic, a Telegram chat or e-mail.</p>
     </div>
 
     {% match test_result %}
@@ -133,8 +133,73 @@
                 </div>
             </div>
 
+            <div class="form-section" data-kinds="email">
+                <h2 class="section-title">E-mail</h2>
+                <div class="form-row form-row-wide-first">
+                    <div class="form-group">
+                        <label class="form-label" for="email_host">SMTP Server</label>
+                        <input class="form-input" id="email_host" name="email_host" type="text" maxlength="253"
+                               placeholder="smtp.example.com" value="{{ form.email_host }}"/>
+                        <span class="form-hint">Your provider's relay: Gmail, Fastmail, Brevo, your own server…</span>
+                        {% call field_error("email_host") %}{% endcall %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="email_port">Port</label>
+                        <input class="form-input" id="email_port" name="email_port" type="text" inputmode="numeric" maxlength="5"
+                               placeholder="587" value="{{ form.email_port }}"/>
+                        <span class="form-hint">Empty: 587, 465 with TLS, 25 without encryption.</span>
+                        {% call field_error("email_port") %}{% endcall %}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="email_security">Security</label>
+                    <select class="form-select" id="email_security" name="email_security">
+                        <option value="starttls" {% if form.email_security == "starttls" %}selected{% endif %}>STARTTLS (required)</option>
+                        <option value="tls" {% if form.email_security == "tls" %}selected{% endif %}>TLS</option>
+                        <option value="none" {% if form.email_security == "none" %}selected{% endif %}>None, trusted network only</option>
+                    </select>
+                    {% call field_error("email_security") %}{% endcall %}
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="email_username">Username</label>
+                        <input class="form-input" id="email_username" name="email_username" type="text" autocomplete="off"
+                               placeholder="Optional" value="{{ form.email_username }}"/>
+                        {% call field_error("email_username") %}{% endcall %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="email_password">Password</label>
+                        <input class="form-input" id="email_password" name="email_password" type="password" autocomplete="new-password"
+                               value="{{ form.email_password }}" placeholder="{% if has_password %}Stored, leave empty to keep it{% else %}Required with a username{% endif %}"/>
+                        <span class="form-hint">Often an app password, not your account's.</span>
+                        {% call field_error("email_password") %}{% endcall %}
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="email_from">From</label>
+                        <input class="form-input" id="email_from" name="email_from" type="text" maxlength="254"
+                               placeholder="Uptime &lt;uptime@example.com&gt;" value="{{ form.email_from }}"/>
+                        {% call field_error("email_from") %}{% endcall %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="email_to">To</label>
+                        <input class="form-input" id="email_to" name="email_to" type="text"
+                               placeholder="ops@example.com, me@example.com" value="{{ form.email_to }}"/>
+                        <span class="form-hint">Up to 10 addresses, separated by commas.</span>
+                        {% call field_error("email_to") %}{% endcall %}
+                    </div>
+                </div>
+            </div>
+
             <div class="form-section">
-                <label class="checkbox-group" for="group_alerts" data-kinds="discord ntfy telegram">
+                <label class="checkbox-group" for="group_alerts" data-kinds="discord ntfy telegram email">
                     <input type="checkbox" id="group_alerts" name="group_alerts" {% if form.group_alerts.is_some() %}checked{% endif %}/>
                     <div class="checkbox-label-group">
                         <span class="form-label">Group simultaneous alerts</span>

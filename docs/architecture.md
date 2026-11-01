@@ -60,7 +60,8 @@ uptime-monitoring/
 │   ├── notify/                   # Alerts
 │   │   ├── mod.rs                # Notifier: queue, dispatcher, retries, delivery log
 │   │   ├── message.rs            # Title and text of an event, whatever the channel
-│   │   └── channel.rs            # Webhook / Discord / ntfy / Telegram config and request
+│   │   ├── channel.rs            # Webhook / Discord / ntfy / Telegram / e-mail config, HTTP request
+│   │   └── email.rs              # E-mail: the mail and its SMTP delivery
 │   ├── models/                   # Entities and their SQL queries
 │   │   ├── admin.rs              # The single admin account
 │   │   ├── channel.rs            # Notification channels + monitor links
@@ -293,11 +294,19 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   escaping; link previews are off; a refusal is logged with Telegram's `description` (`HTTP 400: Bad Request: chat
   not found`). The guard checks the URL of the built request. With `PUBLIC_URL`, the detail page's address is `monitor.link`, the embed's `url`, ntfy's
   `click` and the last line of the Telegram text (`link` is `null` without it).
+- **E-mail** (`notify/email.rs`, `lettre`, rustls with ring, no connection pool). Through the user's SMTP relay
+  only, never straight to MX servers (port 25 is often blocked, and unsigned mail lands in spam). The relay's name
+  goes through `Guard::resolve_host` and the connection goes to the first address allowed, while TLS checks the
+  certificate against the name. Security: `starttls` (required, 587), `tls` (465) or `none` (25, refused by the form
+  with credentials). Plain-text UTF-8 mail: subject = title (control characters as spaces), body = text then link,
+  one mail to every recipient (To, up to 10), `Message-ID` on the sender's domain. Each command times out after
+  10 s, the whole delivery after 30 s; SMTP 5xx is permanent (not retried), 4xx, connection and DNS errors are.
 - **UI.** `/alerts` lists channels (monitor count, last delivery) and the last 50 deliveries. The channel form's
   *Send Test* button (`…/new/test`, `…/{id}/edit/test`) sends the channel as typed, once, without saving or logging
   it, and shows the form again with the result; *Group simultaneous alerts* (`group_alerts`, on by default) is
-  hidden for webhooks; a typed ntfy token is kept in the field. The ntfy token and the Telegram bot token are never sent back to the browser: left
-  blank, the stored one is kept (for ntfy, unless the server changed; a Telegram channel always needs one). Monitors pick their
+  hidden for webhooks; a typed ntfy token is kept in the field. The ntfy token, the Telegram bot token and the SMTP password are never sent back to the
+  browser: left blank, the stored one is kept (for ntfy, unless the server changed; for e-mail, unless the host or
+  username changed; a Telegram channel always needs one). Monitors pick their
   channels in their form (checkboxes `channel_<id>`, gathered by `MonitorForm::other`); a new monitor starts with
   every enabled channel checked.
 
@@ -456,7 +465,7 @@ exports, copies and imports (below).
 ### Backup and import
 
 - **Export** (`GET /settings/export`). A JSON file (`format: "uptime-monitoring"`, `version: 1`) of the channels,
-  monitors, public pages and maintenance windows, as stored, secrets included (push tokens, channel tokens). Links go
+  monitors, public pages and maintenance windows, as stored, secrets included (push tokens, channel tokens, SMTP passwords). Links go
   by name: a monitor lists its channels' names, a page and a window their monitors' names. No account, settings or
   history.
 - **Database copy** (`GET /settings/backup`). `VACUUM INTO` a file next to the database (in the temporary directory
@@ -475,7 +484,8 @@ exports, copies and imports (below).
   → the group name of its children, other types skipped. `maxretries + 1` → failure threshold (1–10), retry
   interval capped by the interval, timeout (default 80 % of the interval) capped by 120 s and the interval,
   `maxredirects = 0` → no redirects, `expiryNotification` → 14-day certificate warning, `active = 0` → paused.
-  Notifications: webhook, Discord, ntfy (token or none; user/password skipped), Telegram; others skipped. Twin
+  Notifications: webhook, Discord, ntfy (token or none; user/password skipped), Telegram, SMTP (`smtpSecure` → `tls`,
+  else `starttls`; To and Cc kept, Bcc dropped since it would become visible); others skipped. Twin
   names get ` (2)`, ` (3)`…, so their monitors stay linked to the right one.
 
 ## Deployment

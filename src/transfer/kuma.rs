@@ -1,5 +1,5 @@
 //! Uptime Kuma backups (the JSON of Settings › Backup in Kuma 1.x): its HTTP, keyword and push
-//! monitors and its webhook, Discord, ntfy and Telegram notifications, turned into an export.
+//! monitors and its webhook, Discord, ntfy, Telegram and SMTP notifications, turned into an export.
 //! Kuma writes booleans as `0`/`1` or `true`/`false` and numbers as integers or floats: every
 //! field is read leniently.
 
@@ -123,6 +123,33 @@ fn channel(notification: &Value, name: &str) -> Result<ChannelExport, String> {
                 "chat_id": text(&config, "telegramChatID").unwrap_or_default(),
             }),
         ),
+        "smtp" => {
+            // Blind copies would become visible: only To and Cc are kept.
+            let to: Vec<String> = ["smtpTo", "smtpCC"]
+                .iter()
+                .filter_map(|key| text(&config, key))
+                .flat_map(|list| {
+                    list.split(',')
+                        .map(str::trim)
+                        .filter(|t| !t.is_empty())
+                        .map(str::to_string)
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            let secure = flag(&config, "smtpSecure").unwrap_or(false);
+            let mut email = json!({
+                "host": text(&config, "smtpHost").unwrap_or_default(),
+                "port": number(&config, "smtpPort").unwrap_or(if secure { 465 } else { 587 }),
+                "security": if secure { "tls" } else { "starttls" },
+                "from": text(&config, "smtpFrom").unwrap_or_default(),
+                "to": to,
+            });
+            if let Some(username) = text(&config, "smtpUsername") {
+                email["username"] = json!(username);
+                email["password"] = json!(text(&config, "smtpPassword"));
+            }
+            ("email", email)
+        }
         "" => return Err("no notification type.".into()),
         other => return Err(format!("“{other}” notifications are not supported.")),
     };

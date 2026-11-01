@@ -41,7 +41,7 @@ small enough to run next to the sites it watches.
 
 **Alerts**
 - When a monitor goes down, comes back up, or its certificate is about to expire.
-- Webhook, Discord, ntfy and Telegram, retried, with a delivery log.
+- Webhook, Discord, ntfy, Telegram and e-mail (SMTP relay), retried, with a delivery log.
 
 **Security**
 - One admin account: Argon2 password, optional two-factor authentication (TOTP), `Secure` session cookie, CSRF

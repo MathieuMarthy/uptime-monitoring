@@ -6,7 +6,7 @@ use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-pub const KINDS: [&str; 4] = ["webhook", "discord", "ntfy", "telegram"];
+pub const KINDS: [&str; 5] = ["webhook", "discord", "ntfy", "telegram", "email"];
 
 /// The public Bot API server.
 pub const TELEGRAM_API: &str = "https://api.telegram.org";
@@ -37,6 +37,53 @@ pub struct TelegramConfig {
     pub chat_id: String,
 }
 
+/// How the connection to an SMTP relay is secured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SmtpSecurity {
+    /// Plain connection upgraded with `STARTTLS`, which is required (port 587).
+    Starttls,
+    /// TLS from the first byte (port 465).
+    Tls,
+    /// No encryption, for a relay on a trusted network; never with credentials.
+    None,
+}
+
+impl SmtpSecurity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Starttls => "starttls",
+            Self::Tls => "tls",
+            Self::None => "none",
+        }
+    }
+
+    pub fn default_port(self) -> u16 {
+        match self {
+            Self::Starttls => 587,
+            Self::Tls => 465,
+            Self::None => 25,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EmailConfig {
+    /// The SMTP relay: a host name or an IP address.
+    pub host: String,
+    pub port: u16,
+    pub security: SmtpSecurity,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    /// Set whenever `username` is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    /// `address` or `Name <address>`.
+    pub from: String,
+    /// One or more recipients, each like `from`.
+    pub to: Vec<String>,
+}
+
 fn telegram_api() -> String {
     TELEGRAM_API.to_string()
 }
@@ -55,6 +102,8 @@ pub enum ChannelConfig {
     Ntfy(NtfyConfig),
     /// A message sent by a bot to a chat.
     Telegram(TelegramConfig),
+    /// A mail sent through an SMTP relay.
+    Email(EmailConfig),
 }
 
 impl ChannelConfig {
@@ -65,6 +114,7 @@ impl ChannelConfig {
             "discord" => serde_json::from_str(config).map(Self::Discord),
             "ntfy" => serde_json::from_str(config).map(Self::Ntfy),
             "telegram" => serde_json::from_str(config).map(Self::Telegram),
+            "email" => serde_json::from_str(config).map(Self::Email),
             other => Err(serde_json::Error::custom(format!(
                 "unknown channel kind {other:?}"
             ))),
@@ -77,6 +127,7 @@ impl ChannelConfig {
             Self::Discord(_) => "discord",
             Self::Ntfy(_) => "ntfy",
             Self::Telegram(_) => "telegram",
+            Self::Email(_) => "email",
         }
     }
 
@@ -90,13 +141,14 @@ impl ChannelConfig {
             Self::Webhook(c) | Self::Discord(c) => json!(c),
             Self::Ntfy(c) => json!(c),
             Self::Telegram(c) => json!(c),
+            Self::Email(c) => json!(c),
         }
         .to_string()
     }
 
     /// Where the request goes. Telegram's URL carries the bot token.
-    fn url(&self) -> String {
-        match self {
+    fn url(&self) -> Option<String> {
+        Some(match self {
             Self::Webhook(c) | Self::Discord(c) => c.url.clone(),
             Self::Ntfy(c) => c.server.clone(),
             Self::Telegram(c) => format!(
@@ -104,15 +156,18 @@ impl ChannelConfig {
                 c.server.trim_end_matches('/'),
                 c.token
             ),
-        }
+            Self::Email(_) => return None,
+        })
     }
 
+    /// The HTTP request of this channel; `None` for e-mail, which goes over SMTP.
     pub fn request(
         &self,
         client: &Client,
         notification: &Notification,
         message: &Message,
-    ) -> RequestBuilder {
+    ) -> Option<RequestBuilder> {
+        let url = self.url()?;
         let mut body = match self {
             Self::Webhook(_) => json!({
                 "event": notification.event.as_str(),
@@ -146,16 +201,17 @@ impl ChannelConfig {
                 "text": telegram_text(message),
                 "link_preview_options": { "is_disabled": true },
             }),
+            Self::Email(_) => return None,
         };
         if let Some(link) = &message.link {
             match self {
-                Self::Webhook(_) | Self::Telegram(_) => {}
+                Self::Webhook(_) | Self::Telegram(_) | Self::Email(_) => {}
                 Self::Discord(_) => body["embeds"][0]["url"] = json!(link),
                 Self::Ntfy(_) => body["click"] = json!(link),
             }
         }
         let mut request = client
-            .post(self.url())
+            .post(url)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .body(body.to_string());
         if let Self::Ntfy(NtfyConfig {
@@ -164,7 +220,7 @@ impl ChannelConfig {
         {
             request = request.bearer_auth(token);
         }
-        request
+        Some(request)
     }
 }
 
@@ -238,6 +294,15 @@ mod tests {
                 token: "123:ABC".to_string(),
                 chat_id: "-1001".to_string(),
             }),
+            ChannelConfig::Email(EmailConfig {
+                host: "smtp.example.com".to_string(),
+                port: 587,
+                security: SmtpSecurity::Starttls,
+                username: Some("up@example.com".to_string()),
+                password: Some("secret".to_string()),
+                from: "Uptime <up@example.com>".to_string(),
+                to: vec!["ops@example.com".to_string()],
+            }),
         ];
         for config in configs {
             assert_eq!(
@@ -245,7 +310,7 @@ mod tests {
                 config
             );
         }
-        assert!(ChannelConfig::parse("email", "{}").is_err());
+        assert!(ChannelConfig::parse("sms", "{}").is_err());
     }
 
     #[test]

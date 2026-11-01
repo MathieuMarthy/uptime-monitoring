@@ -61,7 +61,10 @@ async fn alerts_page_lists_channels() {
     assert!(r.body.contains(r#"class="data-table data-table-stack""#));
     assert!(r.body.contains(r#"<td data-label="Type">webhook</td>"#));
     // The section tabs use a short label where the full one does not fit.
-    assert!(r.body.contains(r#"<span class="nav-short" aria-hidden="true">Pages</span>"#));
+    assert!(
+        r.body
+            .contains(r#"<span class="nav-short" aria-hidden="true">Pages</span>"#)
+    );
 }
 
 #[tokio::test]
@@ -134,6 +137,44 @@ async fn edit_never_shows_the_telegram_token_and_keeps_it() {
     let r = post_form(&app, &format!("/alerts/{id}/edit"), &telegram("Phone2", "")).await;
     assert_redirect(&r, "/alerts");
     assert!(channels(&pool).await[0].config.contains("tk_secret"));
+}
+
+fn email(name: &str, password: &str) -> String {
+    format!(
+        "name={name}&kind=email&email_host=smtp.example.com&email_port=&email_security=starttls\
+         &email_username=up&email_password={}&email_from={}&email_to={}&enabled=on",
+        encode(password),
+        encode("Uptime <up@example.com>"),
+        encode("ops@example.com, dev@example.com"),
+    )
+}
+
+#[tokio::test]
+async fn edit_never_shows_the_smtp_password_and_keeps_it() {
+    let (app, pool) = common::test_app().await;
+    let r = post_form(&app, "/alerts/new", &email("Mail", "")).await;
+    assert_eq!(r.status, 200, "a username needs its password");
+    assert!(r.body.contains("Password is required with a username."));
+    assert!(channels(&pool).await.is_empty());
+
+    assert_redirect(
+        &post_form(&app, "/alerts/new", &email("Mail", "pw_secret")).await,
+        "/alerts",
+    );
+    let stored = &channels(&pool).await[0];
+    assert_eq!(stored.kind, "email");
+    assert!(stored.config.contains(r#""port":587"#), "{}", stored.config);
+    let id = stored.id;
+
+    let r = get(&app, &format!("/alerts/{id}/edit")).await;
+    assert!(r.body.contains("smtp.example.com"));
+    assert!(r.body.contains("ops@example.com, dev@example.com"));
+    assert!(r.body.contains("Stored, leave empty to keep it"));
+    assert!(!r.body.contains("pw_secret"));
+
+    let r = post_form(&app, &format!("/alerts/{id}/edit"), &email("Mail2", "")).await;
+    assert_redirect(&r, "/alerts");
+    assert!(channels(&pool).await[0].config.contains("pw_secret"));
 }
 
 #[tokio::test]
