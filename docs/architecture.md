@@ -402,6 +402,8 @@ alerts follow the checks retention: older incidents only show their facts.
 - **Menu.** A page marks its menu entry by filling the matching `nav_*` block of `layout.html`. Under 720 px, CSS alone
   puts the brand and three icon buttons (theme, settings, log out; named by `aria-label`) on one line and
   the five sections as equal tabs under them (*Maintenance* shortened to *Maint.*).
+- **Footer.** Admin pages end with the version (`VERSION`), a link to the repository (`REPO_URL`) and *Report a
+  bug*, a new GitHub issue labelled `bug` whose body starts with the version. Public and login pages have none.
 
 ## Public pages
 
@@ -465,7 +467,7 @@ alerts follow the checks retention: older incidents only show their facts.
 - **CI** (`.github/workflows/ci.yml`). On every push to `main` and pull request: `cargo fmt --check`, clippy with
   `-D warnings`, tests, and an image build without push. On a `v*` tag, the image is built and pushed to
   `ghcr.io/<owner>/uptime-monitoring` with the version and `major.minor` tags, plus `latest` for a version that is not
-  a pre-release.
+  a pre-release. The release fails unless the tag is `v` + the `Cargo.toml` version, so bump it before tagging.
 
 ## Tests
 
