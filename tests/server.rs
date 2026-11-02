@@ -9,8 +9,8 @@ use uptime_monitoring::server::{Limits, serve};
 
 const REQUEST: &[u8] = b"GET / HTTP/1.1\r\nHost: test\r\nConnection: close\r\n\r\n";
 
-async fn start(limits: Limits) -> std::net::SocketAddr {
-    let router = Router::new()
+fn router() -> Router {
+    Router::new()
         .route("/", get(|| async { "ok" }))
         .route(
             "/slow",
@@ -19,10 +19,13 @@ async fn start(limits: Limits) -> std::net::SocketAddr {
                 "late"
             }),
         )
-        .route("/body", post(|body: String| async move { body }));
+        .route("/body", post(|body: String| async move { body }))
+}
+
+async fn start(limits: Limits) -> std::net::SocketAddr {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
-    tokio::spawn(serve(listener, router, limits, std::future::pending()));
+    tokio::spawn(serve(listener, router(), limits, std::future::pending()));
     addr
 }
 
@@ -41,6 +44,8 @@ fn limits() -> Limits {
         header_read: Duration::from_millis(300),
         request: Duration::from_millis(300),
         max_connections: 16,
+        loopback_reserve: 0,
+        shutdown_grace: Duration::from_secs(10),
     }
 }
 
@@ -92,7 +97,7 @@ async fn a_slow_handler_gets_a_408() {
 }
 
 #[tokio::test]
-async fn connections_past_the_limit_wait_for_a_free_slot() {
+async fn connections_past_the_limit_are_closed_at_once() {
     let addr = start(Limits {
         header_read: Duration::from_secs(10),
         max_connections: 1,
@@ -102,19 +107,68 @@ async fn connections_past_the_limit_wait_for_a_free_slot() {
     let holder = TcpStream::connect(addr).await.unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let mut waiting = TcpStream::connect(addr).await.unwrap();
-    waiting.write_all(REQUEST).await.unwrap();
-    assert_eq!(
-        read_all(&mut waiting, Duration::from_millis(500)).await,
-        None,
-        "served while the only slot was taken"
-    );
+    let mut refused = TcpStream::connect(addr).await.unwrap();
+    let _ = refused.write_all(REQUEST).await;
+    // Closed without an answer: an end of stream, or a reset since the request was unread.
+    let mut out = Vec::new();
+    let read = tokio::time::timeout(Duration::from_secs(1), refused.read_to_end(&mut out))
+        .await
+        .expect("closed at once, not left waiting");
+    assert!(read.is_err() || out.is_empty(), "{read:?} {out:?}");
 
     drop(holder);
-    let answer = read_all(&mut waiting, Duration::from_secs(3))
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let mut next = TcpStream::connect(addr).await.unwrap();
+    next.write_all(REQUEST).await.unwrap();
+    let answer = read_all(&mut next, Duration::from_secs(3)).await.unwrap();
+    assert!(answer.starts_with("HTTP/1.1 200"), "{answer}");
+}
+
+/// The healthcheck connects through loopback: it still gets in when the limit is reached.
+#[tokio::test]
+async fn loopback_clients_have_a_reserve() {
+    let addr = start(Limits {
+        header_read: Duration::from_secs(10),
+        max_connections: 1,
+        loopback_reserve: 1,
+        ..limits()
+    })
+    .await;
+    let _holder = TcpStream::connect(addr).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let mut health = TcpStream::connect(addr).await.unwrap();
+    health.write_all(REQUEST).await.unwrap();
+    let answer = read_all(&mut health, Duration::from_secs(3)).await.unwrap();
+    assert!(answer.starts_with("HTTP/1.1 200"), "{answer}");
+}
+
+/// A request that never ends does not keep the process from exiting.
+#[tokio::test]
+async fn shutdown_waits_at_most_the_grace_period() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let limits = Limits {
+        request: Duration::from_secs(60),
+        shutdown_grace: Duration::from_millis(200),
+        ..limits()
+    };
+    let server = tokio::spawn(serve(listener, router(), limits, async {
+        let _ = stopped.await;
+    }));
+
+    let mut stream = TcpStream::connect(addr).await.unwrap();
+    stream
+        .write_all(b"GET /slow HTTP/1.1\r\nHost: test\r\n\r\n")
         .await
         .unwrap();
-    assert!(answer.starts_with("HTTP/1.1 200"), "{answer}");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), server)
+        .await
+        .expect("the server should exit within its grace period")
+        .unwrap();
 }
 
 #[tokio::test]

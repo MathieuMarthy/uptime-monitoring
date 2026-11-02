@@ -167,7 +167,11 @@ async fn page(
 ) -> Result<SettingsTemplate, AppError> {
     let settings = Settings::load(&state.db).await?;
     let storage = StorageUse::load(&state.db).await?;
-    let other_sessions = session.count_others(&state.db).await?;
+    // Shown in the Security section only.
+    let other_sessions = match section {
+        Section::Security => session.count_others(&state.db).await?,
+        _ => 0,
+    };
     let mut page = SettingsTemplate::new(&settings, storage, session.csrf_token, section);
     page.totp_enabled = Admin::find(&state.db)
         .await?
@@ -181,7 +185,10 @@ async fn end_other_sessions(
     State(state): State<AppState>,
     Extension(session): Extension<Session>,
 ) -> Result<Response, AppError> {
-    session.end_others(&state.db).await?;
+    if !session.end_others(&state.db).await? {
+        // Another session logged this one out first.
+        return Ok(Redirect::to("/login").into_response());
+    }
     tracing::info!("Other admin sessions logged out.");
     Ok(Redirect::to("/settings?section=security&saved=sessions").into_response())
 }

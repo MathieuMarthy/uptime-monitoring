@@ -61,13 +61,22 @@ impl Session {
             .await
     }
 
-    /// Deletes every session but this one.
-    pub async fn end_others(&self, pool: &SqlitePool) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM sessions WHERE token_hash <> ?")
+    /// Deletes every session but this one, unless this one has ended meanwhile (another session
+    /// logged it out first): false then, and nothing is deleted.
+    pub async fn end_others(&self, pool: &SqlitePool) -> Result<bool, sqlx::Error> {
+        // One statement: the check and the deletion cannot be split by another session's.
+        sqlx::query(
+            "DELETE FROM sessions WHERE token_hash <> ? \
+             AND EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?)",
+        )
+        .bind(&self.token_hash)
+        .bind(&self.token_hash)
+        .execute(pool)
+        .await?;
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?)")
             .bind(&self.token_hash)
-            .execute(pool)
-            .await?;
-        Ok(())
+            .fetch_one(pool)
+            .await
     }
 
     pub async fn purge_expired(pool: &SqlitePool, now: i64) -> Result<(), sqlx::Error> {

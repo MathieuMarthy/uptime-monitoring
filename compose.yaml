@@ -12,8 +12,9 @@ services:
     volumes:
       - data:/data
     # Least privilege. Root is only used at startup to hand /data to the app user (CHOWN), then
-    # dropped for good (SETUID, SETGID). With `user: "65532:65532"` and a volume that user already
-    # owns, `cap_add` can go too.
+    # dropped for good (SETUID, SETGID). Root then cannot bypass file permissions: a DATABASE_URL in
+    # a subdirectory of the volume that does not exist yet also needs DAC_OVERRIDE. With
+    # `user: "65532:65532"` and a volume that user already owns, `cap_add` can go too.
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID]
     security_opt:
@@ -21,7 +22,6 @@ services:
     # Only /data is written, backups included.
     read_only: true
     mem_limit: 128m
-    pids_limit: 64
 
 volumes:
   data:

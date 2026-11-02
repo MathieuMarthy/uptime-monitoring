@@ -350,3 +350,16 @@ async fn logging_out_other_sessions_needs_the_csrf_token() {
     assert_eq!(r.status, 403);
     assert!(Session::find(&pool, &other.token).await.unwrap().is_some());
 }
+
+#[tokio::test]
+async fn an_ended_session_cannot_log_out_the_others() {
+    let (_, pool) = common::test_app().await;
+    let mine = Session::create(&pool).await.unwrap();
+    let other = Session::create(&pool).await.unwrap();
+    let mine = Session::find(&pool, &mine.token).await.unwrap().unwrap();
+    // Ended by the other session first, between its guard check and its own request.
+    mine.delete(&pool).await.unwrap();
+
+    assert!(!mine.end_others(&pool).await.unwrap());
+    assert!(Session::find(&pool, &other.token).await.unwrap().is_some());
+}

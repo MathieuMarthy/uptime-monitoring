@@ -24,10 +24,15 @@ pub struct Limits {
     /// idle keep-alive connection is closed after this long too.
     pub header_read: Duration,
     /// To read the body and produce the response (408 past it). A streamed response body,
-    /// such as the backup, is not counted.
+    /// such as the backup download, is not counted.
     pub request: Duration,
-    /// Connections served at once; the next ones wait in the listen backlog.
+    /// Connections served at once; past it, a new connection is closed at once.
     pub max_connections: usize,
+    /// Extra connections for loopback clients only, so that the healthcheck still gets in when
+    /// remote clients hold every other slot.
+    pub loopback_reserve: usize,
+    /// How long requests in flight may finish after the shutdown signal.
+    pub shutdown_grace: Duration,
 }
 
 impl Default for Limits {
@@ -36,11 +41,14 @@ impl Default for Limits {
             header_read: Duration::from_secs(10),
             request: Duration::from_secs(30),
             max_connections: 512,
+            loopback_reserve: 8,
+            shutdown_grace: Duration::from_secs(10),
         }
     }
 }
 
-/// Serves `router` until `shutdown` completes, then waits for the requests in flight.
+/// Serves `router` until `shutdown` completes, then lets the requests in flight finish, for at
+/// most `shutdown_grace`.
 /// Handlers see the peer address as `ConnectInfo<SocketAddr>`.
 pub async fn serve(
     listener: TcpListener,
@@ -53,14 +61,11 @@ pub async fn serve(
         limits.request,
     ));
     let slots = Arc::new(Semaphore::new(limits.max_connections));
+    let reserve = Arc::new(Semaphore::new(limits.loopback_reserve));
     let graceful = GracefulShutdown::new();
     let mut shutdown = pin!(shutdown);
 
     loop {
-        let slot = tokio::select! {
-            slot = slots.clone().acquire_owned() => slot.expect("never closed"),
-            () = &mut shutdown => break,
-        };
         let (stream, peer) = tokio::select! {
             accepted = listener.accept() => match accepted {
                 Ok(accepted) => accepted,
@@ -72,6 +77,18 @@ pub async fn serve(
                 }
             },
             () = &mut shutdown => break,
+        };
+        let slot = slots.clone().try_acquire_owned().or_else(|e| {
+            if peer.ip().to_canonical().is_loopback() {
+                reserve.clone().try_acquire_owned()
+            } else {
+                Err(e)
+            }
+        });
+        let Ok(slot) = slot else {
+            // Dropping the stream closes it: no task, no buffer for a client past the limit.
+            tracing::debug!(%peer, "connection refused: too many open connections");
+            continue;
         };
         let _ = stream.set_nodelay(true);
 
@@ -95,5 +112,10 @@ pub async fn serve(
     }
 
     drop(listener);
-    graceful.shutdown().await;
+    if tokio::time::timeout(limits.shutdown_grace, graceful.shutdown())
+        .await
+        .is_err()
+    {
+        tracing::warn!("requests still in flight after the grace period; exiting anyway");
+    }
 }

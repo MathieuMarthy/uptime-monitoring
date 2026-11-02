@@ -220,8 +220,10 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   `Referrer-Policy: same-origin`; protected pages add `Cache-Control: no-store`. HSTS is left to the reverse proxy.
 - **Connections** (`server.rs`). `axum::serve` sets no timer, so hyper's header timeout would never apply: the binary
   serves HTTP/1.1 through hyper itself. 10 s to send the headers, idle keep-alive connections included; 30 s to read
-  the body and produce the response (408 past it; a streamed body such as the backup is not counted); at most 512
-  connections at once, the next ones wait in the listen backlog. No HTTP/2: the reverse proxy speaks HTTP/1.1 to it.
+  the body and produce the response (408 past it; a streamed body such as the backup download is not counted). At
+  most 512 connections at once, plus 8 for loopback clients only, so that the healthcheck still gets in; past that,
+  a new connection is closed at once. On shutdown, requests in flight get 10 s. No HTTP/2: the reverse proxy speaks
+  HTTP/1.1 to it. A per-client limit belongs to the proxy, behind which every client has its address.
 
 ## Check engine
 
@@ -519,7 +521,8 @@ grid. Each form is posted and validated on its own (`/settings/general`, `/setti
   history.
 - **Database copy** (`GET /settings/backup`). `VACUUM INTO` a file next to the database (in the temporary directory
   for an in-memory one, where it lands in memory instead: tests use a file), opened then unlinked at once, and
-  streamed in 64 KiB chunks. One copy at a time: the next one waits until the download ends.
+  streamed in 64 KiB chunks. One copy at a time: the next one waits until the download ends. The copy runs in its
+  own task, so a request dropped mid-copy (timeout, closed connection) still unlinks it.
 - **Import** (`POST /settings/import`, field `document`; `static/js/import.js` loads a chosen file into it). The only
   form allowed above `MAX_BODY_BYTES`: up to 8 MiB, also in the CSRF check. The format is detected: an export, or an
   Uptime Kuma 1.x backup (`monitorList`), converted to an export first. Import only adds, in one transaction: an
@@ -548,13 +551,15 @@ grid. Each form is posted and validated on its own (`/settings/general`, `/setti
   directory, the database and its journals (nothing else) to `PUID:PGID` (default 65532), without following
   symlinks, then drops supplementary groups, sets its gid and uid, and checks that root cannot be regained. A
   bind-mounted directory created by Docker as root thus works as is. Started as another user (`user:` in Compose,
-  Kubernetes), it changes nothing. The `healthcheck` subcommand drops root too, without touching files. A database
-  directory that resolves to `/` is refused rather than handed over.
-- **File modes.** The umask is 077 from the first instruction: the database holds the password hash and every
-  channel's secret. Existing database files are brought to 0600 at startup (symlinks left alone).
+  Kubernetes), it changes nothing. The `healthcheck` subcommand drops root too, without touching files. The directory is
+  handed over only when it is dedicated to the database: already owned by `PUID:PGID`, holding the database, or
+  empty (`lost+found` aside); `/`, `/etc` and the like are refused.
+- **File modes.** The umask is 077 once root is dropped (earlier, directories root creates for the database would
+  not be traversable by the user): the database holds the password hash and every channel's secret. Existing
+  database files are brought to 0600 at startup, through a handle opened without following symlinks.
 - **Compose** (`compose.yaml`). The example drops every capability but `CHOWN`, `SETUID` and `SETGID` (used only
   before root is dropped), sets `no-new-privileges`, a read-only root filesystem (only `/data` is written, backups
-  included), and memory and PID limits.
+  included), and a memory limit.
 - **Health.** No shell in the image: `HEALTHCHECK` runs `uptime-monitoring healthcheck`, which sends `GET /health` to
   `BIND_ADDR` (loopback when it is unspecified) and exits 0 on a 200 within 5 s.
 - **Logs.** No colour codes unless stdout is a terminal.

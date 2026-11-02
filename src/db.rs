@@ -39,6 +39,15 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
 /// is gone once the handle is dropped. Written next to the database (a mounted volume has room
 /// for it), in the temporary directory for an in-memory one.
 pub async fn backup(pool: &SqlitePool) -> Result<Backup, BackupError> {
+    // Its own task: a request dropped mid-copy (timeout, closed connection) does not stop it
+    // before the copy is unlinked, and the next copy waits until this one is done.
+    let pool = pool.clone();
+    tokio::spawn(async move { copy(&pool).await })
+        .await
+        .map_err(|e| BackupError::Io(std::io::Error::other(e)))?
+}
+
+async fn copy(pool: &SqlitePool) -> Result<Backup, BackupError> {
     // One copy at a time, until it is read: each one takes the size of the database on disk.
     static RUNNING: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
     let permit = RUNNING.acquire().await.expect("never closed");
@@ -105,3 +114,63 @@ impl std::fmt::Display for BackupError {
 }
 
 impl std::error::Error for BackupError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn copies_in(dir: &std::path::Path) -> usize {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter(|e| {
+                e.as_ref()
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".backup-")
+            })
+            .count()
+    }
+
+    /// A request timeout drops the handler while the copy is being written: the copy must still
+    /// be removed, and the next backup must wait for it.
+    #[tokio::test]
+    async fn an_abandoned_backup_leaves_no_copy_behind() {
+        let dir = std::env::temp_dir().join(format!("uptime-backup-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pool = init_pool(&format!("sqlite://{}/uptime.db", dir.display()))
+            .await
+            .unwrap();
+
+        // Large enough for the copy to take a while.
+        sqlx::query(
+            "CREATE TABLE filler AS WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n \
+             WHERE i < 20000) SELECT randomblob(4096) AS b FROM n",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Dropped once the copy is being written, as a request timeout would.
+        let abandoned = backup(&pool);
+        tokio::select! {
+            _ = abandoned => panic!("the copy finished before it could be abandoned"),
+            () = async {
+                while copies_in(&dir) == 0 {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            } => {}
+        }
+        let next = tokio::time::timeout(Duration::from_secs(10), backup(&pool))
+            .await
+            .expect("the abandoned copy releases its turn")
+            .unwrap();
+        drop(next);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        assert_eq!(copies_in(&dir), 0);
+        pool.close().await;
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

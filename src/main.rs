@@ -23,8 +23,6 @@ fn main() {
         }
     };
     let serving = matches!(command, Command::Serve);
-    // The database holds the password hash and every channel's secrets.
-    privileges::restrict_new_files();
 
     let config = match Config::from_env() {
         Ok(config) => config,
@@ -46,6 +44,9 @@ fn main() {
             std::process::exit(1);
         }
     }
+    // The database holds the password hash and every channel's secrets. Set after the hand-over,
+    // so that directories root creates for it stay traversable by the user it becomes.
+    privileges::restrict_new_files();
     if serving && let Err(e) = privileges::restrict_database(&config.database_url) {
         eprintln!("Cannot make the database readable by its owner only: {e}");
     }
