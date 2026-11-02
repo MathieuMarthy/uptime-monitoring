@@ -1,5 +1,7 @@
 //! What a notification says, whatever the channel. Pure: the clock and timezone are passed in.
 
+use crate::i18n::{t, tf, tn};
+
 use crate::notify::{Event, MonitorRef, Notification, truncate};
 use crate::time::{day_of, days_left, format_datetime, format_duration};
 use jiff::tz::TimeZone;
@@ -30,15 +32,18 @@ impl Message {
             .map_or("", |m| m.name.as_str());
         let (title, text, severity) = match &notification.event {
             Event::Down { since, cause } => (
-                format!("{name} is down"),
-                format!("{cause}\nDown since {}.", format_datetime(tz, *since)),
+                tf("{} is down", &[&name]),
+                tf(
+                    "{}\nDown since {}.",
+                    &[&cause, &format_datetime(tz, *since)],
+                ),
                 Severity::Critical,
             ),
             Event::Up { down_since } => (
-                format!("{name} is up"),
-                format!(
+                tf("{} is up", &[&name]),
+                tf(
                     "Back up after {} of downtime.",
-                    format_duration(notification.at - down_since)
+                    &[&format_duration(notification.at - down_since)],
                 ),
                 Severity::Resolved,
             ),
@@ -46,15 +51,15 @@ impl Message {
                 let date = day_of(tz, *expires_at);
                 match days_left(*expires_at, notification.at) {
                     left if left < 0 => (
-                        format!("{name}: certificate expired"),
-                        format!("The certificate expired on {date}."),
+                        tf("{}: certificate expired", &[&name]),
+                        tf("The certificate expired on {}.", &[&date]),
                         Severity::Warning,
                     ),
                     left => (
-                        format!("{name}: certificate expires soon"),
-                        format!(
-                            "The certificate expires on {date} ({left} day{} left).",
-                            if left == 1 { "" } else { "s" }
+                        tf("{}: certificate expires soon", &[&name]),
+                        tf(
+                            "The certificate expires on {} ({}).",
+                            &[&date, &tn(left, "{} day left", "{} days left")],
                         ),
                         Severity::Warning,
                     ),
@@ -65,24 +70,24 @@ impl Message {
                 latency_ms,
                 threshold_ms,
             } => (
-                format!("{name} is slow"),
-                format!(
-                    "Responses take {latency_ms} ms, above the {threshold_ms} ms threshold.\nSlow since {}.",
-                    format_datetime(tz, *since)
+                tf("{} is slow", &[&name]),
+                tf(
+                    "Responses take {} ms, above the {} ms threshold.\nSlow since {}.",
+                    &[&latency_ms, &threshold_ms, &format_datetime(tz, *since)],
                 ),
                 Severity::Warning,
             ),
             Event::LatencyNormal { degraded_since } => (
-                format!("{name} is fast again"),
-                format!(
+                tf("{} is fast again", &[&name]),
+                tf(
                     "Response times are back to normal after {}.",
-                    format_duration(notification.at - degraded_since)
+                    &[&format_duration(notification.at - degraded_since)],
                 ),
                 Severity::Resolved,
             ),
             Event::Test => (
-                "Test notification".to_string(),
-                "This channel works.".to_string(),
+                t("Test notification").to_string(),
+                t("This channel works.").to_string(),
                 Severity::Info,
             ),
         };
@@ -92,7 +97,7 @@ impl Message {
         };
         let link = public_url
             .zip(notification.monitor.as_ref())
-            .map(|(base, monitor)| format!("{base}/monitors/{}", monitor.id));
+            .map(|(base, monitor)| format!("{}/monitors/{}", base, monitor.id));
         Self {
             title,
             text,
@@ -116,7 +121,7 @@ impl Message {
             let detail = match &n.event {
                 Event::Down { cause, .. } => cause.clone(),
                 Event::Up { down_since } => {
-                    format!("back up after {}", format_duration(n.at - down_since))
+                    tf("back up after {}", &[&format_duration(n.at - down_since)])
                 }
                 other => other.as_str().to_string(),
             };
@@ -133,15 +138,19 @@ impl Message {
             shown += 1;
         }
         if shown < notifications.len() {
-            text.push_str(&format!("\n…and {} more.", notifications.len() - shown));
+            text.push_str(&tf("\n…and {} more.", &[&(notifications.len() - shown)]));
         }
-        let (state, severity) = if up {
-            ("up", Severity::Resolved)
+        let severity = if up {
+            Severity::Resolved
         } else {
-            ("down", Severity::Critical)
+            Severity::Critical
         };
         Self {
-            title: format!("{} monitors are {state}", notifications.len()),
+            title: if up {
+                tf("{} monitors are up", &[&notifications.len()])
+            } else {
+                tf("{} monitors are down", &[&notifications.len()])
+            },
             text,
             severity,
             link: public_url.map(|base| format!("{base}/")),
@@ -174,6 +183,18 @@ mod tests {
 
     fn message(event: Event) -> Message {
         Message::new(&notification(event), &TimeZone::UTC, None)
+    }
+
+    #[test]
+    fn message_follows_the_language_in_scope() {
+        let event = || Event::TlsExpiring {
+            expires_at: 12 * DAY_MS,
+        };
+        let m = crate::i18n::sync_scope(crate::i18n::Lang::De, || message(event()));
+        assert_eq!(m.title, "API: Zertifikat läuft bald ab");
+        assert!(m.text.contains("(Noch 2 Tage)"), "{}", m.text);
+        let m = crate::i18n::sync_scope(crate::i18n::Lang::Fr, || message(event()));
+        assert!(m.text.contains("(2 jours restants)"), "{}", m.text);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use crate::forms::monitor::FieldErrors;
 use crate::forms::settings::{DataForm, timezones};
+use crate::i18n::{filters, t, tf};
 use crate::models::{Settings, StorageUse};
 use crate::transfer::import::Report;
 use askama::Template;
@@ -10,9 +11,53 @@ use askama_web::WebTemplate;
 pub const CHECK_BYTES: f64 = 32.0;
 pub const DAILY_STAT_BYTES: f64 = 36.0;
 
+/// A part of the settings page, shown alone: `/settings?section=…`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Section {
+    #[default]
+    General,
+    Data,
+    Security,
+    Backup,
+}
+
+impl Section {
+    pub const ALL: [Section; 4] = [
+        Section::General,
+        Section::Data,
+        Section::Security,
+        Section::Backup,
+    ];
+
+    pub fn param(self) -> &'static str {
+        match self {
+            Section::General => "general",
+            Section::Data => "data",
+            Section::Security => "security",
+            Section::Backup => "backup",
+        }
+    }
+
+    pub fn from_param(param: &str) -> Option<Section> {
+        Section::ALL.into_iter().find(|s| s.param() == param)
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Section::General => t("General"),
+            Section::Data => t("Data"),
+            Section::Security => t("Security"),
+            Section::Backup => t("Backup"),
+        }
+    }
+}
+
 #[derive(Template, WebTemplate)]
 #[template(path = "settings/index.html")]
 pub struct SettingsTemplate {
+    pub section: Section,
+    /// The stored values the rail sums up, whatever a failed form holds.
+    pub stored: Settings,
     pub csrf_token: String,
     pub timezones: Vec<String>,
     pub timezone: String,
@@ -46,8 +91,15 @@ pub struct TotpSetupTemplate {
 
 impl SettingsTemplate {
     /// The page showing the stored settings.
-    pub fn new(settings: &Settings, storage: StorageUse, csrf_token: String) -> Self {
+    pub fn new(
+        settings: &Settings,
+        storage: StorageUse,
+        csrf_token: String,
+        section: Section,
+    ) -> Self {
         Self {
+            section,
+            stored: settings.clone(),
             csrf_token,
             timezones: timezones(),
             timezone: settings.timezone.clone(),
@@ -57,13 +109,38 @@ impl SettingsTemplate {
                     .history_retention_days
                     .map(|days| days.to_string())
                     .unwrap_or_default(),
-                block_private_targets: settings.block_private_targets.then(|| "on".to_string()),
             },
             errors: FieldErrors::new(),
             saved: None,
             storage,
             totp_enabled: false,
             document: String::new(),
+        }
+    }
+
+    /// The one-line state of a section, under its name in the rail.
+    pub fn summary(&self, section: &Section) -> String {
+        let s = &self.stored;
+        match section {
+            Section::General => format!("{}, {}", s.lang().name(), s.timezone),
+            Section::Data => {
+                let history = match s.history_retention_days {
+                    Some(days) => tf("{} days", &[&days]),
+                    None => t("forever").to_string(),
+                };
+                tf(
+                    "Checks {} days, history {}",
+                    &[&s.checks_retention_days, &history],
+                )
+            }
+            Section::Security => match (self.totp_enabled, s.block_private_targets) {
+                (true, true) => t("Two-factor on, private addresses blocked"),
+                (true, false) => t("Two-factor on"),
+                (false, true) => t("Two-factor off, private addresses blocked"),
+                (false, false) => t("Two-factor off"),
+            }
+            .to_string(),
+            Section::Backup => t("Export, database copy, import").to_string(),
         }
     }
 
@@ -87,7 +164,10 @@ impl SettingsTemplate {
     pub fn history_estimate(&self) -> String {
         let per_day = self.storage.monitors as f64 * DAILY_STAT_BYTES;
         match self.data.history_retention_days.trim() {
-            "" => format!("{} per year, kept forever", format_bytes(per_day * 365.0)),
+            "" => tf(
+                "{} per year, kept forever",
+                &[&format_bytes(per_day * 365.0)],
+            ),
             raw => match raw.parse::<f64>() {
                 Ok(days) if days > 0.0 => format_bytes(per_day * days),
                 _ => "—".to_string(),
@@ -139,13 +219,14 @@ mod tests {
             checks_retention_days: 7,
             history_retention_days: None,
             block_private_targets: false,
+            language: "en".to_string(),
         };
         let storage = StorageUse {
             checks_per_day: 100.0 * 1440.0,
             monitors: 100,
             database_bytes: 0,
         };
-        let mut page = SettingsTemplate::new(&settings, storage, String::new());
+        let mut page = SettingsTemplate::new(&settings, storage, String::new(), Section::Data);
         // 144 000 checks × 7 days × 32 bytes ≈ 30.8 MiB.
         assert_eq!(page.checks_estimate(), "31 MiB");
         assert_eq!(page.history_estimate(), "1.3 MiB per year, kept forever");

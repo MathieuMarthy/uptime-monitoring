@@ -7,6 +7,7 @@ use crate::auth::{
 use crate::error::AppError;
 use crate::forms::auth::{LoginForm, SetupForm, TotpLoginForm};
 use crate::forms::monitor::FieldErrors;
+use crate::i18n::t;
 use crate::models::{Admin, Session, is_unique_violation};
 use crate::routes::form_or_invalid;
 use crate::state::AppState;
@@ -23,8 +24,12 @@ use serde::Deserialize;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::{Duration, Instant};
 
-const LOGIN_FAILED: &str = "Invalid username or password.";
-pub(super) const INVALID_CODE: &str = "Invalid code.";
+fn login_failed() -> &'static str {
+    t("Invalid username or password.")
+}
+pub(super) fn invalid_code() -> &'static str {
+    t("Invalid code.")
+}
 const HASHING_WAIT: Duration = Duration::from_secs(5);
 
 /// Routes reachable without a session.
@@ -91,12 +96,21 @@ async fn setup(
     let hash = with_password_hashing(&state, move || hash_password(&password))
         .await?
         .map_err(|e| AppError::Internal(e.to_string().into()))?;
-    match Admin::setup(&state.db, &input.username, &hash, &input.timezone).await {
+    match Admin::setup(
+        &state.db,
+        &input.username,
+        &hash,
+        &input.timezone,
+        input.language,
+    )
+    .await
+    {
         Ok(()) => {}
         // Another request finished the setup first.
         Err(e) if is_unique_violation(&e) => return Ok(Redirect::to("/login").into_response()),
         Err(e) => return Err(e.into()),
     }
+    state.language.set(input.language);
     *state.setup_token.lock().unwrap() = None;
     tracing::info!("Admin account created; setup is complete.");
 
@@ -171,7 +185,7 @@ async fn login(
         tracing::warn!(%ip, "failed login attempt");
         return Ok(LoginTemplate {
             username: form.username,
-            error: Some(LOGIN_FAILED),
+            error: Some(login_failed()),
         }
         .into_response());
     }
@@ -271,7 +285,7 @@ async fn login_totp(
             return Ok(back_to_login());
         }
         return Ok(LoginTotpTemplate {
-            error: Some(INVALID_CODE),
+            error: Some(invalid_code()),
         }
         .into_response());
     }

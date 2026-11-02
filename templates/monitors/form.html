@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}{% if self.is_edit() %}Edit Monitor{% else %}Add New Monitor{% endif %} - Uptime Monitoring{% endblock %}
+{% block title %}{% if self.is_edit() %}{{ "Edit Monitor"|t }}{% else %}{{ "Add New Monitor"|t }}{% endif %} - Uptime Monitoring{% endblock %}
 {% block nav_monitors %}aria-current="page"{% endblock %}
 
 {% block styles %}
@@ -18,25 +18,25 @@
 {% block content %}
 <div class="form-container">
     <div class="form-header">
-        <h1 class="form-title">{% if self.is_edit() %}Edit Monitor{% else %}Create a New Monitor{% endif %}</h1>
-        <p class="form-subtitle">Configure URL, interval, threshold, and payload for uptime checks.</p>
+        <h1 class="form-title">{% if self.is_edit() %}{{ "Edit Monitor"|t }}{% else %}{{ "Create a New Monitor"|t }}{% endif %}</h1>
+        <p class="form-subtitle">{{ "Configure URL, interval, threshold, and payload for uptime checks."|t }}</p>
     </div>
 
     {% match test_result %}
     {% when Some(Ok(summary)) %}
     <div class="success-banner" role="status">
-        <span>Test passed: {{ summary }} {% if self.is_edit() %}Changes are{% else %}The monitor is{% endif %} not saved yet.</span>
+        <span>{{ "Test passed:"|t }} {{ summary }} {% if self.is_edit() %}{{ "Changes are not saved yet."|t }}{% else %}{{ "The monitor is not saved yet."|t }}{% endif %}</span>
     </div>
     {% when Some(Err(error)) %}
     <div class="error-banner" role="alert">
-        <span>Test failed: {{ error }}</span>
+        <span>{{ "Test failed:"|t }} {{ error }}</span>
     </div>
     {% when None %}
     {% endmatch %}
 
     {% if !errors.is_empty() %}
     <div class="error-banner" role="alert">
-        <span>Please fix the {{ errors.len() }} highlighted field(s).</span>
+        <span>{{ "Please fix the {} highlighted field(s)."|tf(errors.len()) }}</span>
     </div>
     {% endif %}
 
@@ -45,48 +45,48 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             {% if let Some(source) = copy_of %}<input type="hidden" name="copy_of" value="{{ source }}">{% endif %}
             <div class="form-section">
-                <h2 class="section-title">General Settings</h2>
+                <h2 class="section-title">{{ "General Settings"|t }}</h2>
 
                 <div class="form-group">
-                    <label class="form-label" for="name">Monitor Name *</label>
+                    <label class="form-label" for="name">{{ "Monitor Name *"|t }}</label>
                     <input class="form-input" id="name" name="name" type="text" maxlength="100"
-                           placeholder="e.g. Production API, Landing Page" required value="{{ form.name }}"/>
+                           placeholder="{{ "e.g. Production API, Landing Page"|t }}" required value="{{ form.name }}"/>
                     {% call field_error("name") %}{% endcall %}
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="group">Group</label>
+                    <label class="form-label" for="group">{{ "Group"|t }}</label>
                     <input class="form-input" id="group" name="group" type="text" maxlength="64" list="group-names"
-                           placeholder="e.g. Production, Customers" value="{{ form.group }}"/>
+                           placeholder="{{ "e.g. Production, Customers"|t }}" value="{{ form.group }}"/>
                     <datalist id="group-names">
                         {%- for group in groups %}
                         <option value="{{ group }}">
                         {%- endfor %}
                     </datalist>
-                    <span class="form-hint">Monitors sharing a group are listed together on the dashboard. Leave blank for none.</span>
+                    <span class="form-hint">{{ "Monitors sharing a group are listed together on the dashboard. Leave blank for none."|t }}</span>
                     {% call field_error("group") %}{% endcall %}
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="kind">Monitor Type</label>
+                    <label class="form-label" for="kind">{{ "Monitor Type"|t }}</label>
                     <select class="form-select" id="kind" name="kind">
                         <option value="http" {% if !self.is_push() %}selected{% endif %}>HTTP(S): this instance checks a URL</option>
-                        <option value="push" {% if self.is_push() %}selected{% endif %}>Push: a job calls this instance</option>
+                        <option value="push" {% if self.is_push() %}selected{% endif %}>{{ "Push: a job calls this instance"|t }}</option>
                     </select>
-                    <span class="form-hint" data-kind="push"{% if !self.is_push() %} hidden{% endif %}>The job calls a secret URL, shown once the monitor is saved, after each run: a cron task, a backup, a job behind a NAT.</span>
+                    <span class="form-hint" data-kind="push"{% if !self.is_push() %} hidden{% endif %}>{{ "The job calls a secret URL, shown once the monitor is saved, after each run: a cron task, a backup, a job behind a NAT."|t }}</span>
                     {% call field_error("kind") %}{% endcall %}
                 </div>
 
                 <div class="form-row form-row-wide-first" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                     <div class="form-group">
-                        <label class="form-label" for="url">URL to monitor *</label>
+                        <label class="form-label" for="url">{{ "URL to monitor *"|t }}</label>
                         <input class="form-input" id="url" name="url" type="url"
                                placeholder="https://example.com/health" required value="{{ form.url }}"/>
                         {% call field_error("url") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="method">HTTP Method</label>
+                        <label class="form-label" for="method">{{ "HTTP Method"|t }}</label>
                         <select class="form-select" id="method" name="method">
                             {% for method in self.methods() %}
                             <option value="{{ method }}" {% if form.method == **method %}selected{% endif %}>{{ method }}</option>
@@ -98,76 +98,76 @@
             </div>
 
             <div class="form-section">
-                <h2 class="section-title">Interval & Thresholds</h2>
+                <h2 class="section-title">{{ "Interval & Thresholds"|t }}</h2>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label" for="interval_s">Check Interval (seconds)</label>
+                        <label class="form-label" for="interval_s">{{ "Check Interval (seconds)"|t }}</label>
                         <input class="form-input" id="interval_s" name="interval_s" type="number"
                                min="5" max="86400" step="1" value="{{ form.interval_s }}"/>
-                        <span class="form-hint">Between 5 seconds and 24 hours. Default: 60s.</span>
+                        <span class="form-hint">{{ "Between 5 seconds and 24 hours. Default: 60s."|t }}</span>
                         {% call field_error("interval_s") %}{% endcall %}
                     </div>
 
                     <div class="form-group" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
-                        <label class="form-label" for="retry_interval_s">Retry Interval (seconds)</label>
+                        <label class="form-label" for="retry_interval_s">{{ "Retry Interval (seconds)"|t }}</label>
                         <input class="form-input" id="retry_interval_s" name="retry_interval_s" type="number"
                                min="5" max="86400" step="1" value="{{ form.retry_interval_s }}"/>
-                        <span class="form-hint">Delay before re-checking after a failure, until the threshold is reached. Default: 20s.</span>
+                        <span class="form-hint">{{ "Delay before re-checking after a failure, until the threshold is reached. Default: 20s."|t }}</span>
                         {% call field_error("retry_interval_s") %}{% endcall %}
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
-                        <label class="form-label" for="timeout_s">Request Timeout (seconds)</label>
+                        <label class="form-label" for="timeout_s">{{ "Request Timeout (seconds)"|t }}</label>
                         <input class="form-input" id="timeout_s" name="timeout_s" type="number"
                                min="1" max="120" step="1" value="{{ form.timeout_s }}"/>
-                        <span class="form-hint">At most 120s and no longer than the interval. Default: 10s.</span>
+                        <span class="form-hint">{{ "At most 120s and no longer than the interval. Default: 10s."|t }}</span>
                         {% call field_error("timeout_s") %}{% endcall %}
                     </div>
 
                     <div class="form-group" data-kind="push"{% if !self.is_push() %} hidden{% endif %}>
-                        <label class="form-label" for="grace_s">Grace Period (seconds)</label>
+                        <label class="form-label" for="grace_s">{{ "Grace Period (seconds)"|t }}</label>
                         <input class="form-input" id="grace_s" name="grace_s" type="number"
                                min="0" max="86400" step="1" value="{{ form.grace_s }}"/>
-                        <span class="form-hint">How late a ping may arrive after the interval before it counts as missed. Default: 60s.</span>
+                        <span class="form-hint">{{ "How late a ping may arrive after the interval before it counts as missed. Default: 60s."|t }}</span>
                         {% call field_error("grace_s") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="failure_threshold">Failure Threshold</label>
+                        <label class="form-label" for="failure_threshold">{{ "Failure Threshold"|t }}</label>
                         <input class="form-input" id="failure_threshold" name="failure_threshold" type="number"
                                min="1" max="10" step="1" value="{{ form.failure_threshold }}"/>
-                        <span class="form-hint">Consecutive failures required before marking Down. Default: 3.</span>
+                        <span class="form-hint">{{ "Consecutive failures required before marking Down. Default: 3."|t }}</span>
                         {% call field_error("failure_threshold") %}{% endcall %}
                     </div>
                 </div>
 
                 <div class="form-row" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                     <div class="form-group">
-                        <label class="form-label" for="accepted_statuses">Accepted Status Codes</label>
+                        <label class="form-label" for="accepted_statuses">{{ "Accepted Status Codes"|t }}</label>
                         <input class="form-input" id="accepted_statuses" name="accepted_statuses" type="text"
                                placeholder="200-299" value="{{ form.accepted_statuses }}"/>
-                        <span class="form-hint">Codes or ranges, e.g. 200-299,301.</span>
+                        <span class="form-hint">{{ "Codes or ranges, e.g. 200-299,301."|t }}</span>
                         {% call field_error("accepted_statuses") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="tls_expiry_warn_days">Certificate Expiry Warning (days)</label>
+                        <label class="form-label" for="tls_expiry_warn_days">{{ "Certificate Expiry Warning (days)"|t }}</label>
                         <input class="form-input" id="tls_expiry_warn_days" name="tls_expiry_warn_days" type="number"
                                min="1" max="365" step="1" value="{{ form.tls_expiry_warn_days }}"/>
-                        <span class="form-hint">Leave empty to disable. Default: 14 days.</span>
+                        <span class="form-hint">{{ "Leave empty to disable. Default: 14 days."|t }}</span>
                         {% call field_error("tls_expiry_warn_days") %}{% endcall %}
                     </div>
                 </div>
 
                 <div class="form-row" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
                     <div class="form-group">
-                        <label class="form-label" for="latency_warn_ms">Latency Threshold (ms)</label>
+                        <label class="form-label" for="latency_warn_ms">{{ "Latency Threshold (ms)"|t }}</label>
                         <input class="form-input" id="latency_warn_ms" name="latency_warn_ms" type="number"
                                min="1" max="119999" step="1" value="{{ form.latency_warn_ms }}"/>
-                        <span class="form-hint">Slower responses, as many in a row as the failure threshold, mark the monitor Degraded. Leave empty to disable.</span>
+                        <span class="form-hint">{{ "Slower responses, as many in a row as the failure threshold, mark the monitor Degraded. Leave empty to disable."|t }}</span>
                         {% call field_error("latency_warn_ms") %}{% endcall %}
                     </div>
 
@@ -176,8 +176,8 @@
                             <input type="checkbox" id="latency_alerts" name="latency_alerts"
                                    {% if form.latency_alerts.is_some() %}checked{% endif %}/>
                             <div class="checkbox-label-group">
-                                <span class="form-label">Alert When Degraded</span>
-                                <span class="form-hint">Send an alert when responses turn slow and when they are fast again.</span>
+                                <span class="form-label">{{ "Alert When Degraded"|t }}</span>
+                                <span class="form-hint">{{ "Send an alert when responses turn slow and when they are fast again."|t }}</span>
                             </div>
                         </label>
                     </div>
@@ -189,8 +189,8 @@
                             <input type="checkbox" id="follow_redirects" name="follow_redirects"
                                    {% if form.follow_redirects.is_some() %}checked{% endif %}/>
                             <div class="checkbox-label-group">
-                                <span class="form-label">Follow Redirects</span>
-                                <span class="form-hint">Judge the final response instead of the redirect.</span>
+                                <span class="form-label">{{ "Follow Redirects"|t }}</span>
+                                <span class="form-hint">{{ "Judge the final response instead of the redirect."|t }}</span>
                             </div>
                         </label>
                     </div>
@@ -200,8 +200,8 @@
                             <input type="checkbox" id="ignore_tls_errors" name="ignore_tls_errors"
                                    {% if form.ignore_tls_errors.is_some() %}checked{% endif %}/>
                             <div class="checkbox-label-group">
-                                <span class="form-label">Ignore TLS Errors</span>
-                                <span class="form-hint">Accept self-signed, expired or mismatched certificates.</span>
+                                <span class="form-label">{{ "Ignore TLS Errors"|t }}</span>
+                                <span class="form-hint">{{ "Accept self-signed, expired or mismatched certificates."|t }}</span>
                             </div>
                         </label>
                     </div>
@@ -209,25 +209,25 @@
             </div>
 
             <div class="form-section" data-kind="http"{% if self.is_push() %} hidden{% endif %}>
-                <h2 class="section-title">Advanced Options (Optional)</h2>
+                <h2 class="section-title">{{ "Advanced Options (Optional)"|t }}</h2>
 
                 <div class="form-group">
-                    <label class="form-label" for="keyword">Keyword Verification</label>
+                    <label class="form-label" for="keyword">{{ "Keyword Verification"|t }}</label>
                     <input class="form-input" id="keyword" name="keyword" type="text"
-                           placeholder="e.g. status: ok, Welcome" value="{{ form.keyword }}"/>
-                    <span class="form-hint">The response body must contain this text to be marked as Up.</span>
+                           placeholder="{{ "e.g. status: ok, Welcome"|t }}" value="{{ form.keyword }}"/>
+                    <span class="form-hint">{{ "The response body must contain this text to be marked as Up."|t }}</span>
                     {% call field_error("keyword") %}{% endcall %}
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="headers">Request Headers (JSON object)</label>
+                    <label class="form-label" for="headers">{{ "Request Headers (JSON object)"|t }}</label>
                     <textarea class="form-textarea" id="headers" name="headers"
                               placeholder='{"Authorization": "Bearer token"}'>{{ form.headers }}</textarea>
                     {% call field_error("headers") %}{% endcall %}
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="body">Request Body (for POST / PUT / PATCH)</label>
+                    <label class="form-label" for="body">{{ "Request Body (for POST / PUT / PATCH)"|t }}</label>
                     <textarea class="form-textarea" id="body" name="body"
                               placeholder='{"ping": true}'>{{ form.body }}</textarea>
                     {% call field_error("body") %}{% endcall %}
@@ -235,19 +235,19 @@
             </div>
 
             <div class="form-section">
-                <h2 class="section-title">Alerts</h2>
+                <h2 class="section-title">{{ "Alerts"|t }}</h2>
 
                 {% include "partials/channel-boxes.html" %}
             </div>
 
             <div class="form-section">
-                <h2 class="section-title">Status</h2>
+                <h2 class="section-title">{{ "Status"|t }}</h2>
 
                 <label class="checkbox-group" for="active">
                     <input type="checkbox" id="active" name="active" {% if form.active.is_some() %}checked{% endif %}/>
                     <div class="checkbox-label-group">
-                        <span class="form-label">Active Monitoring</span>
-                        <span class="form-hint">When unchecked, the monitor is paused and checks are suspended.</span>
+                        <span class="form-label">{{ "Active Monitoring"|t }}</span>
+                        <span class="form-hint">{{ "When unchecked, the monitor is paused and checks are suspended."|t }}</span>
                     </div>
                 </label>
             </div>
@@ -255,11 +255,11 @@
             <div class="form-actions">
                 <div class="form-actions-left">
                     <button class="button-primary" type="submit">
-                        {% if self.is_edit() %}Save Changes{% else %}Create Monitor{% endif %}
+                        {% if self.is_edit() %}{{ "Save Changes"|t }}{% else %}{{ "Create Monitor"|t }}{% endif %}
                     </button>
                     <button class="button-secondary" type="submit" formaction="{{ action_url }}/test"
-                            data-kind="http"{% if self.is_push() %} hidden{% endif %}>Test</button>
-                    <a class="button-secondary" href="{{ cancel_url }}">Cancel</a>
+                            data-kind="http"{% if self.is_push() %} hidden{% endif %}>{{ "Test"|t }}</button>
+                    <a class="button-secondary" href="{{ cancel_url }}">{{ "Cancel"|t }}</a>
                 </div>
             </div>
         </form>
@@ -267,14 +267,14 @@
         {% if let Some(id) = monitor_id %}
         <div class="danger-zone">
             <form action="/monitors/{{ id }}/delete" method="POST"
-                  data-confirm="Are you sure you want to permanently delete this monitor and all its history?">
+                  data-confirm="{{ "Are you sure you want to permanently delete this monitor and all its history?"|t }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div class="form-actions form-actions-plain">
                     <div>
-                        <span class="danger-zone-title">Danger Zone</span>
-                        <p class="form-hint">Permanently delete this monitor and all its history.</p>
+                        <span class="danger-zone-title">{{ "Danger Zone"|t }}</span>
+                        <p class="form-hint">{{ "Permanently delete this monitor and all its history."|t }}</p>
                     </div>
-                    <button class="button-danger" type="submit">Delete Monitor</button>
+                    <button class="button-danger" type="submit">{{ "Delete Monitor"|t }}</button>
                 </div>
             </form>
         </div>

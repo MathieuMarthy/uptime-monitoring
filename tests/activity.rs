@@ -366,3 +366,22 @@ async fn slowdown_alerts_stop_where_the_next_slowdown_starts() {
     let body = get(&app, "/activity?type=slowdowns").await.body;
     assert_eq!(body.matches("second slowdown").count(), 1, "{body}");
 }
+
+#[tokio::test]
+async fn ongoing_incident_is_folded_on_activity_but_open_on_its_monitor() {
+    let (app, pool) = common::test_app().await;
+    create(&app, "API").await;
+    exec(
+        &pool,
+        "INSERT INTO incidents (monitor_id, started_at, resolved_at, error_kind, cause)
+         VALUES (1, ?1 - 60000, NULL, 'status', 'Outage')",
+        now_ms(),
+    )
+    .await;
+    let tag = |body: &str| {
+        let start = position(body, "id=\"incident-1\"");
+        body[start..start + body[start..].find('>').unwrap()].to_string()
+    };
+    assert!(!tag(&get(&app, "/activity").await.body).contains("open"));
+    assert!(tag(&get(&app, "/monitors/1").await.body).contains("open"));
+}

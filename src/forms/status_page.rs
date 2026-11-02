@@ -1,5 +1,6 @@
 use crate::forms::monitor::FieldErrors;
 use crate::forms::{has_visible_char, text_len};
+use crate::i18n::{t, tf};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -99,11 +100,11 @@ impl StatusPageForm {
 
         let title = self.title.trim();
         if !has_visible_char(title) {
-            errors.insert("title", "Title is required.".to_string());
+            errors.insert("title", t("Title is required.").to_string());
         } else if text_len(title) > TITLE_MAX_CHARS {
             errors.insert(
                 "title",
-                format!("Title must be at most {TITLE_MAX_CHARS} characters."),
+                tf("Title must be at most {} characters.", &[&TITLE_MAX_CHARS]),
             );
         }
 
@@ -111,8 +112,9 @@ impl StatusPageForm {
         if !valid_slug(slug) {
             errors.insert(
                 "slug",
-                format!(
-                    "Up to {SLUG_MAX_CHARS} lowercase letters, digits and single hyphens, e.g. my-services."
+                tf(
+                    "Up to {} lowercase letters, digits and single hyphens, e.g. my-services.",
+                    &[&SLUG_MAX_CHARS],
                 ),
             );
         }
@@ -121,7 +123,10 @@ impl StatusPageForm {
         if text_len(description) > DESCRIPTION_MAX_CHARS {
             errors.insert(
                 "description",
-                format!("Description must be at most {DESCRIPTION_MAX_CHARS} characters."),
+                tf(
+                    "Description must be at most {} characters.",
+                    &[&DESCRIPTION_MAX_CHARS],
+                ),
             );
         }
 
@@ -134,7 +139,10 @@ impl StatusPageForm {
             if text_len(name) > DISPLAY_NAME_MAX_CHARS {
                 add_error(
                     &mut errors,
-                    format!("Display names must be at most {DISPLAY_NAME_MAX_CHARS} characters."),
+                    tf(
+                        "Display names must be at most {} characters.",
+                        &[&DISPLAY_NAME_MAX_CHARS],
+                    ),
                 );
             }
             let position = match self.position(id).trim() {
@@ -144,7 +152,10 @@ impl StatusPageForm {
                     _ => {
                         add_error(
                             &mut errors,
-                            format!("Order must be a whole number from 0 to {POSITION_MAX}."),
+                            tf(
+                                "Order must be a whole number from 0 to {}.",
+                                &[&POSITION_MAX],
+                            ),
                         );
                         continue;
                     }

@@ -2,6 +2,7 @@
 //! windows across monitors, latest first, grouped by local day.
 
 use crate::error::AppError;
+use crate::i18n::{filters, t, tf};
 use crate::models::{
     CertificateWarning, Check, FailedCheck, Incident, Maintenance, Monitor, MonitorState,
     MonitorSummary, NamedIncident, NamedSlowdown, NotificationLog, Settings, Slowdown,
@@ -69,12 +70,12 @@ impl Kind {
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::All => "All events",
-            Self::Outages => "Outages",
-            Self::Slowdowns => "Slowdowns",
-            Self::Checks => "Failed checks",
-            Self::Certificates => "Certificates",
-            Self::Maintenance => "Maintenance",
+            Self::All => t("All events"),
+            Self::Outages => t("Outages"),
+            Self::Slowdowns => t("Slowdowns"),
+            Self::Checks => t("Failed checks"),
+            Self::Certificates => t("Certificates"),
+            Self::Maintenance => t("Maintenance"),
         }
     }
 
@@ -139,7 +140,7 @@ impl Cursor {
 
 impl std::fmt::Display for Cursor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}-{}", self.at, self.source, self.id)
+        f.write_str(&format!("{}-{}-{}", self.at, self.source, self.id))
     }
 }
 
@@ -166,16 +167,16 @@ impl Filter {
     fn url(self, kind: Kind, before: Option<Cursor>) -> String {
         let mut params = Vec::new();
         if let Some(kind) = kind.param() {
-            params.push(format!("type={kind}"));
+            params.push(format!("type={}", kind));
         }
         if let Some(monitor) = self.monitor {
-            params.push(format!("monitor={monitor}"));
+            params.push(format!("monitor={}", monitor));
         }
         if self.days != PERIODS[0] {
             params.push(format!("days={}", self.days));
         }
         if let Some(before) = before {
-            params.push(format!("before={before}"));
+            params.push(format!("before={}", before));
         }
         if params.is_empty() {
             "/activity".to_string()
@@ -390,11 +391,11 @@ impl IndexTemplate {
                     started: m.started,
                     facts: vec![
                         Fact {
-                            label: "Window",
+                            label: t("Window"),
                             value: m.window,
                         },
                         Fact {
-                            label: "Monitors",
+                            label: t("Monitors"),
                             value: m.monitors,
                         },
                     ],
@@ -437,12 +438,14 @@ impl IndexTemplate {
     /// What the page lists, for its lede and empty state.
     pub fn scope(&self) -> &'static str {
         match self.filter.kind {
-            Kind::All => "Outages, slowdowns, failed checks, certificate warnings and maintenance",
-            Kind::Outages => "Outages",
-            Kind::Slowdowns => "Slowdowns",
-            Kind::Checks => "Failed checks that did not make a monitor down",
-            Kind::Certificates => "Certificate warnings",
-            Kind::Maintenance => "Maintenance windows",
+            Kind::All => {
+                t("Outages, slowdowns, failed checks, certificate warnings and maintenance")
+            }
+            Kind::Outages => t("Outages"),
+            Kind::Slowdowns => t("Slowdowns"),
+            Kind::Checks => t("Failed checks that did not make a monitor down"),
+            Kind::Certificates => t("Certificate warnings"),
+            Kind::Maintenance => t("Maintenance windows"),
         }
     }
 }
@@ -502,21 +505,21 @@ fn failure_event(tz: &TimeZone, f: FailedCheck) -> FailureEvent {
         kind,
         facts: vec![
             Fact {
-                label: "Checked",
+                label: t("Checked"),
                 value: row.time.clone(),
             },
             Fact {
-                label: "Error type",
+                label: t("Error type"),
                 value: kind.to_string(),
             },
             Fact {
-                label: "HTTP status",
+                label: t("HTTP status"),
                 value: f
                     .status_code
                     .map_or_else(|| "—".to_string(), |c| c.to_string()),
             },
             Fact {
-                label: "Response",
+                label: t("Response"),
                 value: f
                     .latency_ms
                     .map_or_else(|| "—".to_string(), |ms| format!("{ms} ms")),
@@ -552,17 +555,17 @@ async fn slowdown_event(
     )
     .await?;
     let mut facts = vec![Fact {
-        label: "Started",
+        label: t("Started"),
         value: format_datetime(tz, slowdown.started_at),
     }];
     if let Some(resolved_at) = slowdown.resolved_at {
         facts.push(Fact {
-            label: "Ended",
+            label: t("Ended"),
             value: format_datetime(tz, resolved_at),
         });
     }
     facts.push(Fact {
-        label: "Threshold",
+        label: t("Threshold"),
         value: format!("{} ms", slowdown.threshold_ms),
     });
     Ok(SlowdownEvent {
@@ -593,24 +596,24 @@ async fn certificate_event(
     .await?;
     let renewed = w.current_expiry.is_some_and(|at| at > w.expires_at);
     let tag = match days_left(w.expires_at, now) {
-        _ if renewed => "Renewed".to_string(),
-        left if left < 0 => "Expired".to_string(),
-        1 => "1 day left".to_string(),
-        left => format!("{left} days left"),
+        _ if renewed => t("Renewed").to_string(),
+        left if left < 0 => t("Expired").to_string(),
+        1 => t("1 day left").to_string(),
+        left => tf("{} days left", &[&left]),
     };
     let mut facts = vec![
         Fact {
-            label: "Warned",
+            label: t("Warned"),
             value: format_datetime(tz, w.warned_at),
         },
         Fact {
-            label: "Expires",
+            label: t("Expires"),
             value: format_datetime(tz, w.expires_at),
         },
     ];
     if let Some(current) = w.current_expiry.filter(|_| renewed) {
         facts.push(Fact {
-            label: "New certificate expires",
+            label: t("New certificate expires"),
             value: format_datetime(tz, current),
         });
     }
@@ -632,9 +635,9 @@ fn day_label(tz: &TimeZone, at: i64, now: i64) -> String {
     let today = day_of(tz, now);
     let name = day.strftime("%A %-d %B").to_string();
     if day == today {
-        format!("Today, {name}")
+        tf("Today, {}", &[&name])
     } else if today.checked_sub(1.day()).ok() == Some(day) {
-        format!("Yesterday, {name}")
+        tf("Yesterday, {}", &[&name])
     } else {
         name
     }

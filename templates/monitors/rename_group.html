@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}Rename Group - Uptime Monitoring{% endblock %}
+{% block title %}{{ "Rename Group"|t }} - Uptime Monitoring{% endblock %}
 {% block nav_monitors %}aria-current="page"{% endblock %}
 
 {% block styles %}
@@ -10,9 +10,8 @@
 {% block content %}
 <div class="form-container">
     <div class="form-header">
-        <h1 class="form-title">Rename Group</h1>
-        <p class="form-subtitle">{{ name }} holds {{ self.monitors() }}. They all move to the new name; an existing
-            group's name merges them into it.</p>
+        <h1 class="form-title">{{ "Rename Group"|t }}</h1>
+        <p class="form-subtitle">{{ "{} holds {}. They all move to the new name; an existing group's name merges them into it."|tf2(name, self.monitors()) }}</p>
     </div>
 
     <div class="form-card">
@@ -21,7 +20,7 @@
             <input type="hidden" name="name" value="{{ name }}">
             <div class="form-section">
                 <div class="form-group">
-                    <label class="form-label" for="new_name">New name *</label>
+                    <label class="form-label" for="new_name">{{ "New name *"|t }}</label>
                     <input class="form-input" id="new_name" name="new_name" type="text" maxlength="{{ GROUP_MAX_CHARS }}"
                            list="group-names" required autofocus value="{{ new_name }}"/>
                     <datalist id="group-names">
@@ -34,8 +33,8 @@
             </div>
             <div class="form-actions">
                 <div class="form-actions-left">
-                    <button class="button-primary" type="submit">Rename</button>
-                    <a class="button-secondary" href="/">Cancel</a>
+                    <button class="button-primary" type="submit">{{ "Rename"|t }}</button>
+                    <a class="button-secondary" href="/">{{ "Cancel"|t }}</a>
                 </div>
             </div>
         </form>

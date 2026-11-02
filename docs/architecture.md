@@ -32,11 +32,12 @@ uptime-monitoring/
 │   ├── config.rs                 # Config::from_env(): DATABASE_URL, BIND_ADDR, TRUST_PROXY_HEADERS, PUBLIC_URL
 │   ├── healthcheck.rs            # Probe of /health used by the Docker HEALTHCHECK
 │   ├── error.rs                  # AppError → HTML error pages (404, 405, 403, 429, 500…)
+│   ├── i18n/                     # Lang, t()/tf()/tn(), askama filters; catalog.txt (fr, es, de)
 │   ├── auth/                     # Argon2 hashing, random tokens, session cookie
 │   │   ├── pending.rs            # Logins waiting for their two-factor code
 │   │   ├── rate_limit.rs         # In-memory limit on failed logins per IP
 │   │   └── totp.rs               # RFC 6238 codes, base32, QR code SVG
-│   ├── middleware.rs             # require_session (session + CSRF), security headers
+│   ├── middleware.rs             # set_language, require_session (session + CSRF), security headers
 │   ├── time.rs                   # now_ms(), local days and hours, date formatting
 │   ├── windows.rs                # Maintenance windows in time (pure) + Maintenances, the shared set
 │   ├── maintenance.rs            # Hourly upkeep: daily rollups, then purges
@@ -136,6 +137,34 @@ uptime-monitoring/
 - **No inline CSS or JS.** The Content-Security-Policy only allows same-origin files: no `style=` or `on*=` attributes
   and no inline `<script>`. Behaviour goes in `static/js/` (e.g. `data-confirm` handled by `confirm.js`).
 - **Vocabulary.** The domain entity is a *monitor* everywhere: database, code, routes and UI.
+- **Every user-facing text is translated** (see Languages): `{{ "Save"|t }}` in templates, `t("Save")` in Rust,
+  then an entry in `src/i18n/catalog.txt`. A test fails on any text without a translation and on any stale entry.
+
+## Languages
+
+English, French, Spanish and German. English text is the key: there are no message ids.
+
+- **Where the language comes from.** One language per instance, `settings.language`, set during setup and on the
+  settings page, kept in `AppState::language` (an atomic, changed live). Before setup, a page uses the `lang` query
+  parameter (the setup page's picker), else the browser's `Accept-Language`, else English.
+- **How it reaches the text.** The `set_language` middleware runs each request inside a Tokio task-local, so
+  handlers, forms, views and templates call `t()` without passing anything; outside a request (tests, the engine)
+  it is English. The notifier wraps each message in `i18n::sync_scope` with the language it reads from the settings.
+  Public pages are cached rendered: a language change clears the cache.
+- **Calls.** `t("…")` returns a `&'static str`; `tf("… {} …", &[&a, &b])` fills `{}` in order; `tn(n, "{} day",
+  "{} days")` picks the form by the language's plural rule (French: 0 and 1 are singular). Templates use the
+  filters `|t`, `|tf(a)`, `|tf2(a, b)` and `n|tn("…", "…")` (`n` an `i64`). A sentence is one key, its variable parts
+  are `{}`, so each language orders it its own way. A text holding a link or `<code>` is a key with that HTML,
+  rendered with `|safe`, and only with arguments that are not user input.
+- **Catalog.** `src/i18n/catalog.txt`, embedded and parsed once: an English line, then `fr: …`, `es: …`, `de: …`;
+  `\n` is a line break. A missing translation shows the English text. `i18n::tests` extracts every key from
+  `src/` and `templates/` and checks the catalog against it, along with the `{}` count and the HTML tags of each
+  translation.
+- **JavaScript.** Scripts hold no text: the page passes it in `data-*` attributes (`copy.js`, `theme.js`, `bulk.js`,
+  `settings.js`).
+- **Not translated.** Check errors recorded by the engine (`connection refused`, `HTTP 502, expected 200-299`) are
+  stored text, kept in English, like logs. The reserved group name `Ungrouped` is English in forms; it is shown
+  translated. Byte units (KiB, MiB) stay as they are.
 
 ## Configuration
 
@@ -448,14 +477,20 @@ alerts follow the checks retention: older incidents only show their facts.
 
 ## Settings
 
-`/settings` holds four forms, each posted and validated on its own (`/settings/general`, `/settings/data`,
-`/settings/password`, `/settings/totp/disable`); success redirects to `/settings?saved=…`. A Backup section
-exports, copies and imports (below).
+`/settings?section=…` shows one of four sections (`general` by default, also for an unknown value). A rail lists
+them, each with a one-line summary of its stored state (`SettingsTemplate::summary`); on phones it becomes a 2 × 2
+grid. Each form is posted and validated on its own (`/settings/general`, `/settings/data`, `/settings/blocking`,
+`/settings/password`, `/settings/totp/disable`, `/settings/import`); success redirects to
+`/settings?section=…&saved=…`, an error re-renders the form's section.
 
-- **General.** The timezone, chosen among the names of the embedded tz database.
-- **Data and security.** Raw checks retention (2–365 days) and history retention (blank = forever, otherwise at least
-  the checks retention), applied by the next hourly maintenance; private-target blocking, applied at once.
-  Under the fields, a disk estimate: `Σ 86 400 / interval_s` checks a day over the monitors that are not paused × days
+- **General.** The timezone, chosen among the names of the embedded tz database, and the language.
+- **Data.** Raw checks retention (2–365 days) and history retention (blank = forever, otherwise at least
+  the checks retention), applied by the next hourly maintenance.
+- **Security.** Private-target blocking, applied at once; password; two-factor authentication.
+- **Backup.** Export, database copy and import (below).
+
+
+- **Disk estimate.** Under the retention fields: `Σ 86 400 / interval_s` checks a day over the monitors that are not paused × days
   × 32 bytes, and monitors × days × 36 bytes of daily stats (incidents are left out: about 100 bytes each). The sizes
   were measured with `dbstat`; `static/js/settings.js` recomputes them while typing. The page also shows the database
   file's size. Retention does not change memory use.

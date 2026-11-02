@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::forms::maintenance::{MaintenanceForm, group_field};
 use crate::forms::monitor::FieldErrors;
+use crate::i18n::{filters, t, tf};
 use crate::models::{Maintenance, Monitor, MonitorSummary, Settings};
 use crate::time::{day_of, format_datetime, format_duration, format_time, now_ms};
 use crate::windows::Schedule;
@@ -10,7 +11,18 @@ use jiff::tz::TimeZone;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
-pub const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+/// Short weekday names, Monday first, in the current language.
+pub fn weekdays() -> [&'static str; 7] {
+    [
+        t("Mon"),
+        t("Tue"),
+        t("Wed"),
+        t("Thu"),
+        t("Fri"),
+        t("Sat"),
+        t("Sun"),
+    ]
+}
 /// Monitors named in a row of the list; beyond, a count.
 const NAMED_MONITORS: usize = 3;
 
@@ -53,9 +65,9 @@ impl IndexTemplate {
         for (m, ids) in Maintenance::all(pool).await? {
             let schedule = m.schedule();
             let (list, key, status) = if let Some((_, end)) = schedule.occurrence_at(&tz, now) {
-                (0, end, format!("Until {}", short_time(&tz, end, now)))
+                (0, end, tf("Until {}", &[&short_time(&tz, end, now)]))
             } else if let Some((start, _)) = schedule.next_after(&tz, now) {
-                (1, start, format!("Next on {}", format_datetime(&tz, start)))
+                (1, start, tf("Next on {}", &[&format_datetime(&tz, start)]))
             } else {
                 let Schedule::Once { ends_at, .. } = schedule else {
                     continue;
@@ -64,7 +76,7 @@ impl IndexTemplate {
                 (
                     2,
                     -ends_at,
-                    format!("Ended {}", format_datetime(&tz, ends_at)),
+                    tf("Ended {}", &[&format_datetime(&tz, ends_at)]),
                 )
             };
             let row = MaintenanceRow {
@@ -105,22 +117,25 @@ pub fn describe(schedule: &Schedule, tz: &TimeZone) -> String {
             local_start,
             duration_min,
         } => {
-            let days: Vec<&str> = WEEKDAYS
-                .iter()
+            let days: Vec<&str> = self::weekdays()
+                .into_iter()
                 .enumerate()
                 .filter(|(i, _)| weekdays & (1 << i) != 0)
-                .map(|(_, d)| *d)
+                .map(|(_, d)| d)
                 .collect();
             let days = if days.len() == 7 {
-                "Every day".to_string()
+                t("Every day").to_string()
             } else {
                 days.join(", ")
             };
-            format!(
-                "{days} at {:02}:{:02} for {}",
-                local_start / 60,
-                local_start % 60,
-                format_duration(duration_min * 60_000)
+            tf(
+                "{} at {}:{} for {}",
+                &[
+                    &days,
+                    &format!("{:02}", local_start / 60),
+                    &format!("{:02}", local_start % 60),
+                    &format_duration(duration_min * 60_000),
+                ],
             )
         }
     }
@@ -137,7 +152,7 @@ pub fn short_time(tz: &TimeZone, at: i64, now: i64) -> String {
 
 pub fn monitors_label(all: bool, ids: &[i64], names: &HashMap<i64, String>) -> String {
     if all {
-        return "All monitors".to_string();
+        return t("All monitors").to_string();
     }
     let mut named: Vec<&str> = ids
         .iter()
@@ -145,12 +160,14 @@ pub fn monitors_label(all: bool, ids: &[i64], names: &HashMap<i64, String>) -> S
         .collect();
     named.sort_unstable_by_key(|n| n.to_lowercase());
     match named.len() {
-        0 => "No monitor".to_string(),
+        0 => t("No monitor").to_string(),
         n if n <= NAMED_MONITORS => named.join(", "),
-        n => format!(
+        n => tf(
             "{} and {} more",
-            named[..NAMED_MONITORS - 1].join(", "),
-            n - (NAMED_MONITORS - 1)
+            &[
+                &named[..NAMED_MONITORS - 1].join(", "),
+                &(n - (NAMED_MONITORS - 1)),
+            ],
         ),
     }
 }
@@ -179,8 +196,8 @@ impl FormTemplate {
         self.errors.get(field).map(String::as_str)
     }
 
-    pub fn weekdays(&self) -> &'static [&'static str] {
-        &WEEKDAYS
+    pub fn weekdays(&self) -> [&'static str; 7] {
+        weekdays()
     }
 
     pub fn group_field(&self, group: &str) -> String {

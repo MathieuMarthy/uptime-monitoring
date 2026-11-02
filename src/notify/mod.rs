@@ -5,6 +5,7 @@
 //! its messages; channels send in parallel, retrying failures, a few requests at a time. Each
 //! delivery's final result goes to `notification_log`, one row per monitor.
 
+use crate::i18n::{self, Lang};
 pub mod channel;
 pub mod email;
 pub mod message;
@@ -394,9 +395,9 @@ impl Router {
                 }
             }
         }
-        let tz = match Settings::load(&self.pool).await {
-            Ok(settings) => settings.tz(),
-            Err(_) => TimeZone::UTC,
+        let (tz, lang) = match Settings::load(&self.pool).await {
+            Ok(settings) => (settings.tz(), settings.lang()),
+            Err(_) => (TimeZone::UTC, Lang::En),
         };
         let sender = self.sender.clone();
         let public_url = sender.public_url.as_deref();
@@ -409,10 +410,10 @@ impl Router {
             };
             for indexes in groups {
                 let notifications: Vec<_> = indexes.iter().map(|&i| list[i].clone()).collect();
-                let message = match notifications.as_slice() {
+                let message = i18n::sync_scope(lang, || match notifications.as_slice() {
                     [one] => Message::new(one, &tz, public_url),
                     many => Message::group(many, public_url),
-                };
+                });
                 self.send(channel.id, notifications, message);
             }
         }

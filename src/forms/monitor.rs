@@ -1,4 +1,5 @@
 use crate::forms::{has_visible_char, is_invisible_format, text_len};
+use crate::i18n::{t, tf};
 use crate::models::{Monitor, name_key};
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -11,6 +12,7 @@ pub const METHODS: [&str; 6] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
 const NAME_MAX_CHARS: usize = 100;
 pub const GROUP_MAX_CHARS: usize = 64;
 /// The dashboard's title for the monitors without a group, which no group may take.
+/// Name shown for the monitors without a group; reserved, whatever the language.
 pub const UNGROUPED: &str = "Ungrouped";
 const URL_MAX_BYTES: usize = 2048;
 const BODY_MAX_BYTES: usize = 64 * 1024;
@@ -26,8 +28,14 @@ pub enum GroupError {
 impl std::fmt::Display for GroupError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::TooLong => write!(f, "Group must be at most {GROUP_MAX_CHARS} characters."),
-            Self::Reserved => write!(f, "“{UNGROUPED}” is kept for the monitors without a group."),
+            Self::TooLong => f.write_str(&tf(
+                "Group must be at most {} characters.",
+                &[&GROUP_MAX_CHARS],
+            )),
+            Self::Reserved => f.write_str(&tf(
+                "“{}” is kept for the monitors without a group.",
+                &[&UNGROUPED],
+            )),
         }
     }
 }
@@ -229,11 +237,11 @@ impl MonitorForm {
 
         let name = self.name.trim();
         if !has_visible_char(name) {
-            errors.insert("name", "Name is required.".to_string());
+            errors.insert("name", t("Name is required.").to_string());
         } else if text_len(name) > NAME_MAX_CHARS {
             errors.insert(
                 "name",
-                format!("Name must be at most {NAME_MAX_CHARS} characters."),
+                tf("Name must be at most {} characters.", &[&NAME_MAX_CHARS]),
             );
         }
 
@@ -249,7 +257,7 @@ impl MonitorForm {
             "" | HTTP => HTTP,
             PUSH => PUSH,
             _ => {
-                errors.insert("kind", "Choose HTTP or push.".to_string());
+                errors.insert("kind", t("Choose HTTP or push.").to_string());
                 HTTP
             }
         };
@@ -271,7 +279,7 @@ impl MonitorForm {
         {
             errors.insert(
                 "retry_interval_s",
-                "Retry interval cannot be longer than the check interval.".to_string(),
+                t("Retry interval cannot be longer than the check interval.").to_string(),
             );
         }
 
@@ -331,7 +339,7 @@ impl MonitorForm {
 
         let method = self.method.trim().to_ascii_uppercase();
         if !METHODS.contains(&method.as_str()) {
-            errors.insert("method", "Choose a supported HTTP method.".to_string());
+            errors.insert("method", t("Choose a supported HTTP method.").to_string());
         }
 
         let accepted_statuses = match parse_status_ranges(&self.accepted_statuses) {
@@ -350,7 +358,7 @@ impl MonitorForm {
         {
             errors.insert(
                 "timeout_s",
-                "Timeout cannot be longer than the check interval.".to_string(),
+                t("Timeout cannot be longer than the check interval.").to_string(),
             );
         }
 
@@ -385,7 +393,10 @@ impl MonitorForm {
         // Kept as typed: leading or trailing whitespace may matter to the target.
         let body = has_visible_char(&self.body).then(|| self.body.clone());
         if body.as_ref().is_some_and(|b| b.len() > BODY_MAX_BYTES) {
-            errors.insert("body", "Request body must be at most 64 KiB.".to_string());
+            errors.insert(
+                "body",
+                t("Request body must be at most 64 KiB.").to_string(),
+            );
         }
 
         let keyword = non_empty(&self.keyword);
@@ -393,11 +404,11 @@ impl MonitorForm {
             .as_ref()
             .is_some_and(|k| k.len() > KEYWORD_MAX_BYTES)
         {
-            errors.insert("keyword", "Keyword must be at most 1 KiB.".to_string());
+            errors.insert("keyword", t("Keyword must be at most 1 KiB.").to_string());
         } else if keyword.is_some() && method == "HEAD" {
             errors.insert(
                 "keyword",
-                "A HEAD response has no body: choose another method or remove the keyword."
+                t("A HEAD response has no body: choose another method or remove the keyword.")
                     .to_string(),
             );
         }
@@ -455,7 +466,7 @@ impl Default for HttpFields {
 /// Parses `"200-299,301"` into inclusive ranges. Every code must be 100–599.
 pub fn parse_status_ranges(raw: &str) -> Result<Vec<(u16, u16)>, String> {
     let invalid =
-        || "Use status codes or ranges between 100 and 599, e.g. 200-299,301.".to_string();
+        || t("Use status codes or ranges between 100 and 599, e.g. 200-299,301.").to_string();
     let code = |s: &str| -> Result<u16, String> {
         let n: u16 = s.trim().parse().map_err(|_| invalid())?;
         if (100..=599).contains(&n) {
@@ -500,7 +511,7 @@ fn format_status_ranges(ranges: &[(u16, u16)]) -> String {
 fn parse_bounded(raw: &str, min: i64, max: i64) -> Result<i64, String> {
     match raw.trim().parse::<i64>() {
         Ok(n) if (min..=max).contains(&n) => Ok(n),
-        _ => Err(format!("Enter a whole number between {min} and {max}.")),
+        _ => Err(tf("Enter a whole number between {} and {}.", &[&min, &max])),
     }
 }
 
@@ -511,35 +522,35 @@ fn non_empty(raw: &str) -> Option<String> {
 
 pub(crate) fn validate_url(raw: &str) -> Result<(), String> {
     if raw.len() > URL_MAX_BYTES {
-        return Err(format!("URL must be at most {URL_MAX_BYTES} characters."));
+        return Err(tf("URL must be at most {} characters.", &[&URL_MAX_BYTES]));
     }
     let parsed = url::Url::parse(raw)
-        .map_err(|_| "Enter a valid URL, e.g. https://example.com/health.".to_string())?;
+        .map_err(|_| t("Enter a valid URL, e.g. https://example.com/health.").to_string())?;
     if !matches!(parsed.scheme(), "http" | "https") {
-        return Err("URL must start with http:// or https://.".to_string());
+        return Err(t("URL must start with http:// or https://.").to_string());
     }
     if parsed.host_str().is_none_or(str::is_empty) {
-        return Err("URL must include a host, e.g. https://example.com.".to_string());
+        return Err(t("URL must include a host, e.g. https://example.com.").to_string());
     }
     Ok(())
 }
 
 fn validate_headers(raw: &str) -> Result<(), String> {
     let HeaderPairs(pairs) = serde_json::from_str(raw).map_err(|_| {
-        r#"Headers must be a JSON object, e.g. {"Authorization": "Bearer token"}."#.to_string()
+        t("Headers must be a JSON object, e.g. {\"Authorization\": \"Bearer token\"}.").to_string()
     })?;
     let mut seen = std::collections::HashSet::new();
     for (name, value) in &pairs {
         let header = http::HeaderName::from_bytes(name.as_bytes())
-            .map_err(|_| format!("{name:?} is not a valid header name."))?;
+            .map_err(|_| tf("“{}” is not a valid header name.", &[&name]))?;
         if !seen.insert(header) {
-            return Err(format!("{name:?} appears more than once."));
+            return Err(tf("“{}” appears more than once.", &[&name]));
         }
         let value = value
             .as_str()
-            .ok_or_else(|| format!("The value of {name:?} must be a string."))?;
+            .ok_or_else(|| tf("The value of “{}” must be a string.", &[&name]))?;
         http::HeaderValue::from_str(value)
-            .map_err(|_| format!("The value of {name:?} is not a valid header value."))?;
+            .map_err(|_| tf("The value of “{}” is not a valid header value.", &[&name]))?;
     }
     Ok(())
 }

@@ -1,5 +1,6 @@
 use crate::forms::monitor::{FieldErrors, validate_url};
 use crate::forms::{has_visible_char, text_len};
+use crate::i18n::{t, tf};
 use crate::notify::channel::{
     ChannelConfig, EmailConfig, KINDS, NtfyConfig, SmtpSecurity, TELEGRAM_API, TelegramConfig,
     WebhookConfig,
@@ -115,11 +116,11 @@ impl ChannelForm {
 
         let name = self.name.trim();
         if !has_visible_char(name) {
-            errors.insert("name", "Name is required.".to_string());
+            errors.insert("name", t("Name is required.").to_string());
         } else if text_len(name) > NAME_MAX_CHARS {
             errors.insert(
                 "name",
-                format!("Name must be at most {NAME_MAX_CHARS} characters."),
+                tf("Name must be at most {} characters.", &[&NAME_MAX_CHARS]),
             );
         }
 
@@ -132,7 +133,7 @@ impl ChannelForm {
                 .map(ChannelConfig::Telegram),
             "email" => self.email(existing, &mut errors).map(ChannelConfig::Email),
             _ => {
-                errors.insert("kind", format!("Choose one of: {}.", KINDS.join(", ")));
+                errors.insert("kind", tf("Choose one of: {}.", &[&KINDS.join(", ")]));
                 None
             }
         };
@@ -168,7 +169,10 @@ impl ChannelForm {
         } else {
             errors.insert(
                 "url",
-                format!("A Discord webhook URL starts with {}.", DISCORD_PREFIXES[0]),
+                tf(
+                    "A Discord webhook URL starts with {}.",
+                    &[&DISCORD_PREFIXES[0]],
+                ),
             );
             None
         }
@@ -198,7 +202,10 @@ impl ChannelForm {
         if !topic_ok {
             errors.insert(
                 "ntfy_topic",
-                format!("Topic is required: up to {TOPIC_MAX_CHARS} letters, digits, - or _."),
+                tf(
+                    "Topic is required: up to {} letters, digits, - or _.",
+                    &[&TOPIC_MAX_CHARS],
+                ),
             );
         }
 
@@ -209,7 +216,10 @@ impl ChannelForm {
             if !valid {
                 errors.insert(
                     "ntfy_token",
-                    format!("Token must be at most {TOKEN_MAX_BYTES} characters, without spaces."),
+                    tf(
+                        "Token must be at most {} characters, without spaces.",
+                        &[&TOKEN_MAX_BYTES],
+                    ),
                 );
             }
             Some(typed.to_string())
@@ -240,7 +250,8 @@ impl ChannelForm {
             if !is_bot_token(typed) {
                 errors.insert(
                     "telegram_token",
-                    "A bot token looks like 123456:ABC-DEF…, as given by @BotFather.".to_string(),
+                    t("A bot token looks like 123456:ABC-DEF…, as given by @BotFather.")
+                        .to_string(),
                 );
             }
             Some(typed.to_string())
@@ -248,7 +259,7 @@ impl ChannelForm {
             match existing {
                 Some(ChannelConfig::Telegram(c)) => Some(c.token.clone()),
                 _ => {
-                    errors.insert("telegram_token", "Bot token is required.".to_string());
+                    errors.insert("telegram_token", t("Bot token is required.").to_string());
                     None
                 }
             }
@@ -258,7 +269,8 @@ impl ChannelForm {
         if !is_chat_id(chat_id) {
             errors.insert(
                 "telegram_chat_id",
-                "Chat ID is a number, e.g. -1001234567890, or a channel's @username.".to_string(),
+                t("Chat ID is a number, e.g. -1001234567890, or a channel's @username.")
+                    .to_string(),
             );
         }
 
@@ -283,7 +295,8 @@ impl ChannelForm {
         if host.is_none() {
             errors.insert(
                 "email_host",
-                "SMTP server is a host name or an IP address, e.g. smtp.example.com.".to_string(),
+                t("SMTP server is a host name or an IP address, e.g. smtp.example.com.")
+                    .to_string(),
             );
         }
         let host = host.unwrap_or_default();
@@ -295,7 +308,7 @@ impl ChannelForm {
             _ => {
                 errors.insert(
                     "email_security",
-                    "Choose STARTTLS, TLS or none.".to_string(),
+                    t("Choose STARTTLS, TLS or none.").to_string(),
                 );
                 SmtpSecurity::Starttls
             }
@@ -310,7 +323,7 @@ impl ChannelForm {
                 _ => {
                     errors.insert(
                         "email_port",
-                        "Port is a number from 1 to 65535.".to_string(),
+                        t("Port is a number from 1 to 65535.").to_string(),
                     );
                     0
                 }
@@ -338,13 +351,13 @@ impl ChannelForm {
             if password.is_none() {
                 errors.insert(
                     "email_password",
-                    "Password is required with a username.".to_string(),
+                    t("Password is required with a username.").to_string(),
                 );
             }
             if security == SmtpSecurity::None {
                 errors.insert(
                     "email_security",
-                    "A username and password are only sent over STARTTLS or TLS.".to_string(),
+                    t("A username and password are only sent over STARTTLS or TLS.").to_string(),
                 );
             }
             (Some(username.to_string()), password)
@@ -354,7 +367,7 @@ impl ChannelForm {
         if !is_mailbox(from) {
             errors.insert(
                 "email_from",
-                "Sender is an address, e.g. uptime@example.com or Uptime <uptime@example.com>."
+                t("Sender is an address, e.g. uptime@example.com or Uptime <uptime@example.com>.")
                     .to_string(),
             );
         }
@@ -363,7 +376,10 @@ impl ChannelForm {
         if to.is_empty() || to.len() > MAX_RECIPIENTS || !to.iter().all(|t| is_mailbox(t)) {
             errors.insert(
                 "email_to",
-                format!("Recipients: 1 to {MAX_RECIPIENTS} addresses separated by commas."),
+                tf(
+                    "Recipients: 1 to {} addresses separated by commas.",
+                    &[&MAX_RECIPIENTS],
+                ),
             );
         }
 

@@ -34,6 +34,17 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    /* Long labels (German) wrap, hyphenated by the page language, and stay centred. */
+    .activity-filters .segmented a {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: normal;
+        hyphens: auto;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
+    }
+
     .activity-form {
         display: grid;
         grid-template-columns: minmax(0, 1fr);

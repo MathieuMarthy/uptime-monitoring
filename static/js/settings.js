@@ -28,7 +28,7 @@
             checksDays.value.trim() && checks > 0 ? formatBytes(checksPerDay * checks * CHECK_BYTES) : "—";
         const history = Number(historyDays.value);
         document.getElementById("history-estimate").textContent = !historyDays.value.trim()
-            ? `${formatBytes(perDayOfHistory * 365)} per year, kept forever`
+            ? form.dataset.forever.replace("{}", formatBytes(perDayOfHistory * 365))
             : history > 0 ? formatBytes(perDayOfHistory * history) : "—";
     };
     checksDays.addEventListener("input", update);

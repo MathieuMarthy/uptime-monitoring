@@ -1,5 +1,6 @@
 use crate::forms::auth::check_new_password;
 use crate::forms::monitor::FieldErrors;
+use crate::i18n::{Lang, t, tf};
 use serde::Deserialize;
 
 pub const CHECKS_RETENTION_DAYS: std::ops::RangeInclusive<i64> = 2..=365;
@@ -10,6 +11,7 @@ pub const HISTORY_RETENTION_MAX_DAYS: i64 = 36_500;
 #[serde(default)]
 pub struct GeneralForm {
     pub timezone: String,
+    pub language: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -17,6 +19,12 @@ pub struct GeneralForm {
 pub struct DataForm {
     pub checks_retention_days: String,
     pub history_retention_days: String,
+}
+
+/// The private-target blocking checkbox, alone in its form.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct BlockingForm {
     pub block_private_targets: Option<String>,
 }
 
@@ -24,7 +32,6 @@ pub struct DataForm {
 pub struct DataInput {
     pub checks_retention_days: i64,
     pub history_retention_days: Option<i64>,
-    pub block_private_targets: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -62,18 +69,27 @@ pub fn timezones() -> Vec<String> {
 }
 
 impl GeneralForm {
-    /// The timezone, exactly as listed by `timezones()`.
-    pub fn validate(&self) -> Result<String, FieldErrors> {
+    /// The timezone, exactly as listed by `timezones()`, and the language.
+    pub fn validate(&self) -> Result<(String, Lang), FieldErrors> {
+        let mut errors = FieldErrors::new();
         let timezone = self.timezone.trim();
-        if jiff::tz::db()
+        if !jiff::tz::db()
             .available()
             .any(|name| name.as_str() == timezone)
         {
-            Ok(timezone.to_string())
-        } else {
-            let mut errors = FieldErrors::new();
-            errors.insert("timezone", "Unknown timezone.".to_string());
-            Err(errors)
+            errors.insert("timezone", t("Unknown timezone.").to_string());
+        }
+        // Blank: the language stays as it is.
+        let language = match self.language.trim() {
+            "" => Some(crate::i18n::current()),
+            code => Lang::from_code(code),
+        };
+        if language.is_none() {
+            errors.insert("language", t("Unknown language.").to_string());
+        }
+        match language {
+            Some(language) if errors.is_empty() => Ok((timezone.to_string(), language)),
+            _ => Err(errors),
         }
     }
 }
@@ -91,10 +107,9 @@ impl DataForm {
         if checks.is_none() {
             errors.insert(
                 "checks_retention_days",
-                format!(
+                tf(
                     "Enter a number of days between {} and {}.",
-                    CHECKS_RETENTION_DAYS.start(),
-                    CHECKS_RETENTION_DAYS.end()
+                    &[&CHECKS_RETENTION_DAYS.start(), &CHECKS_RETENTION_DAYS.end()],
                 ),
             );
         }
@@ -106,8 +121,9 @@ impl DataForm {
                 _ => {
                     errors.insert(
                         "history_retention_days",
-                        format!(
-                            "Enter a number of days up to {HISTORY_RETENTION_MAX_DAYS}, or leave it blank."
+                        tf(
+                            "Enter a number of days up to {}, or leave it blank.",
+                            &[&HISTORY_RETENTION_MAX_DAYS],
                         ),
                     );
                     None
@@ -119,7 +135,7 @@ impl DataForm {
         {
             errors.insert(
                 "history_retention_days",
-                "History must be kept at least the checks retention.".to_string(),
+                t("History must be kept at least the checks retention.").to_string(),
             );
         }
 
@@ -127,7 +143,6 @@ impl DataForm {
             Some(checks) if errors.is_empty() => Ok(DataInput {
                 checks_retention_days: checks,
                 history_retention_days: history,
-                block_private_targets: self.block_private_targets.is_some(),
             }),
             _ => Err(errors),
         }
@@ -141,7 +156,7 @@ impl PasswordForm {
         if self.current_password.is_empty() {
             errors.insert(
                 "current_password",
-                "Enter your current password.".to_string(),
+                t("Enter your current password.").to_string(),
             );
         }
         check_new_password(&self.password, &self.password_confirm, &mut errors);
@@ -161,7 +176,6 @@ mod tests {
         DataForm {
             checks_retention_days: checks.to_string(),
             history_retention_days: history.to_string(),
-            block_private_targets: None,
         }
     }
 
@@ -172,8 +186,12 @@ mod tests {
         assert!(zones.is_sorted());
         let form = |tz: &str| GeneralForm {
             timezone: tz.to_string(),
+            language: "en".to_string(),
         };
-        assert_eq!(form(" UTC ").validate().unwrap(), "UTC");
+        assert_eq!(
+            form(" UTC ").validate().unwrap(),
+            ("UTC".to_string(), Lang::En)
+        );
         for tz in ["", "europe/paris", "Mars/Olympus", "../etc"] {
             assert!(form(tz).validate().is_err(), "{tz:?}");
         }
@@ -184,7 +202,6 @@ mod tests {
         let input = data(" 30 ", "").validate().unwrap();
         assert_eq!(input.checks_retention_days, 30);
         assert_eq!(input.history_retention_days, None);
-        assert!(!input.block_private_targets);
         assert_eq!(
             data("7", "7").validate().unwrap().history_retention_days,
             Some(7)

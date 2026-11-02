@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::forms::bulk_monitor::{BulkErrors, BulkMonitorForm};
 use crate::forms::monitor::{FieldErrors, MonitorForm, PUSH, clean_group};
+use crate::i18n::{t, tf};
 use crate::models::{Channel, Monitor, Session, is_unique_violation};
 use crate::routes::{PathId, form_or_invalid, parse_id};
 use crate::state::AppState;
@@ -18,7 +19,9 @@ use std::collections::HashMap;
 
 /// The Test button's checks stop after this long, whatever the monitor's timeout.
 const TEST_TIMEOUT_S: i64 = 30;
-const DUPLICATE_NAME: &str = "This name is already used.";
+fn duplicate_name() -> &'static str {
+    t("This name is already used.")
+}
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -174,7 +177,7 @@ async fn bulk_add(
         }
     }
     let errors = BulkErrors {
-        urls: Some("Names were taken meanwhile: submit again.".to_string()),
+        urls: Some(t("Names were taken meanwhile: submit again.").to_string()),
         ..BulkErrors::default()
     };
     Ok(bulk_add_page(&state, form, errors, session.csrf_token)
@@ -253,7 +256,7 @@ async fn rename_group(
             let done = BulkDone::Renamed(ids.len() as u64);
             return Ok(Redirect::to(&format!("/?{}", done.query())).into_response());
         }
-        Ok(None) => "Enter a group name.".to_string(),
+        Ok(None) => t("Enter a group name.").to_string(),
         Err(error) => error.to_string(),
     };
     Ok(RenameGroupTemplate {
@@ -316,7 +319,7 @@ async fn create(
     match Monitor::create(&state.db, &input).await {
         Ok(id) => {
             state.engine.reload(id);
-            Ok(Redirect::to(&format!("/monitors/{id}")).into_response())
+            Ok(Redirect::to(&format!("/monitors/{}", id)).into_response())
         }
         Err(e) if is_unique_violation(&e) => {
             Ok(page(&state, None, form, name_taken(), session.csrf_token)
@@ -358,7 +361,7 @@ async fn duplicate_form(
         .await?
         .ok_or(AppError::NotFound)?;
     let mut form = MonitorForm::from_monitor(&monitor);
-    form.name = format!("{} (copy)", monitor.name);
+    form.name = tf("{} (copy)", &[&monitor.name]);
     form.active = Some("on".to_string());
     form.copy_of = id.to_string();
     form.set_channels(&Channel::ids_for_monitor(&state.db, id).await?);
@@ -388,7 +391,7 @@ async fn update(
     match Monitor::update(&state.db, id, &input).await {
         Ok(true) => {
             state.engine.reload(id);
-            Ok(Redirect::to(&format!("/monitors/{id}")).into_response())
+            Ok(Redirect::to(&format!("/monitors/{}", id)).into_response())
         }
         Ok(false) => Err(AppError::NotFound),
         Err(e) if is_unique_violation(&e) => {
@@ -438,7 +441,7 @@ async fn test_page(
         Err(errors) => return page(state, id, form, errors, csrf_token).await,
     };
     let result = if input.kind == PUSH {
-        Err("A push monitor waits for its job: save it, then call its URL.".to_string())
+        Err(t("A push monitor waits for its job: save it, then call its URL.").to_string())
     } else {
         match state.monitor_tests.clone().try_acquire_owned() {
             Ok(_permit) => {
@@ -448,7 +451,7 @@ async fn test_page(
                 let outcome = state.form_checker.check(&monitor).await;
                 test_summary(&outcome, input.tls_expiry_warn_days)
             }
-            Err(_) => Err("Other tests are running: try again in a moment.".to_string()),
+            Err(_) => Err(t("Other tests are running: try again in a moment.").to_string()),
         }
     };
     let mut page = page(state, id, form, FieldErrors::new(), csrf_token).await?;
@@ -473,7 +476,7 @@ async fn toggle_pause(
 ) -> Result<Redirect, AppError> {
     if Monitor::toggle_pause(&state.db, id).await? {
         state.engine.reload(id);
-        Ok(Redirect::to(&format!("/monitors/{id}")))
+        Ok(Redirect::to(&format!("/monitors/{}", id)))
     } else {
         Err(AppError::NotFound)
     }
@@ -485,7 +488,7 @@ async fn renew_push_token(
     PathId(id): PathId,
 ) -> Result<Redirect, AppError> {
     if Monitor::renew_push_token(&state.db, id).await? {
-        Ok(Redirect::to(&format!("/monitors/{id}")))
+        Ok(Redirect::to(&format!("/monitors/{}", id)))
     } else {
         Err(AppError::NotFound)
     }
@@ -515,8 +518,11 @@ async fn page(
         _ => None,
     };
     let (action_url, cancel_url) = match (id, copy_of) {
-        (Some(id), _) => (format!("/monitors/{id}/edit"), format!("/monitors/{id}")),
-        (None, Some(source)) => ("/monitors/new".to_string(), format!("/monitors/{source}")),
+        (Some(id), _) => (
+            format!("/monitors/{}/edit", id),
+            format!("/monitors/{}", id),
+        ),
+        (None, Some(source)) => ("/monitors/new".to_string(), format!("/monitors/{}", source)),
         (None, None) => ("/monitors/new".to_string(), "/".to_string()),
     };
     Ok(FormTemplate {
@@ -543,5 +549,5 @@ fn enabled_channel_ids(channels: &[Channel]) -> Vec<i64> {
 }
 
 fn name_taken() -> FieldErrors {
-    FieldErrors::from([("name", DUPLICATE_NAME.to_string())])
+    FieldErrors::from([("name", duplicate_name().to_string())])
 }

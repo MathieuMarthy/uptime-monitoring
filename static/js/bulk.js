@@ -23,7 +23,8 @@ function update() {
     all.hidden = false;
     toggle.checked = ticked > 0 && ticked === visible.length;
     toggle.indeterminate = ticked > 0 && ticked < visible.length;
-    all.querySelector("[data-selected-count]").textContent = ticked ? `${ticked} selected` : "Select all";
+    const count = all.querySelector("[data-selected-count]");
+    count.textContent = ticked ? count.dataset.format.replace("{}", ticked) : count.dataset.label;
     form.querySelector("[data-bulk-bar]").toggleAttribute("data-empty", ticked === 0);
 }
 

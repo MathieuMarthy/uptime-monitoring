@@ -1,3 +1,4 @@
+use crate::i18n::Lang;
 use crate::time::now_ms;
 use sqlx::SqlitePool;
 
@@ -34,6 +35,7 @@ impl Admin {
         username: &str,
         password_hash: &str,
         timezone: &str,
+        language: Lang,
     ) -> Result<(), sqlx::Error> {
         let mut tx = pool.begin().await?;
         sqlx::query(
@@ -44,8 +46,9 @@ impl Admin {
         .bind(now_ms())
         .execute(&mut *tx)
         .await?;
-        sqlx::query("UPDATE settings SET timezone = ? WHERE id = 1")
+        sqlx::query("UPDATE settings SET timezone = ?, language = ? WHERE id = 1")
             .bind(timezone)
+            .bind(language.code())
             .execute(&mut *tx)
             .await?;
         tx.commit().await

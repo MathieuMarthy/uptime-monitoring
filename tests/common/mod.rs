@@ -111,9 +111,15 @@ pub async fn test_app_with_engine() -> (TestApp, SqlitePool) {
 }
 
 async fn logged_in(state: AppState, pool: SqlitePool) -> (TestApp, SqlitePool) {
-    Admin::setup(&pool, USERNAME, "not-a-real-hash", "UTC")
-        .await
-        .expect("admin");
+    Admin::setup(
+        &pool,
+        USERNAME,
+        "not-a-real-hash",
+        "UTC",
+        Default::default(),
+    )
+    .await
+    .expect("admin");
     let session = Session::create(&pool).await.expect("session");
     let session = TestSession {
         token: session.token,
@@ -126,7 +132,7 @@ async fn logged_in(state: AppState, pool: SqlitePool) -> (TestApp, SqlitePool) {
 pub async fn app_with_admin() -> (TestApp, SqlitePool) {
     let pool = pool().await;
     let hash = uptime_monitoring::auth::hash_password(PASSWORD).expect("hash");
-    Admin::setup(&pool, USERNAME, &hash, "UTC")
+    Admin::setup(&pool, USERNAME, &hash, "UTC", Default::default())
         .await
         .expect("admin");
     (build(AppState::new(pool.clone()), None), pool)

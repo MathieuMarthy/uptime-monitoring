@@ -1,6 +1,6 @@
 {% extends "public.html" %}
 
-{% block title %}Two-factor code - Uptime Monitoring{% endblock %}
+{% block title %}{{ "Two-factor code"|t }} - Uptime Monitoring{% endblock %}
 {% block styles %}
 <link href="/static/css/forms.css" rel="stylesheet">
 {% endblock %}
@@ -8,8 +8,8 @@
 {% block content %}
 <div class="form-container auth-container">
     <div class="form-header">
-        <h1 class="form-title">Two-factor code</h1>
-        <p class="form-subtitle">Enter the 6-digit code from your authenticator app.</p>
+        <h1 class="form-title">{{ "Two-factor code"|t }}</h1>
+        <p class="form-subtitle">{{ "Enter the 6-digit code from your authenticator app."|t }}</p>
     </div>
 
     {% if let Some(error) = error %}
@@ -18,13 +18,13 @@
 
     <form action="/login/totp" method="POST" class="auth-form">
         <div class="form-group">
-            <label class="form-label" for="code">Code</label>
+            <label class="form-label" for="code">{{ "Code"|t }}</label>
             <input class="form-input" id="code" name="code" type="text" inputmode="numeric"
                    autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" required autofocus/>
         </div>
 
-        <button class="button-primary" type="submit">Log in</button>
+        <button class="button-primary" type="submit">{{ "Log in"|t }}</button>
     </form>
-    <p class="form-hint"><a href="/login">Back to the password</a></p>
+    <p class="form-hint"><a href="/login">{{ "Back to the password"|t }}</a></p>
 </div>
 {% endblock %}

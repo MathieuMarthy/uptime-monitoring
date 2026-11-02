@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}Monitors - Uptime Monitoring{% endblock %}
+{% block title %}{{ "Monitors"|t }} - Uptime Monitoring{% endblock %}
 {% block nav_monitors %}aria-current="page"{% endblock %}
 {% block styles %}
 <link href="/static/css/monitors.css" rel="stylesheet">
@@ -15,7 +15,7 @@
 {% block content %}
 <div class="page">
     <div class="page-head">
-        <section aria-label="Status overview" id="live-summary" data-live>
+        <section aria-label="{{ "Status overview"|t }}" id="live-summary" data-live>
             <h1 class="headline">
                 <span class="lamp lamp-lg lamp-{{ headline.state }}" aria-hidden="true"></span><span data-announce>{{ headline.text }}</span>
             </h1>
@@ -26,18 +26,18 @@
         </section>
 
         <div class="toolbar">
-            <nav class="segmented" aria-label="Time range">
-                <a href="{{ filter.range_url(Range::Hours) }}" data-range="" {% if range == Range::Hours %}aria-current="true"{% endif %}>24 hours</a>
-                <a href="{{ filter.range_url(Range::Days) }}" data-range="90d" {% if range == Range::Days %}aria-current="true"{% endif %}>90 days</a>
+            <nav class="segmented" aria-label="{{ "Time range"|t }}">
+                <a href="{{ filter.range_url(Range::Hours) }}" data-range="" {% if range == Range::Hours %}aria-current="true"{% endif %}>{{ "24 hours"|t }}</a>
+                <a href="{{ filter.range_url(Range::Days) }}" data-range="90d" {% if range == Range::Days %}aria-current="true"{% endif %}>{{ "90 days"|t }}</a>
             </nav>
-            <a class="button-secondary" href="/monitors/new/bulk">Add several</a>
-            <a class="button-primary" href="/monitors/new">Add monitor</a>
+            <a class="button-secondary" href="/monitors/new/bulk">{{ "Add several"|t }}</a>
+            <a class="button-primary" href="/monitors/new">{{ "Add monitor"|t }}</a>
         </div>
     </div>
 
     {% if !groups.is_empty() %}
     <div class="dashboard-filters">
-        <nav class="segmented" aria-label="Monitor state" id="status-filter" data-live>
+        <nav class="segmented" aria-label="{{ "Monitor state"|t }}" id="status-filter" data-live>
             {%- for chip in chips %}
             <a href="{{ chip.url }}" data-status="{{ chip.key }}" {% if chip.current %}aria-current="true"{% endif %}>{{ chip.label }} <span class="filter-count">{{ chip.count }}</span></a>
             {%- endfor %}
@@ -49,13 +49,13 @@
             {%- if let Some(status) = filter.status %}
             <input type="hidden" name="status" value="{{ status.param() }}">
             {%- endif %}
-            <label class="visually-hidden" for="search-monitors">Search monitors</label>
+            <label class="visually-hidden" for="search-monitors">{{ "Search monitors"|t }}</label>
             <input class="search-bar" id="search-monitors" name="q" type="search" value="{{ filter.q }}"
-                   placeholder="Search name, address, group" title="Press / to search, Esc to clear">
+                   placeholder="{{ "Search name, address, group"|t }}" title="{{ "Press / to search, Esc to clear"|t }}">
             {%- if grouped %}
-            <label class="visually-hidden" for="filter-group">Group</label>
+            <label class="visually-hidden" for="filter-group">{{ "Group"|t }}</label>
             <select class="field" id="filter-group" name="group" data-live>
-                <option value="">All groups</option>
+                <option value="">{{ "All groups"|t }}</option>
                 {%- if let Some(group) = missing_group %}
                 <option value="{{ group }}" selected>{{ group }}</option>
                 {%- endif %}
@@ -64,7 +64,7 @@
                 {%- endfor %}
             </select>
             {%- endif %}
-            <button class="button-secondary" type="submit" data-submit>Show</button>
+            <button class="button-secondary" type="submit" data-submit>{{ "Show"|t }}</button>
         </form>
     </div>
     {% endif %}
@@ -77,9 +77,9 @@
     {%- endif %}
     {%- endif %}
 
-    <section aria-label="Monitors" class="panel monitor-panel">
+    <section aria-label="{{ "Monitors"|t }}" class="panel monitor-panel">
         {% if groups.is_empty() %}
-        <p class="empty-state">No monitor yet. <a href="/monitors/new">Add the first one</a> to start checking a site.</p>
+        <p class="empty-state">{{ "No monitor yet. <a href=\"/monitors/new\">Add the first one</a> to start checking a site."|t|safe }}</p>
         {% else %}
         <div id="live-rows" data-live>
         <form id="bulk-form" method="POST" action="/monitors/bulk">
@@ -88,43 +88,43 @@
             {#- Enter in the group field submits the form's first button: Move comes first, shown after. #}
             <div class="bulk-bar" data-bulk-bar>
                 <span class="bulk-group">
-                    <label class="bulk-label" for="bulk-group">Move to group</label>
+                    <label class="bulk-label" for="bulk-group">{{ "Move to group"|t }}</label>
                     <input class="field" id="bulk-group" name="group" list="bulk-groups" maxlength="{{ GROUP_MAX_CHARS }}"
-                           placeholder="No group">
+                           placeholder="{{ "No group"|t }}">
                     <datalist id="bulk-groups">
                         {%- for group in groups %}{% if let Some(name) = group.name %}
                         <option value="{{ name }}">
                         {%- endif %}{% endfor %}
                     </datalist>
-                    <button class="button-secondary" type="submit" name="action" value="group">Move</button>
+                    <button class="button-secondary" type="submit" name="action" value="group">{{ "Move"|t }}</button>
                 </span>
                 <label class="bulk-all" data-select-all hidden>
-                    <input type="checkbox"> <span data-selected-count>Select all</span>
+                    <input type="checkbox"> <span data-selected-count data-label="{{ "Select all"|t }}" data-format="{{ "{} selected"|t }}">{{ "Select all"|t }}</span>
                 </label>
-                <button class="button-secondary" type="submit" name="action" value="pause">Pause</button>
-                <button class="button-secondary" type="submit" name="action" value="resume">Resume</button>
+                <button class="button-secondary" type="submit" name="action" value="pause">{{ "Pause"|t }}</button>
+                <button class="button-secondary" type="submit" name="action" value="resume">{{ "Resume"|t }}</button>
                 {%- if !channels.is_empty() %}
                 <span class="bulk-channel">
-                    <label class="bulk-label" for="bulk-channel">Alert channel</label>
+                    <label class="bulk-label" for="bulk-channel">{{ "Alert channel"|t }}</label>
                     <select class="field" id="bulk-channel" name="channel">
                         {%- for (id, name) in channels %}
                         <option value="{{ id }}">{{ name }}</option>
                         {%- endfor %}
                     </select>
-                    <button class="button-secondary" type="submit" name="action" value="link">Link</button>
-                    <button class="button-secondary" type="submit" name="action" value="unlink">Unlink</button>
+                    <button class="button-secondary" type="submit" name="action" value="link">{{ "Link"|t }}</button>
+                    <button class="button-secondary" type="submit" name="action" value="unlink">{{ "Unlink"|t }}</button>
                 </span>
                 {%- endif %}
                 <button class="button-danger" type="submit" name="action" value="delete"
-                        data-confirm="Delete the selected monitors and all their history?">Delete</button>
+                        data-confirm="{{ "Delete the selected monitors and all their history?"|t }}">{{ "Delete"|t }}</button>
             </div>
             <div class="monitor-head" aria-hidden="true">
-                <span>Monitor</span>
+                <span>{{ "Monitor"|t }}</span>
                 <span class="trace-axis trace-{{ bars() }}">
                     {%- for label in axis.labels %}<span>{{ label }}</span>{% endfor -%}
                 </span>
-                <span class="num">Uptime</span>
-                <span class="num">Response</span>
+                <span class="num">{{ "Uptime"|t }}</span>
+                <span class="num">{{ "Response"|t }}</span>
             </div>
             {%- for group in groups %}
             {%- if grouped %}
@@ -137,7 +137,7 @@
                     <span class="lamp lamp-{{ group.state }}" aria-hidden="true"></span>
                     <span class="monitor-group-name">{{ group.label() }}</span>
                     {%- if let Some(url) = group.rename_url() %}
-                    <a class="monitor-group-rename" href="{{ url }}" aria-label="Rename group {{ group.label() }}" title="Rename group">
+                    <a class="monitor-group-rename" href="{{ url }}" aria-label="{{ "Rename group {}"|tf(group.label()) }}" title="{{ "Rename group"|t }}">
                         <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
                             <path d="M9.5 2.5l2 2L5 11l-2.5.5L3 9z" fill="none" stroke="currentColor" stroke-width="1.4"
                                   stroke-linejoin="round"/>
@@ -157,7 +157,7 @@
                                 <span class="lamp lamp-{{ row.status_key() }}" aria-hidden="true"></span>
                                 <span class="monitor-name-text">{{ m.name }}</span>
                                 {%- if row.status_key() == "up" %}
-                                <span class="visually-hidden">, Up</span>
+                                <span class="visually-hidden">{{ ", Up"|t }}</span>
                                 {%- else %}
                                 <span class="row-state state-{{ row.status_key() }}">{{ row.status_label() }}</span>
                                 {%- endif %}
@@ -167,9 +167,9 @@
                                 <span class="tick {{ tick.class }}{% if loop.index0 > 0 && loop.index0 % axis.step == 0 %} tick-guide{% endif %}" data-tip="{{ tick.title }}"></span>
                                 {%- endfor -%}
                             </span>
-                            <span class="num monitor-uptime">{{ row.heartbeat.uptime_label() }}<span class="visually-hidden"> uptime</span></span>
+                            <span class="num monitor-uptime">{{ row.heartbeat.uptime_label() }}<span class="visually-hidden"> {{ "uptime"|t }}</span></span>
                             <span class="num monitor-latency">
-                                {%- match m.last_latency_ms %}{% when Some with (latency) %}{{ latency }} ms<span class="visually-hidden"> response</span>{% when None %}—{% endmatch -%}
+                                {%- match m.last_latency_ms %}{% when Some with (latency) %}{{ latency }} ms<span class="visually-hidden"> {{ "response"|t }}</span>{% when None %}—{% endmatch -%}
                             </span>
                         </a>
                     </li>
@@ -181,11 +181,10 @@
             {%- endfor %}
         </form>
         </div>
-        <p class="empty-state" data-no-match{% if matches %} hidden{% endif %}>No monitor matches these filters.
-            <a href="{{ filter.reset_url() }}" data-reset>Show every monitor</a></p>
+        <p class="empty-state" data-no-match{% if matches %} hidden{% endif %}>{{ "No monitor matches these filters."|t }}
+            <a href="{{ filter.reset_url() }}" data-reset>{{ "Show every monitor"|t }}</a></p>
         {% endif %}
     </section>
-    <p class="section-note">Red bars are outages, full height once they last a tenth of the bar's time. Orange bars are
-        failed checks that did not make the monitor down, dots are times without checks. Hover a bar for its details.</p>
+    <p class="section-note">{{ "Red bars are outages, full height once they last a tenth of the bar's time. Orange bars are failed checks that did not make the monitor down, dots are times without checks. Hover a bar for its details."|t }}</p>
 </div>
 {% endblock %}

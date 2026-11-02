@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}{% if self.is_edit() %}Edit Channel{% else %}Add Channel{% endif %} - Uptime Monitoring{% endblock %}
+{% block title %}{% if self.is_edit() %}{{ "Edit Channel"|t }}{% else %}{{ "Add Channel"|t }}{% endif %} - Uptime Monitoring{% endblock %}
 {% block nav_alerts %}aria-current="page"{% endblock %}
 
 {% block styles %}
@@ -18,25 +18,25 @@
 {% block content %}
 <div class="form-container">
     <div class="form-header">
-        <h1 class="form-title">{% if self.is_edit() %}Edit Channel{% else %}Add a Notification Channel{% endif %}</h1>
-        <p class="form-subtitle">Where alerts are sent: any webhook, a Discord channel, an ntfy topic, a Telegram chat or e-mail.</p>
+        <h1 class="form-title">{% if self.is_edit() %}{{ "Edit Channel"|t }}{% else %}{{ "Add a Notification Channel"|t }}{% endif %}</h1>
+        <p class="form-subtitle">{{ "Where alerts are sent: any webhook, a Discord channel, an ntfy topic, a Telegram chat or e-mail."|t }}</p>
     </div>
 
     {% match test_result %}
     {% when Some(Ok(())) %}
     <div class="success-banner" role="status">
-        <span>Test message sent.{% if !self.is_edit() %} The channel is not saved yet.{% endif %}</span>
+        <span>{{ "Test message sent."|t }}{% if !self.is_edit() %} {{ "The channel is not saved yet."|t }}{% endif %}</span>
     </div>
     {% when Some(Err(error)) %}
     <div class="error-banner" role="alert">
-        <span>Test failed: {{ error }}</span>
+        <span>{{ "Test failed:"|t }} {{ error }}</span>
     </div>
     {% when None %}
     {% endmatch %}
 
     {% if !errors.is_empty() %}
     <div class="error-banner" role="alert">
-        <span>Please fix the {{ errors.len() }} highlighted field(s).</span>
+        <span>{{ "Please fix the {} highlighted field(s)."|tf(errors.len()) }}</span>
     </div>
     {% endif %}
 
@@ -46,14 +46,14 @@
             <div class="form-section">
                 <div class="form-row form-row-wide-first">
                     <div class="form-group">
-                        <label class="form-label" for="name">Name *</label>
+                        <label class="form-label" for="name">{{ "Name *"|t }}</label>
                         <input class="form-input" id="name" name="name" type="text" maxlength="100"
-                               placeholder="e.g. Ops Discord, My phone" required value="{{ form.name }}"/>
+                               placeholder="{{ "e.g. Ops Discord, My phone"|t }}" required value="{{ form.name }}"/>
                         {% call field_error("name") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="kind">Type</label>
+                        <label class="form-label" for="kind">{{ "Type"|t }}</label>
                         <select class="form-select" id="kind" name="kind">
                             {% for kind in self.kinds() %}
                             <option value="{{ kind }}" {% if form.kind == **kind %}selected{% endif %}>{{ kind }}</option>
@@ -70,7 +70,7 @@
                     <label class="form-label" for="url">URL</label>
                     <input class="form-input" id="url" name="url" type="url"
                            placeholder="https://discord.com/api/webhooks/…" value="{{ form.url }}"/>
-                    <span class="form-hint">Webhook: receives a JSON POST with the event, the monitor and the message. Discord: the channel's webhook URL.</span>
+                    <span class="form-hint">{{ "Webhook: receives a JSON POST with the event, the monitor and the message. Discord: the channel's webhook URL."|t }}</span>
                     {% call field_error("url") %}{% endcall %}
                 </div>
             </div>
@@ -79,14 +79,14 @@
                 <h2 class="section-title">ntfy</h2>
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label" for="ntfy_server">Server</label>
+                        <label class="form-label" for="ntfy_server">{{ "Server"|t }}</label>
                         <input class="form-input" id="ntfy_server" name="ntfy_server" type="url"
                                placeholder="https://ntfy.sh" value="{{ form.ntfy_server }}"/>
                         {% call field_error("ntfy_server") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="ntfy_topic">Topic</label>
+                        <label class="form-label" for="ntfy_topic">{{ "Topic"|t }}</label>
                         <input class="form-input" id="ntfy_topic" name="ntfy_topic" type="text" maxlength="64"
                                placeholder="my-alerts" value="{{ form.ntfy_topic }}"/>
                         {% call field_error("ntfy_topic") %}{% endcall %}
@@ -94,10 +94,10 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="ntfy_token">Access Token</label>
+                    <label class="form-label" for="ntfy_token">{{ "Access Token"|t }}</label>
                     <input class="form-input" id="ntfy_token" name="ntfy_token" type="password" autocomplete="off"
                            value="{{ form.ntfy_token }}" placeholder="{% if has_token %}Stored, leave empty to keep it{% else %}Optional{% endif %}"/>
-                    <span class="form-hint">For a protected topic.</span>
+                    <span class="form-hint">{{ "For a protected topic."|t }}</span>
                     {% call field_error("ntfy_token") %}{% endcall %}
                 </div>
 
@@ -106,7 +106,7 @@
                     <input type="checkbox" id="ntfy_clear_token" name="ntfy_clear_token"
                            {% if form.ntfy_clear_token.is_some() %}checked{% endif %}/>
                     <div class="checkbox-label-group">
-                        <span class="form-label">Remove the stored token</span>
+                        <span class="form-label">{{ "Remove the stored token"|t }}</span>
                     </div>
                 </label>
                 {% endif %}
@@ -116,83 +116,83 @@
                 <h2 class="section-title">Telegram</h2>
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label" for="telegram_token">Bot Token</label>
+                        <label class="form-label" for="telegram_token">{{ "Bot Token"|t }}</label>
                         <input class="form-input" id="telegram_token" name="telegram_token" type="password" autocomplete="off"
                                value="{{ form.telegram_token }}" placeholder="{% if has_bot_token %}Stored, leave empty to keep it{% else %}123456:ABC-DEF…{% endif %}"/>
-                        <span class="form-hint">Create a bot with @BotFather, then send it a message or add it to the group.</span>
+                        <span class="form-hint">{{ "Create a bot with @BotFather, then send it a message or add it to the group."|t }}</span>
                         {% call field_error("telegram_token") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="telegram_chat_id">Chat ID</label>
+                        <label class="form-label" for="telegram_chat_id">{{ "Chat ID"|t }}</label>
                         <input class="form-input" id="telegram_chat_id" name="telegram_chat_id" type="text" maxlength="33"
-                               placeholder="-1001234567890 or @channel" value="{{ form.telegram_chat_id }}"/>
-                        <span class="form-hint">Groups and channels have a negative ID.</span>
+                               placeholder="{{ "-1001234567890 or @channel"|t }}" value="{{ form.telegram_chat_id }}"/>
+                        <span class="form-hint">{{ "Groups and channels have a negative ID."|t }}</span>
                         {% call field_error("telegram_chat_id") %}{% endcall %}
                     </div>
                 </div>
             </div>
 
             <div class="form-section" data-kinds="email">
-                <h2 class="section-title">E-mail</h2>
+                <h2 class="section-title">{{ "E-mail"|t }}</h2>
                 <div class="form-row form-row-wide-first">
                     <div class="form-group">
-                        <label class="form-label" for="email_host">SMTP Server</label>
+                        <label class="form-label" for="email_host">{{ "SMTP Server"|t }}</label>
                         <input class="form-input" id="email_host" name="email_host" type="text" maxlength="253"
                                placeholder="smtp.example.com" value="{{ form.email_host }}"/>
-                        <span class="form-hint">Your provider's relay: Gmail, Fastmail, Brevo, your own server…</span>
+                        <span class="form-hint">{{ "Your provider's relay: Gmail, Fastmail, Brevo, your own server…"|t }}</span>
                         {% call field_error("email_host") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="email_port">Port</label>
+                        <label class="form-label" for="email_port">{{ "Port"|t }}</label>
                         <input class="form-input" id="email_port" name="email_port" type="text" inputmode="numeric" maxlength="5"
                                placeholder="587" value="{{ form.email_port }}"/>
-                        <span class="form-hint">Empty: 587, 465 with TLS, 25 without encryption.</span>
+                        <span class="form-hint">{{ "Empty: 587, 465 with TLS, 25 without encryption."|t }}</span>
                         {% call field_error("email_port") %}{% endcall %}
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="email_security">Security</label>
+                    <label class="form-label" for="email_security">{{ "Security"|t }}</label>
                     <select class="form-select" id="email_security" name="email_security">
                         <option value="starttls" {% if form.email_security == "starttls" %}selected{% endif %}>STARTTLS (required)</option>
                         <option value="tls" {% if form.email_security == "tls" %}selected{% endif %}>TLS</option>
-                        <option value="none" {% if form.email_security == "none" %}selected{% endif %}>None, trusted network only</option>
+                        <option value="none" {% if form.email_security == "none" %}selected{% endif %}>{{ "None, trusted network only"|t }}</option>
                     </select>
                     {% call field_error("email_security") %}{% endcall %}
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label" for="email_username">Username</label>
+                        <label class="form-label" for="email_username">{{ "Username"|t }}</label>
                         <input class="form-input" id="email_username" name="email_username" type="text" autocomplete="off"
-                               placeholder="Optional" value="{{ form.email_username }}"/>
+                               placeholder="{{ "Optional"|t }}" value="{{ form.email_username }}"/>
                         {% call field_error("email_username") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="email_password">Password</label>
+                        <label class="form-label" for="email_password">{{ "Password"|t }}</label>
                         <input class="form-input" id="email_password" name="email_password" type="password" autocomplete="new-password"
                                value="{{ form.email_password }}" placeholder="{% if has_password %}Stored, leave empty to keep it{% else %}Required with a username{% endif %}"/>
-                        <span class="form-hint">Often an app password, not your account's.</span>
+                        <span class="form-hint">{{ "Often an app password, not your account's."|t }}</span>
                         {% call field_error("email_password") %}{% endcall %}
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label" for="email_from">From</label>
+                        <label class="form-label" for="email_from">{{ "From"|t }}</label>
                         <input class="form-input" id="email_from" name="email_from" type="text" maxlength="254"
                                placeholder="Uptime &lt;uptime@example.com&gt;" value="{{ form.email_from }}"/>
                         {% call field_error("email_from") %}{% endcall %}
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" for="email_to">To</label>
+                        <label class="form-label" for="email_to">{{ "To"|t }}</label>
                         <input class="form-input" id="email_to" name="email_to" type="text"
                                placeholder="ops@example.com, me@example.com" value="{{ form.email_to }}"/>
-                        <span class="form-hint">Up to 10 addresses, separated by commas.</span>
+                        <span class="form-hint">{{ "Up to 10 addresses, separated by commas."|t }}</span>
                         {% call field_error("email_to") %}{% endcall %}
                     </div>
                 </div>
@@ -202,16 +202,16 @@
                 <label class="checkbox-group" for="group_alerts" data-kinds="discord ntfy telegram email">
                     <input type="checkbox" id="group_alerts" name="group_alerts" {% if form.group_alerts.is_some() %}checked{% endif %}/>
                     <div class="checkbox-label-group">
-                        <span class="form-label">Group simultaneous alerts</span>
-                        <span class="form-hint">Monitors going down (or back up) within 15 s share one message, sent at the end of those 15 s.</span>
+                        <span class="form-label">{{ "Group simultaneous alerts"|t }}</span>
+                        <span class="form-hint">{{ "Monitors going down (or back up) within 15 s share one message, sent at the end of those 15 s."|t }}</span>
                     </div>
                 </label>
 
                 <label class="checkbox-group" for="enabled">
                     <input type="checkbox" id="enabled" name="enabled" {% if form.enabled.is_some() %}checked{% endif %}/>
                     <div class="checkbox-label-group">
-                        <span class="form-label">Enabled</span>
-                        <span class="form-hint">When unchecked, no alert is sent to this channel.</span>
+                        <span class="form-label">{{ "Enabled"|t }}</span>
+                        <span class="form-hint">{{ "When unchecked, no alert is sent to this channel."|t }}</span>
                     </div>
                 </label>
             </div>
@@ -219,10 +219,10 @@
             <div class="form-actions">
                 <div class="form-actions-left">
                     <button class="button-primary" type="submit">
-                        {% if self.is_edit() %}Save Changes{% else %}Add Channel{% endif %}
+                        {% if self.is_edit() %}{{ "Save Changes"|t }}{% else %}{{ "Add Channel"|t }}{% endif %}
                     </button>
-                    <button class="button-secondary" type="submit" formaction="{{ action_url }}/test">Send Test</button>
-                    <a class="button-secondary" href="/alerts">Cancel</a>
+                    <button class="button-secondary" type="submit" formaction="{{ action_url }}/test">{{ "Send Test"|t }}</button>
+                    <a class="button-secondary" href="/alerts">{{ "Cancel"|t }}</a>
                 </div>
             </div>
         </form>
@@ -230,14 +230,14 @@
         {% if let Some(id) = channel_id %}
         <div class="danger-zone">
             <form action="/alerts/{{ id }}/delete" method="POST"
-                  data-confirm="Delete this channel? Its monitors will no longer alert through it.">
+                  data-confirm="{{ "Delete this channel? Its monitors will no longer alert through it."|t }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div class="form-actions form-actions-plain">
                     <div>
-                        <span class="danger-zone-title">Danger Zone</span>
-                        <p class="form-hint">Delete this channel. Its delivery log is kept.</p>
+                        <span class="danger-zone-title">{{ "Danger Zone"|t }}</span>
+                        <p class="form-hint">{{ "Delete this channel. Its delivery log is kept."|t }}</p>
                     </div>
-                    <button class="button-danger" type="submit">Delete Channel</button>
+                    <button class="button-danger" type="submit">{{ "Delete Channel"|t }}</button>
                 </div>
             </form>
         </div>

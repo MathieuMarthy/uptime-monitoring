@@ -23,11 +23,11 @@
             <path d="M9 3L5 7l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
                   stroke-linejoin="round"/>
         </svg>
-        Monitors
+        {{ "Monitors"|t }}
     </a>
 
     <div class="page-head">
-        <section aria-label="Status" class="detail-status" id="live-status" data-live>
+        <section aria-label="{{ "Status"|t }}" class="detail-status" id="live-status" data-live>
             <h1 class="headline">
                 <span class="lamp lamp-lg lamp-{{ view.status_key() }}" aria-hidden="true"></span>{{ m.name }}
             </h1>
@@ -36,12 +36,12 @@
             </p>
             <p class="detail-config">
                 {% if m.is_push() %}
-                Push, a ping expected every {{ m.interval_s }} s with {{ m.grace_s }} s of grace, down after
-                {{ m.failure_threshold }} missed {% if m.failure_threshold == 1 %}run{% else %}runs in a row{% endif %}.
+                {{ "Push, a ping expected every {} s with {} s of grace,"|tf2(m.interval_s, m.grace_s) }}
+                {{ m.failure_threshold|tn("down after {} missed run.", "down after {} missed runs in a row.") }}
                 {% else %}
                 <a href="{{ m.url }}" target="_blank" rel="noopener noreferrer">{{ m.url }}</a>,
-                {{ m.method }} every {{ m.interval_s }} s, down after {{ m.failure_threshold }}
-                {% if m.failure_threshold == 1 %}failure{% else %}failures in a row{% endif %}.
+                {{ "{} every {} s,"|tf2(m.method, m.interval_s) }}
+                {{ m.failure_threshold|tn("down after {} failure.", "down after {} failures in a row.") }}
                 {% endif %}
             </p>
         </section>
@@ -50,15 +50,15 @@
             <form action="/monitors/{{ m.id }}/toggle-pause" method="POST" class="inline-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 {% if m.paused %}
-                <button class="button-primary" type="submit">Resume</button>
+                <button class="button-primary" type="submit">{{ "Resume"|t }}</button>
                 {% else %}
-                <button class="button-secondary" type="submit">Pause</button>
+                <button class="button-secondary" type="submit">{{ "Pause"|t }}</button>
                 {% endif %}
             </form>
             {% if !m.paused %}
             <form action="/monitors/{{ m.id }}/maintenance" method="POST" class="inline-form maintenance-now">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <label class="visually-hidden" for="maintenance-minutes">Maintenance length</label>
+                <label class="visually-hidden" for="maintenance-minutes">{{ "Maintenance length"|t }}</label>
                 <select class="form-select" id="maintenance-minutes" name="minutes">
                     <option value="15">15 min</option>
                     <option value="30" selected>30 min</option>
@@ -66,62 +66,63 @@
                     <option value="120">2 h</option>
                     <option value="240">4 h</option>
                 </select>
-                <button class="button-secondary" type="submit">Maintenance now</button>
+                <button class="button-secondary" type="submit">{{ "Maintenance now"|t }}</button>
             </form>
             {% endif %}
-            <a class="button-secondary" href="/monitors/{{ m.id }}/duplicate">Duplicate</a>
-            <a class="button-primary" href="/monitors/{{ m.id }}/edit">Edit monitor</a>
+            <a class="button-secondary" href="/monitors/{{ m.id }}/duplicate">{{ "Duplicate"|t }}</a>
+            <a class="button-primary" href="/monitors/{{ m.id }}/edit">{{ "Edit monitor"|t }}</a>
         </div>
     </div>
 
     {% if let Some(push_url) = push_url %}
     <section class="panel panel-pad push-panel" aria-labelledby="push-title">
         <div class="section-head">
-            <h2 class="section-title" id="push-title">Push URL</h2>
-            <span class="section-note">Call it after each run. GET, HEAD and POST all work.</span>
+            <h2 class="section-title" id="push-title">{{ "Push URL"|t }}</h2>
+            <span class="section-note">{{ "Call it after each run. GET, HEAD and POST all work."|t }}</span>
         </div>
         <div class="push-url">
             <code class="code-block" id="push-url">{{ push_url }}</code>
-            <button class="button-secondary" type="button" data-copy="push-url">Copy</button>
+            <button class="button-secondary" type="button" data-copy="push-url" data-copied="{{ "Copied"|t }}"
+                    data-copy-failed="{{ "Copy failed"|t }}">{{ "Copy"|t }}</button>
         </div>
         {% if !push_url.starts_with("http") %}
-        <p class="form-hint">Set <code>PUBLIC_URL</code> to show the full address.</p>
+        <p class="form-hint">{{ "Set <code>PUBLIC_URL</code> to show the full address."|t|safe }}</p>
         {% endif %}
-        <p class="form-hint">To report a failure, add <code>?status=down&amp;msg=…</code>. For example, in a crontab:</p>
+        <p class="form-hint">{{ "To report a failure, add <code>?status=down&amp;msg=…</code>. For example, in a crontab:"|t|safe }}</p>
         <pre class="code-block"><code>if backup.sh; then curl -fsS -m 10 {{ push_url }}; else curl -fsS -m 10 "{{ push_url }}?status=down&amp;msg=backup%20failed"; fi</code></pre>
         <form action="/monitors/{{ m.id }}/push-token" method="POST" class="inline-form"
-              data-confirm="The current URL will stop working at once. Generate a new one?">
+              data-confirm="{{ "The current URL will stop working at once. Generate a new one?"|t }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="button-secondary" type="submit">New URL</button>
+            <button class="button-secondary" type="submit">{{ "New URL"|t }}</button>
         </form>
     </section>
     {% endif %}
 
     <div class="detail-live" id="live-history" data-live>
         <dl class="figures">
-            <div><dt>Uptime, 24 hours</dt><dd>{{ hourly.uptime_label() }}</dd></div>
-            <div><dt>Uptime, 30 days</dt><dd>{{ daily.uptime_30d }}</dd></div>
+            <div><dt>{{ "Uptime, 24 hours"|t }}</dt><dd>{{ hourly.uptime_label() }}</dd></div>
+            <div><dt>{{ "Uptime, 30 days"|t }}</dt><dd>{{ daily.uptime_30d }}</dd></div>
             <div>
-                <dt>Response, 24 h average</dt>
+                <dt>{{ "Response, 24 h average"|t }}</dt>
                 <dd>{% if let Some(latency) = hourly.latency_avg_ms %}{{ latency }} ms{% else %}—{% endif %}</dd>
             </div>
-            <div><dt>Certificate</dt><dd>{{ certificate }}</dd></div>
+            <div><dt>{{ "Certificate"|t }}</dt><dd>{{ certificate }}</dd></div>
         </dl>
 
         <section class="panel panel-pad" aria-labelledby="history-24h">
             <div class="section-head">
-                <h2 class="section-title" id="history-24h">Last 24 hours</h2>
-                <span class="section-note">One bar per hour. The table below gives each hour's figures.</span>
+                <h2 class="section-title" id="history-24h">{{ "Last 24 hours"|t }}</h2>
+                <span class="section-note">{{ "One bar per hour. The table below gives each hour's figures."|t }}</span>
             </div>
             <div class="chart-grid">
-                <span class="chart-label">Availability</span>
+                <span class="chart-label">{{ "Availability"|t }}</span>
                 <span class="trace trace-24 trace-tall" role="img"
                       aria-label="Availability over the last 24 hours: {{ hourly.uptime_label() }}">
                     {%- for tick in hourly.ticks -%}
                     <span class="tick {{ tick.class }}{% if loop.index0 > 0 && loop.index0 % hour_axis.step == 0 %} tick-guide{% endif %}" data-tip="{{ tick.title }}"></span>
                     {%- endfor -%}
                 </span>
-                <span class="chart-label">Response time</span>
+                <span class="chart-label">{{ "Response time"|t }}</span>
                 {% if let Some(max) = latency_max_ms %}
                 <span class="latency-chart" role="img"
                       aria-label="Average response time per hour, slowest {{ latency_slowest }}: {{ max }} ms">
@@ -131,7 +132,7 @@
                     {%- endfor -%}
                 </span>
                 {% else %}
-                <span class="section-note">No response in the last 24 hours.</span>
+                <span class="section-note">{{ "No response in the last 24 hours."|t }}</span>
                 {% endif %}
                 <span></span>
                 <span class="trace-axis trace-24">
@@ -139,14 +140,14 @@
                 </span>
             </div>
             {% if let Some(max) = latency_max_ms %}
-            <p class="section-note">Response time bars are scaled to the slowest hour, {{ max }} ms.</p>
+            <p class="section-note">{{ "Response time bars are scaled to the slowest hour, {} ms."|tf(max) }}</p>
             {% endif %}
             <details class="hourly-figures" id="hourly-figures">
-                <summary>Hourly figures</summary>
-                <div class="table-scroll" tabindex="0" role="region" aria-label="Hourly figures">
+                <summary>{{ "Hourly figures"|t }}</summary>
+                <div class="table-scroll" tabindex="0" role="region" aria-label="{{ "Hourly figures"|t }}">
                     <table class="data-table">
                         <thead>
-                        <tr><th>Hour</th><th class="num">Checks</th><th class="num">Failed</th><th class="num">Uptime</th><th class="num">Response</th></tr>
+                        <tr><th>{{ "Hour"|t }}</th><th class="num">{{ "Checks"|t }}</th><th class="num">{{ "Failed"|t }}</th><th class="num">{{ "Uptime"|t }}</th><th class="num">{{ "Response"|t }}</th></tr>
                         </thead>
                         <tbody>
                         {% for tick in hourly.ticks.iter().rev() %}
@@ -166,8 +167,8 @@
 
         <section class="panel panel-pad" aria-labelledby="history-90d">
             <div class="section-head">
-                <h2 class="section-title" id="history-90d">Last 90 days</h2>
-                <span class="section-note">{{ daily.uptime_90d }} uptime. One bar per day.</span>
+                <h2 class="section-title" id="history-90d">{{ "Last 90 days"|t }}</h2>
+                <span class="section-note">{{ "{} uptime. One bar per day."|tf(daily.uptime_90d) }}</span>
             </div>
             <span class="trace trace-90 trace-tall" role="img"
                   aria-label="Availability over the last 90 days: {{ daily.uptime_90d }}">
@@ -183,34 +184,35 @@
 
     <section class="section" aria-labelledby="incidents-title" id="live-incidents" data-live>
         <div class="section-head">
-            <h2 class="section-title" id="incidents-title">Incidents</h2>
-            <a href="/activity?monitor={{ m.id }}">All activity of {{ m.name }}</a>
+            <h2 class="section-title" id="incidents-title">{{ "Incidents"|t }}</h2>
+            <a href="/activity?monitor={{ m.id }}">{{ "All activity of {}"|tf(m.name) }}</a>
         </div>
         <div class="panel event-list">
             {% for incident in incidents %}
+            {% let open_ongoing = true %}
             {% include "partials/incident.html" %}
             {% else %}
-            <p class="empty-state">No outage recorded for this monitor.</p>
+            <p class="empty-state">{{ "No outage recorded for this monitor."|t }}</p>
             {% endfor %}
         </div>
     </section>
 
     <section class="section" aria-labelledby="checks-title" id="live-checks" data-live>
-        <h2 class="section-title" id="checks-title">Latest checks</h2>
+        <h2 class="section-title" id="checks-title">{{ "Latest checks"|t }}</h2>
         <div class="panel">
             {% if checks.is_empty() %}
-            <p class="empty-state">No check yet.</p>
+            <p class="empty-state">{{ "No check yet."|t }}</p>
             {% else %}
             <div class="table-scroll">
                 <table class="data-table data-table-stack">
                     <thead>
-                    <tr><th>Time</th><th>Result</th><th>HTTP status</th><th class="num">Response</th><th>Error</th></tr>
+                    <tr><th>{{ "Time"|t }}</th><th>{{ "Result"|t }}</th><th>{{ "HTTP status"|t }}</th><th class="num">{{ "Response"|t }}</th><th>{{ "Error"|t }}</th></tr>
                     </thead>
                     <tbody>
                     {% for check in checks %}
                     <tr>
                         <td class="stack-title">{{ check.time }}</td>
-                        {% if check.ok %}<td data-label="Result" class="text-green">OK</td>{% else %}<td data-label="Result" class="text-red">Failed</td>{% endif %}
+                        {% if check.ok %}<td data-label="Result" class="text-green">OK</td>{% else %}<td data-label="Result" class="text-red">{{ "Failed"|t }}</td>{% endif %}
                         <td data-label="HTTP status">{% if let Some(code) = check.status_code %}{{ code }}{% else %}—{% endif %}</td>
                         <td data-label="Response" class="num">{% if let Some(latency) = check.latency_ms %}{{ latency }} ms{% else %}—{% endif %}</td>
                         <td data-label="Error">{% if let Some(error) = check.error %}{{ error }}{% endif %}</td>
@@ -224,36 +226,36 @@
     </section>
 
     <section class="section" aria-labelledby="config-title">
-        <h2 class="section-title" id="config-title">Configuration</h2>
+        <h2 class="section-title" id="config-title">{{ "Configuration"|t }}</h2>
         <dl class="panel config-list">
-            <div><dt>Method</dt><dd>{{ m.method }}</dd></div>
-            <div><dt>Interval</dt><dd>Every {{ m.interval_s }} s</dd></div>
-            <div><dt>Retry interval</dt><dd>Every {{ m.retry_interval_s }} s</dd></div>
-            <div><dt>Down after</dt><dd>{{ m.failure_threshold }} {% if m.failure_threshold == 1 %}failure{% else %}failures in a row{% endif %}</dd></div>
-            <div><dt>Timeout</dt><dd>{{ m.timeout_s }} s</dd></div>
-            <div><dt>Accepted statuses</dt><dd>{{ m.accepted_statuses }}</dd></div>
-            <div><dt>Follow redirects</dt><dd>{% if m.follow_redirects %}Yes{% else %}No{% endif %}</dd></div>
-            <div><dt>Ignore TLS errors</dt><dd>{% if m.ignore_tls_errors %}Yes{% else %}No{% endif %}</dd></div>
+            <div><dt>{{ "Method"|t }}</dt><dd>{{ m.method }}</dd></div>
+            <div><dt>{{ "Interval"|t }}</dt><dd>{{ "Every {} s"|tf(m.interval_s) }}</dd></div>
+            <div><dt>{{ "Retry interval"|t }}</dt><dd>{{ "Every {} s"|tf(m.retry_interval_s) }}</dd></div>
+            <div><dt>{{ "Down after"|t }}</dt><dd>{{ m.failure_threshold|tn("{} failure", "{} failures in a row") }}</dd></div>
+            <div><dt>{{ "Timeout"|t }}</dt><dd>{{ m.timeout_s }} s</dd></div>
+            <div><dt>{{ "Accepted statuses"|t }}</dt><dd>{{ m.accepted_statuses }}</dd></div>
+            <div><dt>{{ "Follow redirects"|t }}</dt><dd>{% if m.follow_redirects %}{{ "Yes"|t }}{% else %}{{ "No"|t }}{% endif %}</dd></div>
+            <div><dt>{{ "Ignore TLS errors"|t }}</dt><dd>{% if m.ignore_tls_errors %}{{ "Yes"|t }}{% else %}{{ "No"|t }}{% endif %}</dd></div>
             <div>
-                <dt>Certificate warning</dt>
-                <dd>{% match m.tls_expiry_warn_days %}{% when Some with (days) %}{{ days }} days before expiry{% when None %}Off{% endmatch %}</dd>
+                <dt>{{ "Certificate warning"|t }}</dt>
+                <dd>{% match m.tls_expiry_warn_days %}{% when Some with (days) %}{{ "{} days before expiry"|tf(days) }}{% when None %}{{ "Off"|t }}{% endmatch %}</dd>
             </div>
             {% if !m.is_push() %}
             <div>
-                <dt>Latency threshold</dt>
-                <dd>{% match m.latency_warn_ms %}{% when Some with (ms) %}{{ ms }} ms, {% if m.latency_alerts %}alerts on{% else %}no alerts{% endif %}{% when None %}Off{% endmatch %}</dd>
+                <dt>{{ "Latency threshold"|t }}</dt>
+                <dd>{% match m.latency_warn_ms %}{% when Some with (ms) %}{{ ms }} ms, {% if m.latency_alerts %}{{ "alerts on"|t }}{% else %}{{ "no alerts"|t }}{% endif %}{% when None %}{{ "Off"|t }}{% endmatch %}</dd>
             </div>
             {% endif %}
-            <div><dt>State</dt><dd>{% if m.paused %}Paused{% else %}Active{% endif %}</dd></div>
+            <div><dt>{{ "State"|t }}</dt><dd>{% if m.paused %}{{ "Paused"|t }}{% else %}{{ "Active"|t }}{% endif %}</dd></div>
         </dl>
         {% if let Some(keyword) = m.keyword %}
-        <div class="config-block"><h3>Expected keyword</h3><pre class="code-block">{{ keyword }}</pre></div>
+        <div class="config-block"><h3>{{ "Expected keyword"|t }}</h3><pre class="code-block">{{ keyword }}</pre></div>
         {% endif %}
         {% if let Some(headers) = m.headers %}
-        <div class="config-block"><h3>Request headers</h3><pre class="code-block">{{ headers }}</pre></div>
+        <div class="config-block"><h3>{{ "Request headers"|t }}</h3><pre class="code-block">{{ headers }}</pre></div>
         {% endif %}
         {% if let Some(body) = m.body %}
-        <div class="config-block"><h3>Request body</h3><pre class="code-block">{{ body }}</pre></div>
+        <div class="config-block"><h3>{{ "Request body"|t }}</h3><pre class="code-block">{{ body }}</pre></div>
         {% endif %}
     </section>
 </div>

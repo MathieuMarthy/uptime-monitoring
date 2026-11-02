@@ -1,3 +1,4 @@
+use crate::i18n::filters;
 use askama::Template;
 
 #[derive(Template)]

@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}Import - Uptime Monitoring{% endblock %}
+{% block title %}{{ "Import"|t }} - Uptime Monitoring{% endblock %}
 {% block nav_settings %}aria-current="page"{% endblock %}
 
 {% block styles %}
@@ -10,14 +10,14 @@
 {% block content %}
 <div class="form-container">
     <div class="form-header">
-        <h1 class="form-title">Import</h1>
-        <p class="form-subtitle">{{ report.added }} added, {{ report.skipped.len() }} skipped.</p>
+        <h1 class="form-title">{{ "Import"|t }}</h1>
+        <p class="form-subtitle">{{ "{} added, {} skipped."|tf2(report.added, report.skipped.len()) }}</p>
     </div>
 
     {% if !report.notices.is_empty() %}
     <div class="form-card">
         <div class="form-section">
-            <h2 class="section-title">To do</h2>
+            <h2 class="section-title">{{ "To do"|t }}</h2>
             <ul class="import-list">
                 {% for notice in report.notices %}<li>{{ notice }}</li>{% endfor %}
             </ul>
@@ -28,7 +28,7 @@
     {% if !report.skipped.is_empty() %}
     <div class="form-card">
         <div class="form-section">
-            <h2 class="section-title">Skipped</h2>
+            <h2 class="section-title">{{ "Skipped"|t }}</h2>
             <ul class="import-list">
                 {% for s in report.skipped %}<li>{{ s.kind }} “{{ s.name }}”: {{ s.reason }}</li>{% endfor %}
             </ul>
@@ -37,8 +37,8 @@
     {% endif %}
 
     <div class="form-actions-left">
-        <a class="button-primary" href="/">Go to monitors</a>
-        <a class="button-secondary" href="/settings">Back to settings</a>
+        <a class="button-primary" href="/">{{ "Go to monitors"|t }}</a>
+        <a class="button-secondary" href="/settings">{{ "Back to settings"|t }}</a>
     </div>
 </div>
 {% endblock %}

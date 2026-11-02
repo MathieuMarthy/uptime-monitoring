@@ -3,6 +3,8 @@
 //! Kuma writes booleans as `0`/`1` or `true`/`false` and numbers as integers or floats: every
 //! field is read leniently.
 
+use crate::i18n::{t, tf};
+
 use super::import::{Report, Skipped};
 use super::{ChannelExport, Export, MonitorExport};
 use serde_json::{Value, json};
@@ -61,7 +63,9 @@ pub fn convert(backup: &Value) -> (Export, Report) {
                 }
                 export.channels.push(channel);
             }
-            Err(reason) => report.skipped.push(Skipped::new("Channel", &name, reason)),
+            Err(reason) => report
+                .skipped
+                .push(Skipped::new(t("Channel"), &name, reason)),
         }
     }
 
@@ -79,7 +83,9 @@ pub fn convert(backup: &Value) -> (Export, Report) {
         match monitor(m, &groups, &channel_names) {
             Ok(Some(monitor)) => export.monitors.push(monitor),
             Ok(None) => {}
-            Err(reason) => report.skipped.push(Skipped::new("Monitor", &name, reason)),
+            Err(reason) => report
+                .skipped
+                .push(Skipped::new(t("Monitor"), &name, reason)),
         }
     }
     (export, report)
@@ -105,7 +111,7 @@ fn channel(notification: &Value, name: &str) -> Result<ChannelExport, String> {
         "ntfy" => {
             let token = text(&config, "ntfyaccesstoken");
             if token.is_none() && text(&config, "ntfyusername").is_some() {
-                return Err("ntfy login with a user name and password is not supported.".into());
+                return Err(t("ntfy login with a user name and password is not supported.").into());
             }
             let mut ntfy = json!({
                 "server": text(&config, "ntfyserverurl").unwrap_or_else(|| "https://ntfy.sh".into()),
@@ -125,7 +131,7 @@ fn channel(notification: &Value, name: &str) -> Result<ChannelExport, String> {
         ),
         "smtp" => {
             if flag(&config, "smtpIgnoreTLSError") == Some(true) {
-                return Err("SMTP without certificate checks is not supported.".into());
+                return Err(t("SMTP without certificate checks is not supported.").into());
             }
             // Blind copies would become visible: only To and Cc are kept.
             let to: Vec<String> = ["smtpTo", "smtpCC"]
@@ -147,8 +153,8 @@ fn channel(notification: &Value, name: &str) -> Result<ChannelExport, String> {
             }
             ("email", email)
         }
-        "" => return Err("no notification type.".into()),
-        other => return Err(format!("“{other}” notifications are not supported.")),
+        "" => return Err(t("no notification type.").into()),
+        other => return Err(tf("“{}” notifications are not supported.", &[&other])),
     };
     Ok(ChannelExport {
         name: name.to_string(),
@@ -170,10 +176,10 @@ fn monitor(
         "group" => return Ok(None),
         "http" | "push" => {}
         "keyword" if flag(m, "invertKeyword") == Some(true) => {
-            return Err("an inverted keyword is not supported.".into());
+            return Err(t("an inverted keyword is not supported.").into());
         }
         "keyword" => {}
-        other => return Err(format!("“{other}” monitors are not supported.")),
+        other => return Err(tf("“{}” monitors are not supported.", &[&other])),
     }
 
     let interval_s = number(m, "interval").unwrap_or(60);

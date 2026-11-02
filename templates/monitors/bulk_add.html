@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}Add Several Monitors - Uptime Monitoring{% endblock %}
+{% block title %}{{ "Add Several Monitors"|t }} - Uptime Monitoring{% endblock %}
 {% block nav_monitors %}aria-current="page"{% endblock %}
 
 {% block styles %}
@@ -10,17 +10,16 @@
 {% block content %}
 <div class="form-container">
     <div class="form-header">
-        <h1 class="form-title">Add Several Monitors</h1>
-        <p class="form-subtitle">One HTTP monitor per URL, named after its host, with the usual defaults: GET every
-            60 s, 2xx expected, down after 3 failures. Edit any of them afterwards.</p>
+        <h1 class="form-title">{{ "Add Several Monitors"|t }}</h1>
+        <p class="form-subtitle">{{ "One HTTP monitor per URL, named after its host, with the usual defaults: GET every 60 s, 2xx expected, down after 3 failures. Edit any of them afterwards."|t }}</p>
     </div>
 
     {% if !errors.lines.is_empty() %}
     <div class="error-banner" role="alert">
-        <span>Nothing added: fix these lines first.</span>
+        <span>{{ "Nothing added: fix these lines first."|t }}</span>
         <ul>
             {%- for error in errors.lines %}
-            <li>Line {{ error.line }} ({{ error.url }}): {{ error.message }}</li>
+            <li>{{ "Line {}"|tf(error.line) }} ({{ error.url }}): {{ error.message }}</li>
             {%- endfor %}
         </ul>
     </div>
@@ -31,35 +30,35 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="form-section">
                 <div class="form-group">
-                    <label class="form-label" for="urls">URLs *</label>
+                    <label class="form-label" for="urls">{{ "URLs *"|t }}</label>
                     <textarea class="form-textarea" id="urls" name="urls" rows="10" required autofocus
                               placeholder="https://example.com/health&#10;api.example.org">{{ form.urls }}</textarea>
-                    <p class="form-hint">One per line, at most {{ BULK_MAX_URLS }}. Without a scheme, https:// is used.</p>
+                    <p class="form-hint">{{ "One per line, at most {}. Without a scheme, https:// is used."|tf(BULK_MAX_URLS) }}</p>
                     {% if let Some(message) = errors.urls %}<p class="field-error">{{ message }}</p>{% endif %}
                 </div>
                 <div class="form-group">
-                    <label class="form-label" for="group">Group</label>
+                    <label class="form-label" for="group">{{ "Group"|t }}</label>
                     <input class="form-input" id="group" name="group" type="text" maxlength="{{ GROUP_MAX_CHARS }}"
-                           list="group-names" placeholder="e.g. Production, Customers" value="{{ form.group }}"/>
+                           list="group-names" placeholder="{{ "e.g. Production, Customers"|t }}" value="{{ form.group }}"/>
                     <datalist id="group-names">
                         {%- for group in groups %}
                         <option value="{{ group }}">
                         {%- endfor %}
                     </datalist>
-                    <span class="form-hint">Every new monitor joins it. Leave blank for none.</span>
+                    <span class="form-hint">{{ "Every new monitor joins it. Leave blank for none."|t }}</span>
                     {% if let Some(message) = errors.group %}<p class="field-error">{{ message }}</p>{% endif %}
                 </div>
             </div>
 
             <div class="form-section">
-                <h2 class="section-title">Alerts</h2>
+                <h2 class="section-title">{{ "Alerts"|t }}</h2>
                 {% include "partials/channel-boxes.html" %}
             </div>
 
             <div class="form-actions">
                 <div class="form-actions-left">
-                    <button class="button-primary" type="submit">Add monitors</button>
-                    <a class="button-secondary" href="/">Cancel</a>
+                    <button class="button-primary" type="submit">{{ "Add monitors"|t }}</button>
+                    <a class="button-secondary" href="/">{{ "Cancel"|t }}</a>
                 </div>
             </div>
         </form>

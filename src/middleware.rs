@@ -2,6 +2,7 @@
 
 use crate::auth::{SESSION_COOKIE, cookie, secrets_match};
 use crate::error::AppError;
+use crate::i18n::{self, Lang};
 use crate::models::Session;
 use crate::state::AppState;
 use crate::{IMPORT_MAX_BODY_BYTES, IMPORT_PATH, MAX_BODY_BYTES};
@@ -86,4 +87,28 @@ pub async fn security_headers(mut response: Response) -> Response {
         headers.insert(name, HeaderValue::from_static(value));
     }
     response
+}
+
+/// Runs the request in its language: the instance one, or before setup the `lang` query
+/// parameter, else the browser's `Accept-Language`.
+pub async fn set_language(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let lang = if state.setup_pending() {
+        let picked = request.uri().query().and_then(|query| {
+            form_urlencoded::parse(query.as_bytes())
+                .find(|(key, _)| key == "lang")
+                .and_then(|(_, value)| Lang::from_code(&value))
+        });
+        picked
+            .or_else(|| {
+                request
+                    .headers()
+                    .get(header::ACCEPT_LANGUAGE)
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(Lang::from_accept_language)
+            })
+            .unwrap_or_default()
+    } else {
+        state.language.get()
+    };
+    i18n::scope(lang, next.run(request)).await
 }

@@ -85,8 +85,8 @@ async fn serve(config: Config) {
         }
     };
 
-    let guard = match Settings::load(&pool).await {
-        Ok(settings) => Guard::new(settings.block_private_targets),
+    let (guard, language) = match Settings::load(&pool).await {
+        Ok(settings) => (Guard::new(settings.block_private_targets), settings.lang()),
         Err(e) => {
             eprintln!("Cannot read the settings: {e}");
             std::process::exit(1);
@@ -121,6 +121,7 @@ async fn serve(config: Config) {
         .with_engine(engine)
         .with_maintenances(maintenances)
         .with_guard(guard)
+        .with_language(language)
         .with_notifier(notifier);
     match state.start_setup_if_needed().await {
         Ok(Some(token)) => {

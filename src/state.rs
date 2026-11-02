@@ -4,6 +4,7 @@ use crate::auth::rate_limit::LoginLimiter;
 use crate::engine::EngineHandle;
 use crate::engine::guard::Guard;
 use crate::engine::http::HttpChecker;
+use crate::i18n::Language;
 use crate::models::Admin;
 use crate::notify::Notifier;
 use crate::page_cache::PageCache;
@@ -42,6 +43,8 @@ pub struct AppState {
     pub form_checker: Arc<HttpChecker>,
     /// Maintenance windows, shared with the engine; reloaded after every change to them.
     pub maintenances: Maintenances,
+    /// The instance language, set at startup and by the settings page.
+    pub language: Language,
 }
 
 impl AppState {
@@ -61,6 +64,7 @@ impl AppState {
             monitor_tests: Arc::new(Semaphore::new(MONITOR_TESTS)),
             form_checker: Arc::new(HttpChecker::new(Guard::default())),
             maintenances: Maintenances::default(),
+            language: Language::default(),
         }
     }
 
@@ -82,6 +86,11 @@ impl AppState {
     pub fn with_guard(mut self, guard: Guard) -> Self {
         self.form_checker = Arc::new(HttpChecker::new(guard.clone()));
         self.guard = guard;
+        self
+    }
+
+    pub fn with_language(self, lang: crate::i18n::Lang) -> Self {
+        self.language.set(lang);
         self
     }
 

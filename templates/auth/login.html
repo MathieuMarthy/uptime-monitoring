@@ -1,6 +1,6 @@
 {% extends "public.html" %}
 
-{% block title %}Log in - Uptime Monitoring{% endblock %}
+{% block title %}{{ "Log in"|t }} - Uptime Monitoring{% endblock %}
 {% block styles %}
 <link href="/static/css/forms.css" rel="stylesheet">
 {% endblock %}
@@ -8,7 +8,7 @@
 {% block content %}
 <div class="form-container auth-container">
     <div class="form-header">
-        <h1 class="form-title">Log in</h1>
+        <h1 class="form-title">{{ "Log in"|t }}</h1>
     </div>
 
     {% if let Some(error) = error %}
@@ -17,18 +17,18 @@
 
     <form action="/login" method="POST" class="auth-form">
         <div class="form-group">
-            <label class="form-label" for="username">Username</label>
+            <label class="form-label" for="username">{{ "Username"|t }}</label>
             <input class="form-input" id="username" name="username" type="text" autocomplete="username"
                    required autofocus value="{{ username }}"/>
         </div>
 
         <div class="form-group">
-            <label class="form-label" for="password">Password</label>
+            <label class="form-label" for="password">{{ "Password"|t }}</label>
             <input class="form-input" id="password" name="password" type="password"
                    autocomplete="current-password" required/>
         </div>
 
-        <button class="button-primary" type="submit">Log in</button>
+        <button class="button-primary" type="submit">{{ "Log in"|t }}</button>
     </form>
 </div>
 {% endblock %}

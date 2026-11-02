@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::forms::monitor::FieldErrors;
 use crate::forms::status_page::StatusPageForm;
+use crate::i18n::{filters, t, tf};
 use crate::models::{
     Incident, MonitorStatus, MonitorSummary, Settings, ShownMonitor, StatusPage, StatusPageSummary,
 };
@@ -86,25 +87,33 @@ impl PublicHeadline {
     /// `degraded` counts the slow ones, shown when none is down.
     pub fn new(listed: usize, degraded: usize, down: &[&str], since: Option<&str>) -> Self {
         let (state, text, detail) = match down {
-            _ if listed == 0 => ("paused", "No service listed yet".to_string(), String::new()),
+            _ if listed == 0 => (
+                "paused",
+                t("No service listed yet").to_string(),
+                String::new(),
+            ),
             [] if degraded > 0 => (
                 "degraded",
-                "Some services are slow".to_string(),
+                t("Some services are slow").to_string(),
                 match degraded {
-                    1 => "1 service responds slowly.".to_string(),
-                    n => format!("{n} services respond slowly."),
+                    1 => t("1 service responds slowly.").to_string(),
+                    n => tf("{} services respond slowly.", &[&n]),
                 },
             ),
-            [] => ("up", "All services are running".to_string(), String::new()),
+            [] => (
+                "up",
+                t("All services are running").to_string(),
+                String::new(),
+            ),
             [name] => (
                 "down",
-                format!("{name} is down"),
-                since.map_or_else(String::new, |at| format!("Unavailable since {at}.")),
+                tf("{} is down", &[&name]),
+                since.map_or_else(String::new, |at| tf("Unavailable since {}.", &[&at])),
             ),
             [first @ .., last] => (
                 "down",
-                format!("{} services are down", down.len()),
-                format!("{} and {last}.", first.join(", ")),
+                tf("{} services are down", &[&down.len()]),
+                tf("{} and {}.", &[&first.join(", "), &last]),
             ),
         };
         Self {
@@ -155,7 +164,7 @@ impl PublicTemplate {
             .into_iter()
             .map(|n| PublicMaintenance {
                 title: n.title,
-                when: format!("Until {}", short_time(&tz, n.ends_at, now)),
+                when: tf("Until {}", &[&short_time(&tz, n.ends_at, now)]),
             })
             .collect();
         let maintenance_planned = planned

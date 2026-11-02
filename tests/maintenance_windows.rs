@@ -117,7 +117,7 @@ async fn weekly_windows_follow_the_instance_timezone() {
     )
     .await
     .unwrap();
-    Settings::update_timezone(&pool, "Asia/Tokyo")
+    Settings::update_general(&pool, "Asia/Tokyo", Default::default())
         .await
         .unwrap();
     let set = Maintenances::default();

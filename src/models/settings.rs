@@ -1,3 +1,4 @@
+use crate::i18n::Lang;
 use crate::time;
 use jiff::tz::TimeZone;
 use sqlx::{FromRow, SqlitePool};
@@ -10,42 +11,63 @@ pub struct Settings {
     /// `None`: incidents and daily stats are kept forever.
     pub history_retention_days: Option<i64>,
     pub block_private_targets: bool,
+    /// Code of the interface and notification language.
+    pub language: String,
 }
 
 impl Settings {
     pub async fn load(pool: &SqlitePool) -> Result<Self, sqlx::Error> {
         sqlx::query_as(
-            "SELECT timezone, checks_retention_days, history_retention_days, block_private_targets
+            "SELECT timezone, checks_retention_days, history_retention_days, block_private_targets,
+                    language
              FROM settings WHERE id = 1",
         )
         .fetch_one(pool)
         .await
     }
 
-    pub async fn update_timezone(pool: &SqlitePool, timezone: &str) -> Result<(), sqlx::Error> {
-        sqlx::query("UPDATE settings SET timezone = ? WHERE id = 1")
+    pub async fn update_general(
+        pool: &SqlitePool,
+        timezone: &str,
+        language: Lang,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE settings SET timezone = ?, language = ? WHERE id = 1")
             .bind(timezone)
+            .bind(language.code())
             .execute(pool)
             .await?;
         Ok(())
     }
 
-    pub async fn update_data(
+    pub async fn update_retention(
         pool: &SqlitePool,
         checks_retention_days: i64,
         history_retention_days: Option<i64>,
-        block_private_targets: bool,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "UPDATE settings SET checks_retention_days = ?, history_retention_days = ?,
-             block_private_targets = ? WHERE id = 1",
+            "UPDATE settings SET checks_retention_days = ?, history_retention_days = ? WHERE id = 1",
         )
         .bind(checks_retention_days)
         .bind(history_retention_days)
-        .bind(block_private_targets)
         .execute(pool)
         .await?;
         Ok(())
+    }
+
+    pub async fn update_blocking(
+        pool: &SqlitePool,
+        block_private_targets: bool,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE settings SET block_private_targets = ? WHERE id = 1")
+            .bind(block_private_targets)
+            .execute(pool)
+            .await?;
+        Ok(())
+    }
+
+    /// The language; English if the stored code is unknown.
+    pub fn lang(&self) -> Lang {
+        Lang::from_code(&self.language).unwrap_or_default()
     }
 
     pub fn tz(&self) -> TimeZone {

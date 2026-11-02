@@ -13,7 +13,7 @@
 {% block body %}
 <main class="page status-page">
     {% if draft %}
-    <div class="error-banner" role="status">Preview: this page is not published, visitors get a 404.</div>
+    <div class="error-banner" role="status">{{ "Preview: this page is not published, visitors get a 404."|t }}</div>
     {% endif %}
 
     <header class="status-header">
@@ -23,7 +23,7 @@
         {% endif %}
     </header>
 
-    <section aria-label="Overall status" class="status-overall status-overall-{{ headline.state }}" id="live-overall" data-live>
+    <section aria-label="{{ "Overall status"|t }}" class="status-overall status-overall-{{ headline.state }}" id="live-overall" data-live>
         <h1 class="headline"><span class="lamp lamp-lg lamp-{{ headline.state }}" aria-hidden="true"></span><span data-announce>{{ headline.text }}</span></h1>
         {% if !headline.detail.is_empty() %}
         <p class="headline-sub">{{ headline.detail }}</p>
@@ -32,14 +32,14 @@
 
     <div id="live-maintenance" data-live>
     {% for m in maintenance_now %}
-    <section class="maintenance-notice maintenance-notice-now" aria-label="Maintenance in progress">
-        <p><strong>Maintenance in progress</strong>{% if let Some(title) = m.title %}: {{ title }}{% endif %}</p>
+    <section class="maintenance-notice maintenance-notice-now" aria-label="{{ "Maintenance in progress"|t }}">
+        <p><strong>{{ "Maintenance in progress"|t }}</strong>{% if let Some(title) = m.title %}: {{ title }}{% endif %}</p>
         <p class="text-muted">{{ m.when }}</p>
     </section>
     {% endfor %}
     {% for m in maintenance_planned %}
-    <section class="maintenance-notice" aria-label="Maintenance planned">
-        <p><strong>Maintenance planned</strong>{% if let Some(title) = m.title %}: {{ title }}{% endif %}</p>
+    <section class="maintenance-notice" aria-label="{{ "Maintenance planned"|t }}">
+        <p><strong>{{ "Maintenance planned"|t }}</strong>{% if let Some(title) = m.title %}: {{ title }}{% endif %}</p>
         <p class="text-muted">{{ m.when }}</p>
     </section>
     {% endfor %}
@@ -48,8 +48,8 @@
     {% if !monitors.is_empty() %}
     <section class="section" aria-labelledby="services-title">
         <div class="section-head">
-            <h2 class="section-title" id="services-title">Services</h2>
-            <span class="section-note">Last 90 days</span>
+            <h2 class="section-title" id="services-title">{{ "Services"|t }}</h2>
+            <span class="section-note">{{ "Last 90 days"|t }}</span>
         </div>
         <div class="panel status-services" id="live-monitors" data-live>
             {% for m in monitors %}
@@ -59,7 +59,7 @@
                         <span class="lamp lamp-{{ m.status_key }}" aria-hidden="true"></span>{{ m.name }}
                     </span>
                     <span class="status-service-meta">
-                        <span class="text-muted">{{ m.daily.uptime_90d }} uptime</span>
+                        <span class="text-muted">{{ "{} uptime"|tf(m.daily.uptime_90d) }}</span>
                         <span class="status-word status-{{ m.status_key }}">{{ m.status_label }}</span>
                     </span>
                 </div>
@@ -71,23 +71,23 @@
             </div>
             {% endfor %}
             <div class="status-legend">
-                <span>90 days ago</span>
-                <span>Red bars are days with an outage</span>
-                <span>Today</span>
+                <span>{{ "90 days ago"|t }}</span>
+                <span>{{ "Red bars are days with an outage"|t }}</span>
+                <span>{{ "Today"|t }}</span>
             </div>
         </div>
     </section>
     {% endif %}
 
     <section class="section" aria-labelledby="incidents-title" id="live-incidents" data-live>
-        <h2 class="section-title" id="incidents-title">Past incidents</h2>
+        <h2 class="section-title" id="incidents-title">{{ "Past incidents"|t }}</h2>
         <div class="panel">
             {% if incidents.is_empty() %}
-            <p class="empty-state">No incident in the last 90 days.</p>
+            <p class="empty-state">{{ "No incident in the last 90 days."|t }}</p>
             {% else %}
             <div class="table-scroll">
                 <table class="data-table">
-                    <thead><tr><th>Service</th><th>Started</th><th class="num">Duration</th></tr></thead>
+                    <thead><tr><th>{{ "Service"|t }}</th><th>{{ "Started"|t }}</th><th class="num">{{ "Duration"|t }}</th></tr></thead>
                     <tbody>
                     {% for incident in incidents %}
                     <tr>
@@ -95,7 +95,7 @@
                         <td>{{ incident.started }}</td>
                         {% match incident.duration %}
                         {% when Some with (duration) %}<td class="num">{{ duration }}</td>
-                        {% when None %}<td class="num text-red">Ongoing</td>
+                        {% when None %}<td class="num text-red">{{ "Ongoing"|t }}</td>
                         {% endmatch %}
                     </tr>
                     {% if let Some(note) = incident.note %}
@@ -109,6 +109,6 @@
         </div>
     </section>
 
-    <p class="section-note">Times in {{ timezone }}. This page refreshes on its own.</p>
+    <p class="section-note">{{ "Times in {}. This page refreshes on its own."|tf(timezone) }}</p>
 </main>
 {% endblock %}

@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}Two-factor authentication - Uptime Monitoring{% endblock %}
+{% block title %}{{ "Two-factor authentication"|t }} - Uptime Monitoring{% endblock %}
 {% block nav_settings %}aria-current="page"{% endblock %}
 
 {% block styles %}
@@ -10,8 +10,8 @@
 {% block content %}
 <div class="form-container">
     <div class="form-header">
-        <h1 class="form-title">Two-factor authentication</h1>
-        <p class="form-subtitle">After the password, each login asks for a code from an authenticator app.</p>
+        <h1 class="form-title">{{ "Two-factor authentication"|t }}</h1>
+        <p class="form-subtitle">{{ "After the password, each login asks for a code from an authenticator app."|t }}</p>
     </div>
 
     {% if let Some(error) = error %}
@@ -22,34 +22,33 @@
         <form action="/settings/totp" method="POST" class="form-section">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="secret" value="{{ secret }}">
-            <h2 class="section-title">1. Add this account to your app</h2>
+            <h2 class="section-title">{{ "1. Add this account to your app"|t }}</h2>
             <div class="totp-secret">
                 {{ qr_svg|safe }}
                 <div class="form-group">
-                    <span class="form-label">Or type the key</span>
+                    <span class="form-label">{{ "Or type the key"|t }}</span>
                     <code class="totp-key">{{ secret }}</code>
-                    <span class="form-hint">Time-based, 6 digits, every 30 seconds.</span>
+                    <span class="form-hint">{{ "Time-based, 6 digits, every 30 seconds."|t }}</span>
                 </div>
             </div>
 
-            <h2 class="section-title">2. Confirm with your password and the code it shows</h2>
+            <h2 class="section-title">{{ "2. Confirm with your password and the code it shows"|t }}</h2>
             <div class="form-row">
             <div class="form-group">
-                <label class="form-label" for="current_password">Current password</label>
+                <label class="form-label" for="current_password">{{ "Current password"|t }}</label>
                 <input class="form-input" id="current_password" name="current_password" type="password"
                        autocomplete="current-password" required/>
             </div>
             <div class="form-group">
-                <label class="form-label" for="code">Code</label>
+                <label class="form-label" for="code">{{ "Code"|t }}</label>
                 <input class="form-input" id="code" name="code" type="text" inputmode="numeric"
                        autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" required/>
             </div>
             </div>
-            <span class="form-hint">Every other session is logged out. If you lose the app, only someone with
-                    access to the server can turn this off (see the README).</span>
+            <span class="form-hint">{{ "Every other session is logged out. If you lose the app, only someone with access to the server can turn this off (see the README)."|t }}</span>
             <div class="form-actions-left">
-                <button class="button-primary" type="submit">Turn On</button>
-                <a class="button-secondary" href="/settings">Cancel</a>
+                <button class="button-primary" type="submit">{{ "Turn On"|t }}</button>
+                <a class="button-secondary" href="/settings">{{ "Cancel"|t }}</a>
             </div>
         </form>
     </div>

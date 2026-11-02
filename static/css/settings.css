@@ -1,0 +1,117 @@
+/* Settings: a rail of sections, each telling its current state, beside the forms of the open one. */
+.settings {
+    width: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 36px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px));
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    column-gap: 40px;
+    row-gap: 28px;
+    align-items: start;
+}
+
+.settings-head {
+    grid-column: 1 / -1;
+}
+
+.settings-rail {
+    position: sticky;
+    top: 24px;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--rule);
+}
+
+.settings-rail a {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 14px 13px 16px;
+    border-bottom: 1px solid var(--rule);
+    border-left: 4px solid transparent;
+    color: var(--ink);
+    text-decoration: none;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.settings-rail a:hover {
+    background: var(--plate-deep);
+}
+
+.settings-rail a:focus-visible {
+    outline-offset: -3px;
+}
+
+/* The open section: its lever pulled. */
+.settings-rail a[aria-current="page"] {
+    background: var(--plate);
+    border-left-color: var(--ink);
+}
+
+.settings-rail-name {
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.settings-rail-state {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.35;
+    font-variant-numeric: tabular-nums;
+}
+
+.settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+}
+
+/* Phones: the rail becomes a 2 × 2 grid above the forms; the 1px gaps draw the dividers. */
+@media (max-width: 719.98px) {
+    .settings {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 20px;
+    }
+
+    .settings-rail {
+        position: static;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        border: 1px solid var(--rule-strong);
+        border-radius: 4px;
+        overflow: hidden;
+        background: var(--rule-strong);
+    }
+
+    .settings-rail a {
+        padding: 10px 12px;
+        border: none;
+        background: var(--plate-deep);
+    }
+
+    .settings-rail a[aria-current="page"] {
+        background: var(--ink);
+        color: var(--on-ink);
+    }
+
+    .settings-rail a[aria-current="page"] .settings-rail-state {
+        color: var(--on-ink);
+    }
+
+    .settings-rail-name {
+        font-size: 15px;
+    }
+
+    .settings-rail-state {
+        font-size: 12px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-rail a {
+        transition: none;
+    }
+}

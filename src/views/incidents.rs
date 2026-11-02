@@ -1,6 +1,8 @@
 //! An incident unfolded: its facts, its failed checks and the alerts sent about it. Shown on a
 //! monitor's page and on the Activity page.
 
+use crate::i18n::{t, tf};
+
 use crate::error::AppError;
 use crate::forms::incident::NOTE_MAX_CHARS;
 use crate::models::{Check, FailedCheck, Incident, LogEntry, NotificationLog};
@@ -71,13 +73,13 @@ impl AlertRow {
             time: format_time(tz, entry.sent_at),
             channel: entry
                 .channel_name
-                .unwrap_or_else(|| "Deleted channel".to_string()),
+                .unwrap_or_else(|| t("Deleted channel").to_string()),
             event: match entry.event.as_str() {
-                "down" => "down alert",
-                "up" => "back up alert",
-                "tls_expiring" => "certificate alert",
-                "degraded" => "slow alert",
-                "latency_normal" => "fast again alert",
+                "down" => t("down alert"),
+                "up" => t("back up alert"),
+                "tls_expiring" => t("certificate alert"),
+                "degraded" => t("slow alert"),
+                "latency_normal" => t("fast again alert"),
                 _ => "test",
             },
             ok: entry.ok,
@@ -171,9 +173,9 @@ impl IncidentDetail {
             Context::Activity => (
                 format_time(tz, incident.started_at),
                 if ongoing {
-                    format!("{monitor_name} is down")
+                    tf("{} is down", &[&monitor_name])
                 } else {
-                    format!("{monitor_name} was down {duration}")
+                    tf("{} was down {}", &[&monitor_name, &duration])
                 },
                 cause,
             ),
@@ -181,28 +183,28 @@ impl IncidentDetail {
 
         let mut facts = vec![
             Fact {
-                label: "Started",
+                label: t("Started"),
                 value: format_datetime_seconds(tz, incident.started_at),
             },
             Fact {
-                label: "Resolved",
+                label: t("Resolved"),
                 value: incident.resolved_at.map_or_else(
-                    || "Not yet".to_string(),
+                    || t("Not yet").to_string(),
                     |at| format_datetime_seconds(tz, at),
                 ),
             },
             Fact {
-                label: "Duration",
+                label: t("Duration"),
                 value: duration.clone(),
             },
             Fact {
-                label: "Error type",
+                label: t("Error type"),
                 value: error_kind_label(Some(&incident.error_kind)).to_string(),
             },
         ];
         if total > 0 {
             facts.push(Fact {
-                label: "Failed checks",
+                label: t("Failed checks"),
                 value: total.to_string(),
             });
         }
@@ -219,7 +221,7 @@ impl IncidentDetail {
             title,
             subtitle,
             tag: if ongoing {
-                format!("Ongoing, {duration}")
+                tf("Ongoing, {}", &[&duration])
             } else {
                 duration
             },
@@ -234,16 +236,16 @@ impl IncidentDetail {
 /// How a check failed, in words.
 pub fn error_kind_label(kind: Option<&str>) -> &'static str {
     match kind {
-        Some("timeout") => "Timeout",
-        Some("dns") => "DNS lookup",
-        Some("blocked") => "Blocked address",
-        Some("connect") => "Connection",
-        Some("tls") => "TLS certificate",
-        Some("status") => "HTTP status",
-        Some("keyword") => "Keyword",
-        Some("missed") => "Missed ping",
-        Some("reported") => "Reported by the job",
-        _ => "Unknown",
+        Some("timeout") => t("Timeout"),
+        Some("dns") => t("DNS lookup"),
+        Some("blocked") => t("Blocked address"),
+        Some("connect") => t("Connection"),
+        Some("tls") => t("TLS certificate"),
+        Some("status") => t("HTTP status"),
+        Some("keyword") => t("Keyword"),
+        Some("missed") => t("Missed ping"),
+        Some("reported") => t("Reported by the job"),
+        _ => t("Unknown"),
     }
 }
 

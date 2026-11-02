@@ -1,5 +1,6 @@
 use crate::forms::monitor::FieldErrors;
 use crate::forms::{has_visible_char, text_len};
+use crate::i18n::{Lang, t, tf};
 use serde::Deserialize;
 
 const USERNAME_MAX_CHARS: usize = 64;
@@ -16,6 +17,7 @@ pub struct SetupForm {
     pub password: String,
     pub password_confirm: String,
     pub timezone: String,
+    pub language: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +25,7 @@ pub struct SetupInput {
     pub username: String,
     pub password: String,
     pub timezone: String,
+    pub language: Lang,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -45,20 +48,32 @@ impl SetupForm {
 
         let username = self.username.trim();
         if !has_visible_char(username) {
-            errors.insert("username", "Username is required.".to_string());
+            errors.insert("username", t("Username is required.").to_string());
         } else if text_len(username) > USERNAME_MAX_CHARS {
             errors.insert(
                 "username",
-                format!("Username must be at most {USERNAME_MAX_CHARS} characters."),
+                tf(
+                    "Username must be at most {} characters.",
+                    &[&USERNAME_MAX_CHARS],
+                ),
             );
         } else if username.chars().any(char::is_control) {
             errors.insert(
                 "username",
-                "Username contains invalid characters.".to_string(),
+                t("Username contains invalid characters.").to_string(),
             );
         }
 
         check_new_password(&self.password, &self.password_confirm, &mut errors);
+
+        // Blank: English, as before languages existed.
+        let language = match self.language.trim() {
+            "" => Some(Lang::En),
+            code => Lang::from_code(code),
+        };
+        if language.is_none() {
+            errors.insert("language", t("Unknown language.").to_string());
+        }
 
         if !errors.is_empty() {
             return Err(errors);
@@ -67,6 +82,7 @@ impl SetupForm {
             username: username.to_string(),
             password: self.password.clone(),
             timezone: timezone_or_default(&self.timezone),
+            language: language.unwrap_or_default(),
         })
     }
 }
@@ -76,15 +92,18 @@ pub fn check_new_password(password: &str, confirm: &str, errors: &mut FieldError
     if password.chars().count() < PASSWORD_MIN_CHARS {
         errors.insert(
             "password",
-            format!("Password must be at least {PASSWORD_MIN_CHARS} characters."),
+            tf(
+                "Password must be at least {} characters.",
+                &[&PASSWORD_MIN_CHARS],
+            ),
         );
     } else if password.len() > PASSWORD_MAX_BYTES {
         errors.insert(
             "password",
-            format!("Password must be at most {PASSWORD_MAX_BYTES} bytes."),
+            tf("Password must be at most {} bytes.", &[&PASSWORD_MAX_BYTES]),
         );
     } else if password != confirm {
-        errors.insert("password_confirm", "Passwords do not match.".to_string());
+        errors.insert("password_confirm", t("Passwords do not match.").to_string());
     }
 }
 

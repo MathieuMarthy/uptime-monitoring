@@ -1,9 +1,8 @@
 use crate::engine::verdict::CheckOutcome;
 use crate::error::AppError;
 use crate::forms::bulk_monitor::{BULK_MAX_URLS, BulkErrors, BulkMonitorForm};
-use crate::forms::monitor::{
-    FieldErrors, GROUP_MAX_CHARS, GroupError, METHODS, MonitorForm, PUSH, UNGROUPED,
-};
+use crate::forms::monitor::{FieldErrors, GROUP_MAX_CHARS, GroupError, METHODS, MonitorForm, PUSH};
+use crate::i18n::{filters, t, tf};
 use crate::models::{
     Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
     name_key,
@@ -77,16 +76,16 @@ pub fn status_label(
     status: MonitorStatus,
 ) -> &'static str {
     if paused {
-        return "Paused";
+        return t("Paused");
     }
     if maintenance {
-        return "Maintenance";
+        return t("Maintenance");
     }
     match status {
-        MonitorStatus::Pending => "Pending",
-        MonitorStatus::Up if degraded => "Degraded",
-        MonitorStatus::Up => "Up",
-        MonitorStatus::Down => "Down",
+        MonitorStatus::Pending => t("Pending"),
+        MonitorStatus::Up if degraded => t("Degraded"),
+        MonitorStatus::Up => t("Up"),
+        MonitorStatus::Down => t("Down"),
     }
 }
 
@@ -187,7 +186,7 @@ pub struct MonitorGroup {
 
 impl MonitorGroup {
     pub fn label(&self) -> &str {
-        self.name.as_deref().unwrap_or(UNGROUPED)
+        self.name.as_deref().unwrap_or(t("Ungrouped"))
     }
 
     /// The rename form of a named group.
@@ -196,7 +195,7 @@ impl MonitorGroup {
             let query = form_urlencoded::Serializer::new(String::new())
                 .append_pair("name", group)
                 .finish();
-            format!("/groups/rename?{query}")
+            format!("/groups/rename?{}", query)
         })
     }
 
@@ -232,12 +231,7 @@ impl MonitorGroup {
                         .into_iter()
                         .filter_map(|key| {
                             let count = rows.iter().filter(|r| r.status_key() == key).count();
-                            let key = if key == "maintenance" {
-                                "in maintenance"
-                            } else {
-                                key
-                            };
-                            (count > 0).then(|| format!("{count} {key}"))
+                            (count > 0).then(|| status_count(count, key))
                         })
                         .collect();
                 Self {
@@ -444,7 +438,7 @@ impl BulkDone {
             Self::InvalidGroup(GroupError::TooLong) => return "done=group-too-long".to_string(),
             Self::InvalidGroup(GroupError::Reserved) => return "done=group-reserved".to_string(),
         };
-        format!("done={done}&count={count}")
+        format!("done={}&count={}", done, count)
     }
 
     /// Nothing was done: shown as an error.
@@ -454,12 +448,12 @@ impl BulkDone {
 
     pub fn notice(self) -> String {
         let monitors = |n: u64| match n {
-            1 => "1 monitor".to_string(),
-            n => format!("{n} monitors"),
+            1 => t("1 monitor").to_string(),
+            n => tf("{} monitors", &[&n]),
         };
         match self {
-            Self::NoneSelected => "No monitor selected.".to_string(),
-            Self::InvalidGroup(error) => format!("Nothing moved: {error}"),
+            Self::NoneSelected => t("No monitor selected.").to_string(),
+            Self::InvalidGroup(error) => tf("Nothing moved: {}", &[&error]),
             Self::Paused(0)
             | Self::Resumed(0)
             | Self::Deleted(0)
@@ -467,15 +461,15 @@ impl BulkDone {
             | Self::Renamed(0)
             | Self::Linked(0)
             | Self::Unlinked(0)
-            | Self::Added(0) => "No monitor changed.".to_string(),
-            Self::Paused(n) => format!("{} paused.", monitors(n)),
-            Self::Resumed(n) => format!("{} resumed.", monitors(n)),
-            Self::Deleted(n) => format!("{} deleted.", monitors(n)),
-            Self::Moved(n) => format!("{} moved.", monitors(n)),
-            Self::Renamed(n) => format!("Group renamed: {}.", monitors(n)),
-            Self::Linked(n) => format!("Channel linked to {}.", monitors(n)),
-            Self::Unlinked(n) => format!("Channel unlinked from {}.", monitors(n)),
-            Self::Added(n) => format!("{} added.", monitors(n)),
+            | Self::Added(0) => t("No monitor changed.").to_string(),
+            Self::Paused(n) => tf("{} paused.", &[&monitors(n)]),
+            Self::Resumed(n) => tf("{} resumed.", &[&monitors(n)]),
+            Self::Deleted(n) => tf("{} deleted.", &[&monitors(n)]),
+            Self::Moved(n) => tf("{} moved.", &[&monitors(n)]),
+            Self::Renamed(n) => tf("Group renamed: {}.", &[&monitors(n)]),
+            Self::Linked(n) => tf("Channel linked to {}.", &[&monitors(n)]),
+            Self::Unlinked(n) => tf("Channel unlinked from {}.", &[&monitors(n)]),
+            Self::Added(n) => tf("{} added.", &[&monitors(n)]),
         }
     }
 }
@@ -522,22 +516,22 @@ impl Headline {
             _ if !down.is_empty() => (
                 "down",
                 match down.len() {
-                    1 => "1 monitor is down".to_string(),
-                    n => format!("{n} monitors are down"),
+                    1 => t("1 monitor is down").to_string(),
+                    n => tf("{} monitors are down", &[&n]),
                 },
             ),
             _ if degraded > 0 => (
                 "degraded",
                 match degraded {
-                    1 => "1 monitor is degraded".to_string(),
-                    n => format!("{n} monitors are degraded"),
+                    1 => t("1 monitor is degraded").to_string(),
+                    n => tf("{} monitors are degraded", &[&n]),
                 },
             ),
-            _ if pending > 0 => ("pending", "No monitor is down".to_string()),
-            _ if up > 0 => ("up", "All monitors are up".to_string()),
-            _ if maintenance > 0 => ("maintenance", "No monitor is down".to_string()),
-            _ if paused > 0 => ("paused", "Every monitor is paused".to_string()),
-            _ => ("paused", "No monitors yet".to_string()),
+            _ if pending > 0 => ("pending", t("No monitor is down").to_string()),
+            _ if up > 0 => ("up", t("All monitors are up").to_string()),
+            _ if maintenance > 0 => ("maintenance", t("No monitor is down").to_string()),
+            _ if paused > 0 => ("paused", t("Every monitor is paused").to_string()),
+            _ => ("paused", t("No monitors yet").to_string()),
         };
         // The count the headline gives is left out.
         let degraded_other = if down.is_empty() { 0 } else { degraded };
@@ -545,16 +539,16 @@ impl Headline {
             (degraded_other, "degraded"),
             (pending, "pending"),
             (up, "up"),
-            (maintenance, "in maintenance"),
+            (maintenance, "maintenance"),
             (paused, "paused"),
         ]
         .into_iter()
         .filter(|&(count, _)| count > 0)
-        .map(|(count, label)| format!("{count} {label}"))
+        .map(|(count, key)| status_count(count, key))
         .collect();
         let others = if others.is_empty() {
             if down.is_empty() {
-                "Add a monitor to start checking a site.".to_string()
+                t("Add a monitor to start checking a site.").to_string()
             } else {
                 String::new()
             }
@@ -570,7 +564,7 @@ impl Headline {
                 name,
                 separator: match count - i {
                     1 => ".",
-                    2 => " and ",
+                    2 => t(" and "),
                     _ => ", ",
                 },
             })
@@ -618,8 +612,8 @@ impl IndexTemplate {
 
     pub fn range_label(&self) -> &'static str {
         match self.range {
-            Range::Hours => "Last 24 hours",
-            Range::Days => "Last 90 days",
+            Range::Hours => t("Last 24 hours"),
+            Range::Days => t("Last 90 days"),
         }
     }
 
@@ -668,10 +662,10 @@ impl IndexTemplate {
         let paused = with_key("paused");
         let degraded = with_key("degraded");
         let chips = [
-            ("All", None, rows.len()),
-            ("Down", Some(StatusFilter::Down), down.len()),
-            ("Degraded", Some(StatusFilter::Degraded), degraded),
-            ("Paused", Some(StatusFilter::Paused), paused),
+            (t("All"), None, rows.len()),
+            (t("Down"), Some(StatusFilter::Down), down.len()),
+            (t("Degraded"), Some(StatusFilter::Degraded), degraded),
+            (t("Paused"), Some(StatusFilter::Paused), paused),
         ]
         .into_iter()
         .map(|(label, status, count)| StatusChip {
@@ -781,7 +775,7 @@ impl DetailTemplate {
             .monitor
             .push_token
             .as_ref()
-            .map(|token| format!("{}/push/{token}", public_url.unwrap_or_default()));
+            .map(|token| format!("{}/push/{}", public_url.unwrap_or_default(), token));
         let tz = Settings::load(pool).await?.tz();
         let now = now_ms();
         let hourly = Heartbeat::hourly(pool, Some(id), &tz, now)
@@ -859,9 +853,9 @@ impl DetailTemplate {
 /// `Expired`, `1 day left`, `41 days left`.
 pub fn certificate_label(expires_at: i64, now: i64) -> String {
     match days_left(expires_at, now) {
-        left if left < 0 => "Expired".to_string(),
-        1 => "1 day left".to_string(),
-        left => format!("{left} days left"),
+        left if left < 0 => t("Expired").to_string(),
+        1 => t("1 day left").to_string(),
+        left => tf("{} days left", &[&left]),
     }
 }
 
@@ -872,20 +866,34 @@ pub fn test_summary(outcome: &CheckOutcome, tls_warn_days: Option<i64>) -> Resul
         return Err(failure.message.clone());
     }
     let mut summary = match (outcome.status_code, outcome.latency_ms) {
-        (Some(code), Some(ms)) => format!("HTTP {code} in {ms} ms."),
-        _ => "The check passed.".to_string(),
+        (Some(code), Some(ms)) => tf("HTTP {} in {} ms.", &[&code, &ms]),
+        _ => t("The check passed.").to_string(),
     };
     if let Some(expires_at) = outcome.tls_expires_at {
         let label = certificate_label(expires_at, outcome.checked_at);
         // The engine's rule (`MonitorState::record`).
         match tls_warn_days.filter(|days| expires_at < outcome.checked_at + days * DAY_MS) {
-            Some(days) => summary.push_str(&format!(
-                " Certificate: {label}, within the {days}-day warning: saving sends a certificate alert."
+            Some(days) => summary.push_str(&tf(
+                " Certificate: {}, within the {}-day warning: saving sends a certificate alert.",
+                &[&label, &days],
             )),
-            None => summary.push_str(&format!(" Certificate: {label}.")),
+            None => summary.push_str(&tf(" Certificate: {}.", &[&label])),
         }
     }
     Ok(summary)
+}
+
+/// `3 down`, `1 in maintenance`…, for a status key.
+fn status_count(count: usize, key: &str) -> String {
+    let n = &count;
+    match key {
+        "down" => tf("{} down", &[n]),
+        "degraded" => tf("{} degraded", &[n]),
+        "pending" => tf("{} pending", &[n]),
+        "up" => tf("{} up", &[n]),
+        "maintenance" => tf("{} in maintenance", &[n]),
+        _ => tf("{} paused", &[n]),
+    }
 }
 
 /// The hourly average latencies, scaled to the tallest one.
@@ -907,7 +915,7 @@ fn latency_bars(hourly: &Heartbeat) -> (Vec<LatencyBar>, Option<i64>) {
                 "latency"
             },
             title: tick.latency_ms.map_or_else(String::new, |ms| {
-                format!("{}: {ms} ms on average", tick.span)
+                tf("{}: {} ms on average", &[&tick.span, &ms])
             }),
         })
         .collect();
@@ -918,59 +926,62 @@ fn latency_bars(hourly: &Heartbeat) -> (Vec<LatencyBar>, Option<i64>) {
 fn status_line(view: &MonitorView, latest: Option<&Incident>, tz: &TimeZone, now: i64) -> String {
     let state = &view.state;
     if view.monitor.paused {
-        return "Paused: no checks until you resume it.".to_string();
+        return t("Paused: no checks until you resume it.").to_string();
     }
     if let Some(m) = &view.maintenance {
-        return format!(
+        return tf(
             "In maintenance until {} ({}): checks neither count nor alert.",
-            short_time(tz, m.ends_at, now),
-            m.title
+            &[&short_time(tz, m.ends_at, now), &m.title],
         );
     }
     match state.status {
         MonitorStatus::Down => match latest.filter(|i| i.resolved_at.is_none()) {
-            Some(i) => format!(
+            Some(i) => tf(
                 "Down for {}. {} since {}.",
-                format_duration(now - i.started_at),
-                i.cause
-                    .as_deref()
-                    .unwrap_or_else(|| error_kind_label(Some(&i.error_kind))),
-                if day_of(tz, i.started_at) == day_of(tz, now) {
-                    format_time(tz, i.started_at)
-                } else {
-                    format_datetime(tz, i.started_at)
-                }
+                &[
+                    &format_duration(now - i.started_at),
+                    &i.cause
+                        .as_deref()
+                        .unwrap_or_else(|| error_kind_label(Some(&i.error_kind))),
+                    &if day_of(tz, i.started_at) == day_of(tz, now) {
+                        format_time(tz, i.started_at)
+                    } else {
+                        format_datetime(tz, i.started_at)
+                    },
+                ],
             ),
-            None => "Down.".to_string(),
+            None => t("Down.").to_string(),
         },
         MonitorStatus::Pending if state.last_check_at.is_none() && view.monitor.is_push() => {
-            "Waiting for the first ping.".to_string()
+            t("Waiting for the first ping.").to_string()
         }
         MonitorStatus::Pending if state.last_check_at.is_none() => {
-            "Waiting for the first check.".to_string()
+            t("Waiting for the first check.").to_string()
         }
-        MonitorStatus::Pending if state.consecutive_failures > 0 => format!(
+        MonitorStatus::Pending if state.consecutive_failures > 0 => tf(
             "Retrying: {} of {} failures before down. {}",
-            state.consecutive_failures,
-            view.monitor.failure_threshold,
-            state.last_error.as_deref().unwrap_or_default()
+            &[
+                &state.consecutive_failures,
+                &view.monitor.failure_threshold,
+                &state.last_error.as_deref().unwrap_or_default(),
+            ],
         )
         .trim_end()
         .to_string(),
-        MonitorStatus::Pending => "Pending.".to_string(),
+        MonitorStatus::Pending => t("Pending.").to_string(),
         MonitorStatus::Up if let Some(since) = state.degraded_since => {
             // A threshold change ends the slowdown: the current one is the slowdown's.
             match view.monitor.latency_warn_ms {
-                Some(ms) => format!(
-                    "Degraded since {}: responses slower than {ms} ms.",
-                    short_time(tz, since, now)
+                Some(ms) => tf(
+                    "Degraded since {}: responses slower than {} ms.",
+                    &[&short_time(tz, since, now), &ms],
                 ),
-                None => format!("Degraded since {}.", short_time(tz, since, now)),
+                None => tf("Degraded since {}.", &[&short_time(tz, since, now)]),
             }
         }
         MonitorStatus::Up => match latest.and_then(|i| i.resolved_at) {
-            Some(at) => format!("Up since {}.", format_datetime(tz, at)),
-            None => "Up, no outage recorded.".to_string(),
+            Some(at) => tf("Up since {}.", &[&format_datetime(tz, at)]),
+            None => t("Up, no outage recorded.").to_string(),
         },
     }
 }
@@ -1041,8 +1052,8 @@ pub struct RenameGroupTemplate {
 impl RenameGroupTemplate {
     pub fn monitors(&self) -> String {
         match self.count {
-            1 => "1 monitor".to_string(),
-            n => format!("{n} monitors"),
+            1 => t("1 monitor").to_string(),
+            n => tf("{} monitors", &[&n]),
         }
     }
 }

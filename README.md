@@ -5,6 +5,10 @@
 <h1 align="center">uptime-monitoring</h1>
 
 <p align="center">
+  <strong>English</strong> · <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> · <a href="README.de.md">Deutsch</a>
+</p>
+
+<p align="center">
   A lightweight, self-hosted uptime monitor: one binary, one SQLite file, about 3 MiB of RAM.
 </p>
 
@@ -38,6 +42,7 @@ small enough to run next to the sites it watches.
   alerts sent.
 - Public status pages, each with its own address, monitors and display names; URLs and errors are never shown.
 - Light and dark themes, following the system or picked in the header.
+- In English, French, Spanish or German: pages, public status pages and alerts alike.
 
 **Alerts**
 - When a monitor goes down, comes back up, or its certificate is about to expire.
@@ -104,7 +109,7 @@ nginx). Over plain HTTP, logging in only works on `localhost`.
 | `RUST_LOG`            | `uptime_monitoring=info,tower_http=info` | Log filter |
 | `PUID`, `PGID`        | `65532`                                  | User and group the process runs as when started as root; they own the database files. Ignored when started as another user (`user:` in Compose) |
 
-Timezone, data retention, private-address blocking, the password and two-factor authentication are changed from the
+Language, timezone, data retention, private-address blocking, the password and two-factor authentication are changed from the
 *Settings* page. Lost your authenticator app? Turn two-factor off on the server, then set it up again:
 
 ```bash

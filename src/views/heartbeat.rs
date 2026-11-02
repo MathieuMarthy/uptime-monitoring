@@ -1,5 +1,7 @@
 //! Availability shown as bars, one per time bucket.
 
+use crate::i18n::tf;
+
 use crate::error::AppError;
 use crate::models::stats::uptime;
 use crate::models::{Bucket, DailyStat};
@@ -90,7 +92,7 @@ impl Heartbeat {
                 Some(b) => tick(b, label(i)),
                 None => Tick {
                     class: "tick-none",
-                    title: format!("{}: no checks", label(i)),
+                    title: tf("{}: no checks", &[&label(i)]),
                     span: label(i),
                     checks: 0,
                     failed: 0,
@@ -260,13 +262,16 @@ fn tick(b: &Bucket, span: String) -> Tick {
         "tick-up"
     };
     let title = if b.checks_failed == 0 {
-        format!("{span}: {} checks, all passed", b.checks_total)
+        tf("{}: {} checks, all passed", &[&span, &b.checks_total])
     } else {
-        format!(
-            "{span}: {} of {} checks failed, {} up",
-            b.checks_failed,
-            b.checks_total,
-            uptime_label(b.uptime())
+        tf(
+            "{}: {} of {} checks failed, {} up",
+            &[
+                &span,
+                &b.checks_failed,
+                &b.checks_total,
+                &uptime_label(b.uptime()),
+            ],
         )
     };
     Tick {

@@ -1,3 +1,4 @@
+use crate::i18n::t;
 use crate::views::errors::ErrorTemplate;
 use askama::Template;
 use axum::http::StatusCode;
@@ -31,22 +32,24 @@ impl From<askama::Error> for AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            Self::NotFound => (StatusCode::NOT_FOUND, "Page not found"),
-            Self::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed"),
+            Self::NotFound => (StatusCode::NOT_FOUND, t("Page not found")),
+            Self::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, t("Method not allowed")),
             Self::Forbidden => (
                 StatusCode::FORBIDDEN,
-                "This form has expired or was not sent from this site. Reload the page and try again.",
+                t(
+                    "This form has expired or was not sent from this site. Reload the page and try again.",
+                ),
             ),
             Self::TooManyRequests => (
                 StatusCode::TOO_MANY_REQUESTS,
-                "Too many login attempts. Try again later.",
+                t("Too many login attempts. Try again later."),
             ),
-            Self::InvalidRequest(status) => (status, "Invalid request"),
+            Self::InvalidRequest(status) => (status, t("Invalid request")),
             Self::Internal(e) => {
                 tracing::error!(error = %e, "request failed");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Something went wrong. The error has been logged.",
+                    t("Something went wrong. The error has been logged."),
                 )
             }
         };

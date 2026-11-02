@@ -1,5 +1,6 @@
 use crate::forms::monitor::FieldErrors;
 use crate::forms::{has_visible_char, text_len};
+use crate::i18n::{t, tf};
 use crate::models::name_key;
 use crate::models::{Maintenance, MaintenanceInput};
 use crate::windows::{MAX_WEEKLY_MINUTES, Schedule};
@@ -108,11 +109,11 @@ impl MaintenanceForm {
 
         let title = self.title.trim();
         if !has_visible_char(title) {
-            errors.insert("title", "Title is required.".to_string());
+            errors.insert("title", t("Title is required.").to_string());
         } else if text_len(title) > TITLE_MAX_CHARS {
             errors.insert(
                 "title",
-                format!("Title must be at most {TITLE_MAX_CHARS} characters."),
+                tf("Title must be at most {} characters.", &[&TITLE_MAX_CHARS]),
             );
         }
 
@@ -131,7 +132,7 @@ impl MaintenanceForm {
             .collect();
         let all_monitors = self.all_monitors.is_some();
         if !all_monitors && monitor_ids.is_empty() {
-            errors.insert("monitors", "Pick at least one monitor.".to_string());
+            errors.insert("monitors", t("Pick at least one monitor.").to_string());
         }
 
         match schedule {
@@ -150,14 +151,17 @@ impl MaintenanceForm {
         let starts_at = parse_local(tz, &self.starts_at);
         let ends_at = parse_local(tz, &self.ends_at);
         if starts_at.is_none() {
-            errors.insert("starts_at", "Enter a start date and time.".to_string());
+            errors.insert("starts_at", t("Enter a start date and time.").to_string());
         }
         if ends_at.is_none() {
-            errors.insert("ends_at", "Enter an end date and time.".to_string());
+            errors.insert("ends_at", t("Enter an end date and time.").to_string());
         }
         let (starts_at, ends_at) = (starts_at?, ends_at?);
         if ends_at <= starts_at {
-            errors.insert("ends_at", "The end must come after the start.".to_string());
+            errors.insert(
+                "ends_at",
+                t("The end must come after the start.").to_string(),
+            );
             return None;
         }
         Some(Schedule::Once { starts_at, ends_at })
@@ -168,7 +172,7 @@ impl MaintenanceForm {
             .filter(|day| self.has_day(usize::from(*day)))
             .fold(0u8, |mask, day| mask | 1 << day);
         if weekdays == 0 {
-            errors.insert("days", "Pick at least one day.".to_string());
+            errors.insert("days", t("Pick at least one day.").to_string());
         }
         let local_start = self
             .local_start
@@ -177,7 +181,7 @@ impl MaintenanceForm {
             .ok()
             .map(|t| i64::from(t.hour()) * 60 + i64::from(t.minute()));
         if local_start.is_none() {
-            errors.insert("local_start", "Enter a time such as 02:30.".to_string());
+            errors.insert("local_start", t("Enter a time such as 02:30.").to_string());
         }
         let duration_min = self.duration_min.trim().parse::<i64>().ok();
         let longest = longest_duration(weekdays);
@@ -185,7 +189,7 @@ impl MaintenanceForm {
             Some(d) if !(1..=MAX_WEEKLY_MINUTES).contains(&d) => {
                 errors.insert(
                     "duration_min",
-                    format!("Duration must be 1 to {MAX_WEEKLY_MINUTES} minutes."),
+                    tf("Duration must be 1 to {} minutes.", &[&MAX_WEEKLY_MINUTES]),
                 );
                 None
             }
@@ -203,7 +207,7 @@ impl MaintenanceForm {
             None => {
                 errors.insert(
                     "duration_min",
-                    format!("Duration must be 1 to {MAX_WEEKLY_MINUTES} minutes."),
+                    tf("Duration must be 1 to {} minutes.", &[&MAX_WEEKLY_MINUTES]),
                 );
                 None
             }

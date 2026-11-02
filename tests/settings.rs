@@ -57,6 +57,7 @@ async fn page_shows_current_values_and_an_estimate() {
     assert_eq!(r.status, 200);
     assert!(r.body.contains(r#"<option value="Europe/Paris""#));
     assert!(r.body.contains(r#"<option value="UTC" selected"#));
+    let r = get(&app, "/settings?section=data").await;
     assert!(r.body.contains(
         r#"name="checks_retention_days" type="number" min="2" max="365" required value="7""#
     ));
@@ -71,13 +72,13 @@ async fn page_shows_current_values_and_an_estimate() {
 async fn timezone_is_saved() {
     let (app, pool) = common::test_app().await;
     let r = post_form(&app, "/settings/general", "timezone=Europe%2FParis").await;
-    assert_redirect(&r, "/settings?saved=general");
+    assert_redirect(&r, "/settings?section=general&saved=general");
     assert_eq!(
         Settings::load(&pool).await.unwrap().timezone,
         "Europe/Paris"
     );
     assert!(
-        get(&app, "/settings?saved=general")
+        get(&app, "/settings?section=general&saved=general")
             .await
             .body
             .contains("Settings saved.")
@@ -101,14 +102,17 @@ async fn retention_and_blocking_are_saved_and_applied() {
     let r = post_form(
         &app,
         "/settings/data",
-        "checks_retention_days=30&history_retention_days=365&block_private_targets=on",
+        "checks_retention_days=30&history_retention_days=365",
     )
     .await;
-    assert_redirect(&r, "/settings?saved=data");
+    assert_redirect(&r, "/settings?section=data&saved=data");
     let settings = Settings::load(&pool).await.unwrap();
     assert_eq!(settings.checks_retention_days, 30);
     assert_eq!(settings.history_retention_days, Some(365));
-    assert!(settings.block_private_targets);
+
+    let r = post_form(&app, "/settings/blocking", "block_private_targets=on").await;
+    assert_redirect(&r, "/settings?section=security&saved=blocking");
+    assert!(Settings::load(&pool).await.unwrap().block_private_targets);
     assert!(app.state.guard.blocks_private());
 
     let r = post_form(
@@ -117,10 +121,15 @@ async fn retention_and_blocking_are_saved_and_applied() {
         "checks_retention_days=7&history_retention_days=",
     )
     .await;
-    assert_redirect(&r, "/settings?saved=data");
+    assert_redirect(&r, "/settings?section=data&saved=data");
     let settings = Settings::load(&pool).await.unwrap();
     assert_eq!(settings.history_retention_days, None);
-    assert!(!settings.block_private_targets);
+    // Retention leaves the blocking alone.
+    assert!(settings.block_private_targets);
+
+    let r = post_form(&app, "/settings/blocking", "").await;
+    assert_redirect(&r, "/settings?section=security&saved=blocking");
+    assert!(!Settings::load(&pool).await.unwrap().block_private_targets);
     assert!(!app.state.guard.blocks_private());
 }
 
@@ -168,7 +177,7 @@ async fn password_change_keeps_this_session_and_ends_the_others() {
         &password_body(PASSWORD, "a brand new password", "a brand new password"),
     )
     .await;
-    assert_redirect(&r, "/settings?saved=password");
+    assert_redirect(&r, "/settings?section=security&saved=password");
 
     assert_eq!(get(&app, "/settings").await.status, 200);
     assert!(Session::find(&pool, &other.token).await.unwrap().is_none());
@@ -235,4 +244,69 @@ async fn wrong_current_passwords_count_toward_the_login_limit() {
         post_form(&app, "/settings/password", &body).await.status,
         429
     );
+}
+
+// --- Sections ---
+
+#[tokio::test]
+async fn each_section_shows_only_its_forms() {
+    let (app, _) = common::test_app().await;
+    let sections = [
+        ("/settings", r#"action="/settings/general""#),
+        ("/settings?section=general", r#"action="/settings/general""#),
+        ("/settings?section=data", r#"action="/settings/data""#),
+        (
+            "/settings?section=security",
+            r#"action="/settings/password""#,
+        ),
+        ("/settings?section=backup", r#"action="/settings/import""#),
+        ("/settings?section=nowhere", r#"action="/settings/general""#),
+    ];
+    let actions = sections.map(|(_, action)| action);
+    for (uri, action) in sections {
+        let body = get(&app, uri).await.body;
+        for other in actions {
+            assert_eq!(body.contains(other), other == action, "{uri}: {other}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn the_rail_tells_each_sections_state() {
+    let (app, _) = common::test_app().await;
+    post_form(
+        &app,
+        "/settings/general",
+        "timezone=Europe%2FParis&language=en",
+    )
+    .await;
+    let body = get(&app, "/settings?section=backup").await.body;
+    assert!(
+        body.contains(r#"href="/settings?section=backup" aria-current="page""#),
+        "{body}"
+    );
+    assert!(body.contains("English, Europe/Paris"));
+    assert!(body.contains("Checks 7 days, history forever"));
+    assert!(body.contains("Two-factor off"));
+}
+
+#[tokio::test]
+async fn an_error_shows_the_section_of_its_form() {
+    let (app, _) = logged_in_with_password().await;
+    let r = post_form(
+        &app,
+        "/settings/password",
+        &password_body(
+            "wrong password!",
+            "a brand new password",
+            "a brand new password",
+        ),
+    )
+    .await;
+    assert_eq!(r.status, 200);
+    assert!(
+        r.body
+            .contains(r#"href="/settings?section=security" aria-current="page""#)
+    );
+    assert!(r.body.contains("Current password is incorrect."));
 }

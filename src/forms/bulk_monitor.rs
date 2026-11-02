@@ -1,5 +1,7 @@
 //! Many HTTP monitors from a pasted list of URLs, one per line, with the add form's defaults.
 
+use crate::i18n::{t, tf};
+
 use crate::forms::monitor::{
     MonitorForm, MonitorInput, channel_ids_in, clean_group, has_channel_in, set_channels_in,
 };
@@ -65,9 +67,9 @@ impl BulkMonitorForm {
             .filter(|(_, line)| !line.is_empty())
             .collect();
         if lines.is_empty() {
-            errors.urls = Some("Paste at least one URL.".to_string());
+            errors.urls = Some(t("Paste at least one URL.").to_string());
         } else if lines.len() > BULK_MAX_URLS {
-            errors.urls = Some(format!("At most {BULK_MAX_URLS} URLs at once."));
+            errors.urls = Some(tf("At most {} URLs at once.", &[&BULK_MAX_URLS]));
         }
         if errors.urls.is_some() {
             return Err(errors);
@@ -85,7 +87,7 @@ impl BulkMonitorForm {
             let url = if has_scheme(raw) {
                 raw.to_string()
             } else {
-                format!("https://{raw}")
+                format!("https://{}", raw)
             };
             let name = free_name(&base_name(&url), &used);
             let form = MonitorForm {

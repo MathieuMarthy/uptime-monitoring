@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::forms::channel::ChannelForm;
 use crate::forms::monitor::FieldErrors;
+use crate::i18n::{filters, t};
 use crate::models::{Channel, NotificationLog, Settings};
 use crate::notify::channel::KINDS;
 use crate::time::format_datetime;
@@ -82,12 +83,12 @@ impl IndexTemplate {
 
 fn event_label(event: &str) -> &'static str {
     match event {
-        "down" => "Down",
-        "up" => "Up",
-        "tls_expiring" => "Certificate",
-        "degraded" => "Slow",
-        "latency_normal" => "Fast again",
-        _ => "Test",
+        "down" => t("Down"),
+        "up" => t("Up"),
+        "tls_expiring" => t("Certificate"),
+        "degraded" => t("Slow"),
+        "latency_normal" => t("Fast again"),
+        _ => t("Test"),
     }
 }
 

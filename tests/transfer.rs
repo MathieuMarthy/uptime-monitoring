@@ -108,7 +108,7 @@ async fn export_requires_a_session() {
 #[tokio::test]
 async fn settings_page_links_to_export_and_backup() {
     let (app, _) = common::test_app().await;
-    let r = get(&app, "/settings").await;
+    let r = get(&app, "/settings?section=backup").await;
     assert!(r.body.contains(r#"href="/settings/export""#));
     assert!(r.body.contains(r#"href="/settings/backup""#));
 }
@@ -370,7 +370,7 @@ async fn import_of_an_uptime_kuma_backup() {
 #[tokio::test]
 async fn settings_page_has_the_import_form() {
     let (app, _) = common::test_app().await;
-    let r = get(&app, "/settings").await;
+    let r = get(&app, "/settings?section=backup").await;
     assert!(r.body.contains(r#"action="/settings/import""#));
     assert!(r.body.contains(r#"name="document""#));
 }

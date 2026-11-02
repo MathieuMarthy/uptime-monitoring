@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::forms::maintenance::MaintenanceForm;
 use crate::forms::monitor::FieldErrors;
+use crate::i18n::t;
 use crate::models::{Maintenance, MaintenanceInput, Monitor, Session, Settings};
 use crate::routes::{PathId, form_or_invalid};
 use crate::state::AppState;
@@ -133,7 +134,7 @@ async fn start_now(
         .ok_or(AppError::NotFound)?;
     let now = now_ms();
     let input = MaintenanceInput {
-        title: "Maintenance".to_string(),
+        title: t("Maintenance").to_string(),
         schedule: Schedule::Once {
             starts_at: now,
             ends_at: now + minutes * 60_000,
@@ -144,7 +145,7 @@ async fn start_now(
     };
     Maintenance::create(&state.db, &input).await?;
     changed(&state).await?;
-    Ok(Redirect::to(&format!("/monitors/{id}")))
+    Ok(Redirect::to(&format!("/monitors/{}", id)))
 }
 
 /// After any change to a window: the engine and the status pages see it at once.
@@ -179,7 +180,7 @@ async fn page(
         errors,
         csrf_token,
         action_url: match id {
-            Some(id) => format!("/maintenances/{id}/edit"),
+            Some(id) => format!("/maintenances/{}/edit", id),
             None => "/maintenances/new".to_string(),
         },
         maintenance_id: id,

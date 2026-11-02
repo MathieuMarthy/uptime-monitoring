@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::forms::channel::ChannelForm;
 use crate::forms::monitor::FieldErrors;
+use crate::i18n::t;
 use crate::models::{Channel, Session, is_unique_violation};
 use crate::notify::channel::ChannelConfig;
 use crate::routes::{PathId, form_or_invalid};
@@ -12,7 +13,9 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Form, Router};
 
-const DUPLICATE_NAME: &str = "This name is already used.";
+fn duplicate_name() -> &'static str {
+    t("This name is already used.")
+}
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -187,7 +190,7 @@ fn page(
         errors,
         csrf_token,
         action_url: match id {
-            Some(id) => format!("/alerts/{id}/edit"),
+            Some(id) => format!("/alerts/{}/edit", id),
             None => "/alerts/new".to_string(),
         },
         channel_id: id,
@@ -199,5 +202,5 @@ fn page(
 }
 
 fn name_taken() -> FieldErrors {
-    FieldErrors::from([("name", DUPLICATE_NAME.to_string())])
+    FieldErrors::from([("name", duplicate_name().to_string())])
 }

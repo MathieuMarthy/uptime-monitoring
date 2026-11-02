@@ -1,6 +1,8 @@
 //! Time helpers. Instants are Unix epoch milliseconds; days and hours are those of the instance
 //! timezone (`settings.timezone`).
 
+use crate::i18n::tf;
+
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 use jiff::{RoundMode, Timestamp, Unit, Zoned, ZonedRound};
@@ -82,9 +84,9 @@ pub fn format_duration(ms: i64) -> String {
     let s = ms.max(0) / 1000;
     let (d, h, m) = (s / 86_400, s / 3600 % 24, s / 60 % 60);
     match () {
-        _ if d > 0 => format!("{d} d {h} h"),
-        _ if h > 0 => format!("{h} h {m:02} min"),
-        _ if m > 0 => format!("{m} min"),
+        _ if d > 0 => tf("{} d {} h", &[&d, &h]),
+        _ if h > 0 => tf("{} h {} min", &[&h, &format!("{:02}", m)]),
+        _ if m > 0 => tf("{} min", &[&m]),
         _ => format!("{s} s"),
     }
 }

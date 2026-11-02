@@ -1,0 +1,3363 @@
+# Translations: an English text exactly as written in the code, then one line per language.
+# Placeholders {} are filled in order; keep them, and keep any HTML tag.
+
+\n…and {} more.
+fr: \n…et {} de plus.
+es: \n…y {} más.
+de: \n…und {} weitere.
+
+ Certificate: {}, within the {}-day warning: saving sends a certificate alert.
+fr:  Certificat : {}, dans le délai d'alerte de {} jours : l'enregistrement envoie une alerte de certificat.
+es:  Certificado: {}, dentro del aviso de {} días: al guardar se envía una alerta de certificado.
+de:  Zertifikat: {}, innerhalb der Warnfrist von {} Tagen: Beim Speichern wird ein Zertifikatsalarm gesendet.
+
+ Certificate: {}.
+fr:  Certificat : {}.
+es:  Certificado: {}.
+de:  Zertifikat: {}.
+
+ and 
+fr:  et 
+es:  y 
+de:  und 
+
+(disabled)
+fr: (désactivé)
+es: (desactivado)
+de: (deaktiviert)
+
+(public)
+fr: (public)
+es: (pública)
+de: (öffentlich)
+
+, Up
+fr: , en ligne
+es: , activo
+de: , online
+
+-1001234567890 or @channel
+fr: -1001234567890 ou @canal
+es: -1001234567890 o @canal
+de: -1001234567890 oder @kanal
+
+1 day left
+fr: 1 jour restant
+es: Queda 1 día
+de: Noch 1 Tag
+
+1 monitor
+fr: 1 sonde
+es: 1 monitor
+de: 1 Monitor
+
+1 monitor is degraded
+fr: 1 sonde est dégradée
+es: 1 monitor está degradado
+de: 1 Monitor ist beeinträchtigt
+
+1 monitor is down
+fr: 1 sonde est hors ligne
+es: 1 monitor está caído
+de: 1 Monitor ist offline
+
+1 service responds slowly.
+fr: 1 service répond lentement.
+es: 1 servicio responde lentamente.
+de: 1 Dienst antwortet langsam.
+
+1. Add this account to your app
+fr: 1. Ajoutez ce compte à votre application
+es: 1. Añada esta cuenta a su aplicación
+de: 1. Fügen Sie dieses Konto Ihrer App hinzu
+
+2. Confirm with your password and the code it shows
+fr: 2. Confirmez avec votre mot de passe et le code qu'elle affiche
+es: 2. Confirme con su contraseña y el código que muestra
+de: 2. Bestätigen Sie mit Ihrem Passwort und dem angezeigten Code
+
+24 hours
+fr: 24 heures
+es: 24 horas
+de: 24 Stunden
+
+90 days
+fr: 90 jours
+es: 90 días
+de: 90 Tage
+
+90 days ago
+fr: Il y a 90 jours
+es: Hace 90 días
+de: Vor 90 Tagen
+
+A Discord webhook URL starts with {}.
+fr: Une URL de webhook Discord commence par {}.
+es: Una URL de webhook de Discord empieza por {}.
+de: Eine Discord-Webhook-URL beginnt mit {}.
+
+A HEAD response has no body: choose another method or remove the keyword.
+fr: Une réponse HEAD n'a pas de corps : choisissez une autre méthode ou retirez le mot-clé.
+es: Una respuesta HEAD no tiene cuerpo: elija otro método o quite la palabra clave.
+de: Eine HEAD-Antwort hat keinen Inhalt: Wählen Sie eine andere Methode oder entfernen Sie das Schlüsselwort.
+
+A bot token looks like 123456:ABC-DEF…, as given by @BotFather.
+fr: Un jeton de bot ressemble à 123456:ABC-DEF…, tel que donné par @BotFather.
+es: Un token de bot tiene la forma 123456:ABC-DEF…, tal como lo da @BotFather.
+de: Ein Bot-Token sieht aus wie 123456:ABC-DEF…, wie von @BotFather ausgegeben.
+
+A note is at most {} characters.
+fr: Une note fait au plus {} caractères.
+es: Una nota tiene como máximo {} caracteres.
+de: Eine Notiz hat höchstens {} Zeichen.
+
+A push monitor waits for its job: save it, then call its URL.
+fr: Une sonde push attend sa tâche : enregistrez-la, puis appelez son URL.
+es: Un monitor push espera a su tarea: guárdelo y luego llame a su URL.
+de: Ein Push-Monitor wartet auf seinen Job: Speichern Sie ihn und rufen Sie dann seine URL auf.
+
+A status page anyone can open at /status/&lt;slug&gt;, showing the monitors you pick.
+fr: Une page d'état que tout le monde peut ouvrir à /status/&lt;slug&gt;, avec les sondes que vous choisissez.
+es: Una página de estado que cualquiera puede abrir en /status/&lt;slug&gt;, con los monitores que elija.
+de: Eine Statusseite, die jeder unter /status/&lt;slug&gt; öffnen kann, mit den Monitoren Ihrer Wahl.
+
+A username and password are only sent over STARTTLS or TLS.
+fr: Un identifiant et un mot de passe ne sont envoyés qu'avec STARTTLS ou TLS.
+es: Un usuario y una contraseña solo se envían con STARTTLS o TLS.
+de: Benutzername und Passwort werden nur über STARTTLS oder TLS gesendet.
+
+Accept self-signed, expired or mismatched certificates.
+fr: Accepter les certificats auto-signés, expirés ou ne correspondant pas.
+es: Aceptar certificados autofirmados, caducados o que no coinciden.
+de: Selbstsignierte, abgelaufene oder nicht passende Zertifikate akzeptieren.
+
+Accepted Status Codes
+fr: Codes de statut acceptés
+es: Códigos de estado aceptados
+de: Akzeptierte Statuscodes
+
+Accepted statuses
+fr: Statuts acceptés
+es: Estados aceptados
+de: Akzeptierte Statuscodes
+
+Access Token
+fr: Jeton d'accès
+es: Token de acceso
+de: Zugriffstoken
+
+Actions
+fr: Actions
+es: Acciones
+de: Aktionen
+
+Active
+fr: Active
+es: Activo
+de: Aktiv
+
+Active Monitoring
+fr: Surveillance active
+es: Supervisión activa
+de: Überwachung aktiv
+
+Activity
+fr: Activité
+es: Actividad
+de: Aktivität
+
+Add Channel
+fr: Ajouter un canal
+es: Añadir canal
+de: Kanal hinzufügen
+
+Add Maintenance
+fr: Ajouter une maintenance
+es: Añadir mantenimiento
+de: Wartung hinzufügen
+
+Add New Monitor
+fr: Ajouter une sonde
+es: Añadir monitor
+de: Monitor hinzufügen
+
+Add Page
+fr: Ajouter la page
+es: Añadir página
+de: Seite hinzufügen
+
+Add Public Page
+fr: Ajouter une page publique
+es: Añadir página pública
+de: Öffentliche Seite hinzufügen
+
+Add Several Monitors
+fr: Ajouter plusieurs sondes
+es: Añadir varios monitores
+de: Mehrere Monitore hinzufügen
+
+Add Window
+fr: Ajouter la fenêtre
+es: Añadir ventana
+de: Fenster hinzufügen
+
+Add a Maintenance Window
+fr: Ajouter une fenêtre de maintenance
+es: Añadir una ventana de mantenimiento
+de: Wartungsfenster hinzufügen
+
+Add a Notification Channel
+fr: Ajouter un canal de notification
+es: Añadir un canal de notificación
+de: Benachrichtigungskanal hinzufügen
+
+Add a Public Page
+fr: Ajouter une page publique
+es: Añadir una página pública
+de: Öffentliche Seite hinzufügen
+
+Add a monitor to start checking a site.
+fr: Ajoutez une sonde pour commencer à surveiller un site.
+es: Añada un monitor para empezar a supervisar un sitio.
+de: Fügen Sie einen Monitor hinzu, um eine Website zu überwachen.
+
+Add channel
+fr: Ajouter un canal
+es: Añadir canal
+de: Kanal hinzufügen
+
+Add monitor
+fr: Ajouter une sonde
+es: Añadir monitor
+de: Monitor hinzufügen
+
+Add monitors
+fr: Ajouter les sondes
+es: Añadir monitores
+de: Monitore hinzufügen
+
+Add page
+fr: Ajouter une page
+es: Añadir página
+de: Seite hinzufügen
+
+Add several
+fr: Ajouter plusieurs
+es: Añadir varios
+de: Mehrere hinzufügen
+
+Add window
+fr: Ajouter une fenêtre
+es: Añadir ventana
+de: Fenster hinzufügen
+
+Address
+fr: Adresse
+es: Dirección
+de: Adresse
+
+Advanced Options (Optional)
+fr: Options avancées (facultatif)
+es: Opciones avanzadas (opcional)
+de: Erweiterte Optionen (optional)
+
+After the password, each login asks for a code from an authenticator app.
+fr: Après le mot de passe, chaque connexion demande un code d'une application d'authentification.
+es: Tras la contraseña, cada inicio de sesión pide un código de una aplicación de autenticación.
+de: Nach dem Passwort fragt jede Anmeldung nach einem Code aus einer Authenticator-App.
+
+Alert When Degraded
+fr: Alerter en cas de dégradation
+es: Alertar si está degradado
+de: Bei Beeinträchtigung alarmieren
+
+Alert channel
+fr: Canal d'alerte
+es: Canal de alerta
+de: Alarmkanal
+
+Alerts
+fr: Alertes
+es: Alertas
+de: Alarme
+
+Alerts sent
+fr: Alertes envoyées
+es: Alertas enviadas
+de: Gesendete Alarme
+
+All
+fr: Toutes
+es: Todos
+de: Alle
+
+All activity of {}
+fr: Toute l'activité de {}
+es: Toda la actividad de {}
+de: Alle Aktivitäten von {}
+
+All events
+fr: Tous les événements
+es: Todos los eventos
+de: Alle Ereignisse
+
+All groups
+fr: Tous les groupes
+es: Todos los grupos
+de: Alle Gruppen
+
+All monitors
+fr: Toutes les sondes
+es: Todos los monitores
+de: Alle Monitore
+
+All monitors are up
+fr: Toutes les sondes sont en ligne
+es: Todos los monitores están activos
+de: Alle Monitore sind online
+
+All services are running
+fr: Tous les services fonctionnent
+es: Todos los servicios funcionan
+de: Alle Dienste laufen
+
+An export of this application, or an Uptime Kuma backup (Settings › Backup › Export): its HTTP, keyword and push monitors and its webhook, Discord, ntfy, Telegram and SMTP notifications. Only adds: a monitor, channel, page or window whose name is taken is skipped. Imported monitors start at once, unless they were paused.
+fr: Un export de cette application, ou une sauvegarde Uptime Kuma (Paramètres › Sauvegarde › Exporter) : ses sondes HTTP, mot-clé et push, et ses notifications webhook, Discord, ntfy, Telegram et SMTP. Ajoute seulement : une sonde, un canal, une page ou une fenêtre dont le nom est pris est ignoré. Les sondes importées démarrent aussitôt, sauf si elles étaient en pause.
+es: Una exportación de esta aplicación, o una copia de seguridad de Uptime Kuma (Settings › Backup › Export): sus monitores HTTP, de palabra clave y push, y sus notificaciones webhook, Discord, ntfy, Telegram y SMTP. Solo añade: se omite un monitor, canal, página o ventana cuyo nombre ya existe. Los monitores importados arrancan enseguida, salvo si estaban en pausa.
+de: Ein Export dieser Anwendung oder ein Uptime-Kuma-Backup (Einstellungen › Backup › Exportieren): seine HTTP-, Schlüsselwort- und Push-Monitore und seine Webhook-, Discord-, ntfy-, Telegram- und SMTP-Benachrichtigungen. Fügt nur hinzu: Ein Monitor, Kanal, eine Seite oder ein Fenster mit vergebenem Namen wird übersprungen. Importierte Monitore starten sofort, außer sie waren pausiert.
+
+And {} earlier failed checks.
+fr: Et {} vérifications échouées plus anciennes.
+es: Y {} comprobaciones fallidas anteriores.
+de: Und {} frühere fehlgeschlagene Prüfungen.
+
+Announce on public pages
+fr: Annoncer sur les pages publiques
+es: Anunciar en las páginas públicas
+de: Auf öffentlichen Seiten ankündigen
+
+Are you sure you want to permanently delete this monitor and all its history?
+fr: Supprimer définitivement cette sonde et tout son historique ?
+es: ¿Seguro que quiere eliminar definitivamente este monitor y todo su historial?
+de: Diesen Monitor und seinen gesamten Verlauf endgültig löschen?
+
+At least 12 characters.
+fr: Au moins 12 caractères.
+es: Al menos 12 caracteres.
+de: Mindestens 12 Zeichen.
+
+At most 120s and no longer than the interval. Default: 10s.
+fr: Au plus 120 s et pas plus que l'intervalle. Par défaut : 10 s.
+es: Como máximo 120 s y no más que el intervalo. Por defecto: 10 s.
+de: Höchstens 120 s und nicht länger als das Intervall. Standard: 10 s.
+
+At most {} URLs at once.
+fr: Au plus {} URL à la fois.
+es: Como máximo {} URL a la vez.
+de: Höchstens {} URLs auf einmal.
+
+Availability
+fr: Disponibilité
+es: Disponibilidad
+de: Verfügbarkeit
+
+Back to monitors
+fr: Retour aux sondes
+es: Volver a los monitores
+de: Zurück zu den Monitoren
+
+Back to settings
+fr: Retour aux paramètres
+es: Volver a los ajustes
+de: Zurück zu den Einstellungen
+
+Back to the password
+fr: Retour au mot de passe
+es: Volver a la contraseña
+de: Zurück zum Passwort
+
+Back up after {} of downtime.
+fr: De retour après {} d'indisponibilité.
+es: Activo de nuevo tras {} de caída.
+de: Wieder online nach {} Ausfall.
+
+Backup
+fr: Sauvegarde
+es: Copia de seguridad
+de: Backup
+
+Between 5 seconds and 24 hours. Default: 60s.
+fr: Entre 5 secondes et 24 heures. Par défaut : 60 s.
+es: Entre 5 segundos y 24 horas. Por defecto: 60 s.
+de: Zwischen 5 Sekunden und 24 Stunden. Standard: 60 s.
+
+Block private addresses
+fr: Bloquer les adresses privées
+es: Bloquear direcciones privadas
+de: Private Adressen sperren
+
+Blocked address
+fr: Adresse bloquée
+es: Dirección bloqueada
+de: Gesperrte Adresse
+
+Bot Token
+fr: Jeton du bot
+es: Token del bot
+de: Bot-Token
+
+Bot token is required.
+fr: Le jeton du bot est requis.
+es: El token del bot es obligatorio.
+de: Das Bot-Token ist erforderlich.
+
+Call it after each run. GET, HEAD and POST all work.
+fr: Appelez-la après chaque exécution. GET, HEAD et POST fonctionnent.
+es: Llámela tras cada ejecución. GET, HEAD y POST funcionan.
+de: Rufen Sie sie nach jedem Lauf auf. GET, HEAD und POST funktionieren.
+
+Cancel
+fr: Annuler
+es: Cancelar
+de: Abbrechen
+
+Certificate
+fr: Certificat
+es: Certificado
+de: Zertifikat
+
+Certificate Expiry Warning (days)
+fr: Alerte d'expiration du certificat (jours)
+es: Aviso de caducidad del certificado (días)
+de: Warnung vor Zertifikatsablauf (Tage)
+
+Certificate warning
+fr: Alerte de certificat
+es: Aviso de certificado
+de: Zertifikatswarnung
+
+Certificate warnings
+fr: Alertes de certificat
+es: Avisos de certificado
+de: Zertifikatswarnungen
+
+Certificates
+fr: Certificats
+es: Certificados
+de: Zertifikate
+
+Change Password
+fr: Changer le mot de passe
+es: Cambiar contraseña
+de: Passwort ändern
+
+Changes are not saved yet.
+fr: Les modifications ne sont pas encore enregistrées.
+es: Los cambios aún no se han guardado.
+de: Die Änderungen sind noch nicht gespeichert.
+
+Channel
+fr: Canal
+es: Canal
+de: Kanal
+
+Channel linked to {}.
+fr: Canal lié à {}.
+es: Canal vinculado a {}.
+de: Kanal mit {} verknüpft.
+
+Channel unlinked from {}.
+fr: Canal délié de {}.
+es: Canal desvinculado de {}.
+de: Kanal von {} getrennt.
+
+Channels receive an alert when a linked monitor goes down, comes back up, or its certificate is about to expire. Link monitors from their edit page.
+fr: Les canaux reçoivent une alerte quand une sonde liée tombe, revient en ligne ou que son certificat va expirer. Liez les sondes depuis leur page de modification.
+es: Los canales reciben una alerta cuando un monitor vinculado cae, vuelve a estar activo o su certificado está por caducar. Vincule los monitores desde su página de edición.
+de: Kanäle erhalten einen Alarm, wenn ein verknüpfter Monitor ausfällt, wieder online ist oder sein Zertifikat bald abläuft. Verknüpfen Sie Monitore auf deren Bearbeitungsseite.
+
+Chat ID
+fr: ID du chat
+es: ID del chat
+de: Chat-ID
+
+Chat ID is a number, e.g. -1001234567890, or a channel's @username.
+fr: L'ID du chat est un nombre, p. ex. -1001234567890, ou le @nom d'un canal.
+es: El ID del chat es un número, p. ej. -1001234567890, o el @nombre de un canal.
+de: Die Chat-ID ist eine Zahl, z. B. -1001234567890, oder der @Name eines Kanals.
+
+Check Interval (seconds)
+fr: Intervalle de vérification (secondes)
+es: Intervalo de comprobación (segundos)
+de: Prüfintervall (Sekunden)
+
+Check the monitors to show. Lower orders come first; a blank display name shows the monitor's name.
+fr: Cochez les sondes à afficher. Les plus petits ordres passent en premier ; un nom d'affichage vide reprend le nom de la sonde.
+es: Marque los monitores que mostrar. Los órdenes más bajos van primero; un nombre visible vacío muestra el nombre del monitor.
+de: Wählen Sie die anzuzeigenden Monitore. Niedrigere Reihenfolge kommt zuerst; ein leerer Anzeigename zeigt den Namen des Monitors.
+
+Checked
+fr: Vérifié
+es: Comprobado
+de: Geprüft
+
+Checks
+fr: Vérifications
+es: Comprobaciones
+de: Prüfungen
+
+Checks keep running, but they neither count against uptime nor alert. Times are in {}.
+fr: Les vérifications continuent, mais ne comptent pas dans la disponibilité et n'alertent pas. Heures en {}.
+es: Las comprobaciones siguen, pero no cuentan para la disponibilidad ni alertan. Horas en {}.
+de: Die Prüfungen laufen weiter, zählen aber weder für die Verfügbarkeit noch lösen sie Alarme aus. Zeiten in {}.
+
+Choose HTTP or push.
+fr: Choisissez HTTP ou push.
+es: Elija HTTP o push.
+de: Wählen Sie HTTP oder Push.
+
+Choose STARTTLS, TLS or none.
+fr: Choisissez STARTTLS, TLS ou aucun.
+es: Elija STARTTLS, TLS o ninguno.
+de: Wählen Sie STARTTLS, TLS oder keine.
+
+Choose a supported HTTP method.
+fr: Choisissez une méthode HTTP prise en charge.
+es: Elija un método HTTP admitido.
+de: Wählen Sie eine unterstützte HTTP-Methode.
+
+Choose one of: {}.
+fr: Choisissez parmi : {}.
+es: Elija uno de: {}.
+de: Wählen Sie eines von: {}.
+
+Code
+fr: Code
+es: Código
+de: Code
+
+Codes or ranges, e.g. 200-299,301.
+fr: Codes ou plages, p. ex. 200-299,301.
+es: Códigos o rangos, p. ej. 200-299,301.
+de: Codes oder Bereiche, z. B. 200-299,301.
+
+Configuration
+fr: Configuration
+es: Configuración
+de: Konfiguration
+
+Configuration file
+fr: Fichier de configuration
+es: Archivo de configuración
+de: Konfigurationsdatei
+
+Configure URL, interval, threshold, and payload for uptime checks.
+fr: Configurez l'URL, l'intervalle, le seuil et le contenu des vérifications.
+es: Configure la URL, el intervalo, el umbral y el contenido de las comprobaciones.
+de: Legen Sie URL, Intervall, Schwelle und Inhalt der Prüfungen fest.
+
+Confirm new password
+fr: Confirmer le nouveau mot de passe
+es: Confirmar la nueva contraseña
+de: Neues Passwort bestätigen
+
+Confirm password
+fr: Confirmer le mot de passe
+es: Confirmar contraseña
+de: Passwort bestätigen
+
+Connection
+fr: Connexion
+es: Conexión
+de: Verbindung
+
+Consecutive failures required before marking Down. Default: 3.
+fr: Échecs consécutifs requis avant de passer hors ligne. Par défaut : 3.
+es: Fallos consecutivos necesarios antes de marcarlo como caído. Por defecto: 3.
+de: Aufeinanderfolgende Fehler, bevor der Monitor als offline gilt. Standard: 3.
+
+Copied
+fr: Copié
+es: Copiado
+de: Kopiert
+
+Copy
+fr: Copier
+es: Copiar
+de: Kopieren
+
+Copy failed
+fr: Échec de la copie
+es: Error al copiar
+de: Kopieren fehlgeschlagen
+
+Create Monitor
+fr: Créer la sonde
+es: Crear monitor
+de: Monitor erstellen
+
+Create a New Monitor
+fr: Créer une sonde
+es: Crear un monitor
+de: Neuen Monitor erstellen
+
+Create a bot with @BotFather, then send it a message or add it to the group.
+fr: Créez un bot avec @BotFather, puis envoyez-lui un message ou ajoutez-le au groupe.
+es: Cree un bot con @BotFather y luego envíele un mensaje o añádalo al grupo.
+de: Erstellen Sie einen Bot mit @BotFather und senden Sie ihm dann eine Nachricht oder fügen Sie ihn der Gruppe hinzu.
+
+Create account
+fr: Créer le compte
+es: Crear cuenta
+de: Konto erstellen
+
+Create the administrator account of this instance.
+fr: Créez le compte administrateur de cette instance.
+es: Cree la cuenta de administrador de esta instancia.
+de: Erstellen Sie das Administratorkonto dieser Instanz.
+
+Current password
+fr: Mot de passe actuel
+es: Contraseña actual
+de: Aktuelles Passwort
+
+Current password is incorrect.
+fr: Le mot de passe actuel est incorrect.
+es: La contraseña actual es incorrecta.
+de: Das aktuelle Passwort ist falsch.
+
+DNS lookup
+fr: Résolution DNS
+es: Resolución DNS
+de: DNS-Auflösung
+
+Daily uptime and incidents, for the 90-day bars and public pages. Blank keeps them forever. Disk: about <strong id="history-estimate">{}</strong>.
+fr: Disponibilité quotidienne et incidents, pour les barres sur 90 jours et les pages publiques. Vide : conservés pour toujours. Disque : environ <strong id="history-estimate">{}</strong>.
+es: Disponibilidad diaria e incidentes, para las barras de 90 días y las páginas públicas. Vacío: se conservan siempre. Disco: unos <strong id="history-estimate">{}</strong>.
+de: Tägliche Verfügbarkeit und Vorfälle, für die 90-Tage-Balken und die öffentlichen Seiten. Leer: für immer behalten. Speicher: etwa <strong id="history-estimate">{}</strong>.
+
+Danger Zone
+fr: Zone de danger
+es: Zona de peligro
+de: Gefahrenzone
+
+Dark
+fr: Sombre
+es: Oscuro
+de: Dunkel
+
+
+Days *
+fr: Jours *
+es: Días *
+de: Tage *
+
+Degraded
+fr: Dégradée
+es: Degradado
+de: Beeinträchtigt
+
+Degraded since {}.
+fr: Dégradée depuis {}.
+es: Degradado desde {}.
+de: Beeinträchtigt seit {}.
+
+Degraded since {}: responses slower than {} ms.
+fr: Dégradée depuis {} : réponses plus lentes que {} ms.
+es: Degradado desde {}: respuestas más lentas que {} ms.
+de: Beeinträchtigt seit {}: Antworten langsamer als {} ms.
+
+Delay before re-checking after a failure, until the threshold is reached. Default: 20s.
+fr: Délai avant de revérifier après un échec, jusqu'à atteindre le seuil. Par défaut : 20 s.
+es: Espera antes de volver a comprobar tras un fallo, hasta alcanzar el umbral. Por defecto: 20 s.
+de: Wartezeit bis zur erneuten Prüfung nach einem Fehler, bis die Schwelle erreicht ist. Standard: 20 s.
+
+Delete
+fr: Supprimer
+es: Eliminar
+de: Löschen
+
+Delete Channel
+fr: Supprimer le canal
+es: Eliminar canal
+de: Kanal löschen
+
+Delete Monitor
+fr: Supprimer la sonde
+es: Eliminar monitor
+de: Monitor löschen
+
+Delete Page
+fr: Supprimer la page
+es: Eliminar página
+de: Seite löschen
+
+Delete Window
+fr: Supprimer la fenêtre
+es: Eliminar ventana
+de: Fenster löschen
+
+Delete the selected monitors and all their history?
+fr: Supprimer les sondes sélectionnées et tout leur historique ?
+es: ¿Eliminar los monitores seleccionados y todo su historial?
+de: Die ausgewählten Monitore und ihren gesamten Verlauf löschen?
+
+Delete this channel. Its delivery log is kept.
+fr: Supprimer ce canal. Son journal d'envois est conservé.
+es: Eliminar este canal. Su registro de envíos se conserva.
+de: Diesen Kanal löschen. Sein Zustellprotokoll bleibt erhalten.
+
+Delete this channel? Its monitors will no longer alert through it.
+fr: Supprimer ce canal ? Ses sondes n'alerteront plus par lui.
+es: ¿Eliminar este canal? Sus monitores ya no alertarán por él.
+de: Diesen Kanal löschen? Seine Monitore alarmieren nicht mehr darüber.
+
+Delete this maintenance window?
+fr: Supprimer cette fenêtre de maintenance ?
+es: ¿Eliminar esta ventana de mantenimiento?
+de: Dieses Wartungsfenster löschen?
+
+Delete this page. The monitors are kept.
+fr: Supprimer cette page. Les sondes sont conservées.
+es: Eliminar esta página. Los monitores se conservan.
+de: Diese Seite löschen. Die Monitore bleiben erhalten.
+
+Delete this public page? Its address will no longer work.
+fr: Supprimer cette page publique ? Son adresse ne fonctionnera plus.
+es: ¿Eliminar esta página pública? Su dirección dejará de funcionar.
+de: Diese öffentliche Seite löschen? Ihre Adresse funktioniert dann nicht mehr.
+
+Delete this window. Checks already made keep their effect.
+fr: Supprimer cette fenêtre. Les vérifications déjà faites gardent leur effet.
+es: Eliminar esta ventana. Las comprobaciones ya hechas mantienen su efecto.
+de: Dieses Fenster löschen. Bereits erfolgte Prüfungen behalten ihre Wirkung.
+
+Deleted channel
+fr: Canal supprimé
+es: Canal eliminado
+de: Gelöschter Kanal
+
+Description
+fr: Description
+es: Descripción
+de: Beschreibung
+
+Description must be at most {} characters.
+fr: La description fait au plus {} caractères.
+es: La descripción tiene como máximo {} caracteres.
+de: Die Beschreibung hat höchstens {} Zeichen.
+
+Disabled
+fr: Désactivé
+es: Desactivado
+de: Deaktiviert
+
+Display Name
+fr: Nom affiché
+es: Nombre visible
+de: Anzeigename
+
+Display names must be at most {} characters.
+fr: Les noms affichés font au plus {} caractères.
+es: Los nombres visibles tienen como máximo {} caracteres.
+de: Anzeigenamen haben höchstens {} Zeichen.
+
+Down
+fr: Hors ligne
+es: Caído
+de: Offline
+
+Down after
+fr: Hors ligne après
+es: Caído tras
+de: Offline nach
+
+Down for {}. {} since {}.
+fr: Hors ligne depuis {}. {} depuis {}.
+es: Caído desde hace {}. {} desde las {}.
+de: Seit {} offline. {} seit {}.
+
+Down.
+fr: Hors ligne.
+es: Caído.
+de: Offline.
+
+Download database
+fr: Télécharger la base de données
+es: Descargar la base de datos
+de: Datenbank herunterladen
+
+Draft
+fr: Brouillon
+es: Borrador
+de: Entwurf
+
+Duplicate
+fr: Dupliquer
+es: Duplicar
+de: Duplizieren
+
+Duration
+fr: Durée
+es: Duración
+de: Dauer
+
+Duration (minutes) *
+fr: Durée (minutes) *
+es: Duración (minutos) *
+de: Dauer (Minuten) *
+
+Duration must be 1 to {} minutes.
+fr: La durée va de 1 à {} minutes.
+es: La duración va de 1 a {} minutos.
+de: Die Dauer beträgt 1 bis {} Minuten.
+
+E-mail
+fr: E-mail
+es: Correo electrónico
+de: E-Mail
+
+Edit
+fr: Modifier
+es: Editar
+de: Bearbeiten
+
+Edit Channel
+fr: Modifier le canal
+es: Editar canal
+de: Kanal bearbeiten
+
+Edit Maintenance
+fr: Modifier la maintenance
+es: Editar mantenimiento
+de: Wartung bearbeiten
+
+Edit Monitor
+fr: Modifier la sonde
+es: Editar monitor
+de: Monitor bearbeiten
+
+Edit Public Page
+fr: Modifier la page publique
+es: Editar página pública
+de: Öffentliche Seite bearbeiten
+
+Edit monitor
+fr: Modifier la sonde
+es: Editar monitor
+de: Monitor bearbeiten
+
+Empty: 587, 465 with TLS, 25 without encryption.
+fr: Vide : 587, 465 avec TLS, 25 sans chiffrement.
+es: Vacío: 587, 465 con TLS, 25 sin cifrado.
+de: Leer: 587, 465 mit TLS, 25 ohne Verschlüsselung.
+
+Enabled
+fr: Activé
+es: Activado
+de: Aktiviert
+
+End *
+fr: Fin *
+es: Fin *
+de: Ende *
+
+Ended
+fr: Terminé
+es: Finalizado
+de: Beendet
+
+Ended {}
+fr: Terminée {}
+es: Finalizado {}
+de: Beendet {}
+
+Enter a group name.
+fr: Saisissez un nom de groupe.
+es: Introduzca un nombre de grupo.
+de: Geben Sie einen Gruppennamen ein.
+
+Enter a number of days between {} and {}.
+fr: Saisissez un nombre de jours entre {} et {}.
+es: Introduzca un número de días entre {} y {}.
+de: Geben Sie eine Anzahl von Tagen zwischen {} und {} ein.
+
+Enter a number of days up to {}, or leave it blank.
+fr: Saisissez un nombre de jours jusqu'à {}, ou laissez vide.
+es: Introduzca un número de días hasta {}, o déjelo vacío.
+de: Geben Sie eine Anzahl von Tagen bis {} ein oder lassen Sie das Feld leer.
+
+Enter a start date and time.
+fr: Saisissez une date et une heure de début.
+es: Introduzca una fecha y hora de inicio.
+de: Geben Sie Startdatum und -uhrzeit ein.
+
+Enter a time such as 02:30.
+fr: Saisissez une heure comme 02:30.
+es: Introduzca una hora como 02:30.
+de: Geben Sie eine Uhrzeit wie 02:30 ein.
+
+Enter a valid URL, e.g. https://example.com/health.
+fr: Saisissez une URL valide, p. ex. https://example.com/health.
+es: Introduzca una URL válida, p. ej. https://example.com/health.
+de: Geben Sie eine gültige URL ein, z. B. https://example.com/health.
+
+Enter a whole number between {} and {}.
+fr: Saisissez un nombre entier entre {} et {}.
+es: Introduzca un número entero entre {} y {}.
+de: Geben Sie eine ganze Zahl zwischen {} und {} ein.
+
+Enter an end date and time.
+fr: Saisissez une date et une heure de fin.
+es: Introduzca una fecha y hora de fin.
+de: Geben Sie Enddatum und -uhrzeit ein.
+
+Enter the 6-digit code from your authenticator app.
+fr: Saisissez le code à 6 chiffres de votre application d'authentification.
+es: Introduzca el código de 6 dígitos de su aplicación de autenticación.
+de: Geben Sie den 6-stelligen Code aus Ihrer Authenticator-App ein.
+
+Enter your current password.
+fr: Saisissez votre mot de passe actuel.
+es: Introduzca su contraseña actual.
+de: Geben Sie Ihr aktuelles Passwort ein.
+
+Error
+fr: Erreur
+es: Error
+de: Fehler
+
+Error type
+fr: Type d'erreur
+es: Tipo de error
+de: Fehlerart
+
+Estimates for the {} active monitor(s); the database file now takes {}.
+fr: Estimations pour {} sonde(s) active(s) ; le fichier de base de données occupe actuellement {}.
+es: Estimaciones para {} monitor(es) activo(s); el archivo de la base de datos ocupa ahora {}.
+de: Schätzungen für {} aktive(n) Monitor(e); die Datenbankdatei belegt derzeit {}.
+
+Event
+fr: Événement
+es: Evento
+de: Ereignis
+
+Event type
+fr: Type d'événement
+es: Tipo de evento
+de: Ereignistyp
+
+Every day
+fr: Tous les jours
+es: Todos los días
+de: Jeden Tag
+
+Every monitor is paused
+fr: Toutes les sondes sont en pause
+es: Todos los monitores están en pausa
+de: Alle Monitore sind pausiert
+
+Every new monitor joins it. Leave blank for none.
+fr: Chaque nouvelle sonde le rejoint. Laissez vide pour aucun.
+es: Cada monitor nuevo se une a él. Déjelo vacío para ninguno.
+de: Jeder neue Monitor tritt ihr bei. Leer lassen für keine.
+
+Every other session is logged out.
+fr: Toutes les autres sessions sont déconnectées.
+es: Se cierran todas las demás sesiones.
+de: Alle anderen Sitzungen werden abgemeldet.
+
+Every other session is logged out. If you lose the app, only someone with access to the server can turn this off (see the README).
+fr: Toutes les autres sessions sont déconnectées. Si vous perdez l'application, seule une personne ayant accès au serveur peut désactiver ceci (voir le README).
+es: Se cierran todas las demás sesiones. Si pierde la aplicación, solo alguien con acceso al servidor puede desactivarlo (vea el README).
+de: Alle anderen Sitzungen werden abgemeldet. Wenn Sie die App verlieren, kann nur jemand mit Zugriff auf den Server dies ausschalten (siehe README).
+
+Every single check, shown on the detail pages. Disk: about <strong id="checks-estimate">{}</strong> ({} checks a day).
+fr: Chaque vérification, affichée sur les pages de détail. Disque : environ <strong id="checks-estimate">{}</strong> ({} vérifications par jour).
+es: Cada comprobación, mostrada en las páginas de detalle. Disco: unos <strong id="checks-estimate">{}</strong> ({} comprobaciones al día).
+de: Jede einzelne Prüfung, auf den Detailseiten angezeigt. Speicher: etwa <strong id="checks-estimate">{}</strong> ({} Prüfungen pro Tag).
+
+Every week
+fr: Chaque semaine
+es: Cada semana
+de: Jede Woche
+
+Every {} s
+fr: Toutes les {} s
+es: Cada {} s
+de: Alle {} s
+
+Expected keyword
+fr: Mot-clé attendu
+es: Palabra clave esperada
+de: Erwartetes Schlüsselwort
+
+Expired
+fr: Expiré
+es: Caducado
+de: Abgelaufen
+
+Expires
+fr: Expire
+es: Caduca
+de: Läuft ab
+
+Export configuration
+fr: Exporter la configuration
+es: Exportar la configuración
+de: Konfiguration exportieren
+
+Failed
+fr: Échec
+es: Fallido
+de: Fehlgeschlagen
+
+Failed checks
+fr: Vérifications échouées
+es: Comprobaciones fallidas
+de: Fehlgeschlagene Prüfungen
+
+Failed checks and alerts are kept {} days, outages as long as the history. You can change both in <a href="/settings?section=data">Settings</a>.
+fr: Les vérifications échouées et les alertes sont gardées {} jours, les pannes aussi longtemps que l'historique. Vous pouvez changer les deux dans les <a href="/settings?section=data">Paramètres</a>.
+es: Las comprobaciones fallidas y las alertas se guardan {} días, las caídas tanto como el historial. Puede cambiar ambos en <a href="/settings?section=data">Ajustes</a>.
+de: Fehlgeschlagene Prüfungen und Alarme werden {} Tage aufbewahrt, Ausfälle so lange wie der Verlauf. Beides lässt sich in den <a href="/settings?section=data">Einstellungen</a> ändern.
+
+Failed checks that did not make a monitor down
+fr: Vérifications échouées qui n'ont pas mis une sonde hors ligne
+es: Comprobaciones fallidas que no hicieron caer un monitor
+de: Fehlgeschlagene Prüfungen, die keinen Monitor offline setzten
+
+Failure Threshold
+fr: Seuil d'échecs
+es: Umbral de fallos
+de: Fehlerschwelle
+
+Fast again
+fr: De nouveau rapide
+es: Rápido de nuevo
+de: Wieder schnell
+
+Follow Redirects
+fr: Suivre les redirections
+es: Seguir redirecciones
+de: Weiterleitungen folgen
+
+Follow redirects
+fr: Suivre les redirections
+es: Seguir redirecciones
+de: Weiterleitungen folgen
+
+For a protected topic.
+fr: Pour un sujet protégé.
+es: Para un tema protegido.
+de: Für ein geschütztes Thema.
+
+Forever
+fr: Pour toujours
+es: Para siempre
+de: Für immer
+
+Fri
+fr: Ven
+es: Vie
+de: Fr
+
+From
+fr: De
+es: De
+de: Von
+
+General
+fr: Général
+es: General
+de: Allgemein
+
+General Settings
+fr: Paramètres généraux
+es: Ajustes generales
+de: Allgemeine Einstellungen
+
+Go to monitors
+fr: Aller aux sondes
+es: Ir a los monitores
+de: Zu den Monitoren
+
+Grace Period (seconds)
+fr: Délai de grâce (secondes)
+es: Periodo de gracia (segundos)
+de: Kulanzzeit (Sekunden)
+
+Group
+fr: Groupe
+es: Grupo
+de: Gruppe
+
+Group must be at most {} characters.
+fr: Le groupe fait au plus {} caractères.
+es: El grupo tiene como máximo {} caracteres.
+de: Die Gruppe hat höchstens {} Zeichen.
+
+Group renamed: {}.
+fr: Groupe renommé : {}.
+es: Grupo renombrado: {}.
+de: Gruppe umbenannt: {}.
+
+Group simultaneous alerts
+fr: Regrouper les alertes simultanées
+es: Agrupar alertas simultáneas
+de: Gleichzeitige Alarme bündeln
+
+Groups and channels have a negative ID.
+fr: Les groupes et canaux ont un ID négatif.
+es: Los grupos y canales tienen un ID negativo.
+de: Gruppen und Kanäle haben eine negative ID.
+
+HTTP Method
+fr: Méthode HTTP
+es: Método HTTP
+de: HTTP-Methode
+
+HTTP status
+fr: Statut HTTP
+es: Estado HTTP
+de: HTTP-Status
+
+HTTP {} in {} ms.
+fr: HTTP {} en {} ms.
+es: HTTP {} en {} ms.
+de: HTTP {} in {} ms.
+
+Headers must be a JSON object, e.g. {"Authorization": "Bearer token"}.
+fr: Les en-têtes doivent être un objet JSON, p. ex. {"Authorization": "Bearer token"}.
+es: Las cabeceras deben ser un objeto JSON, p. ej. {"Authorization": "Bearer token"}.
+de: Header müssen ein JSON-Objekt sein, z. B. {"Authorization": "Bearer token"}.
+
+History (days)
+fr: Historique (jours)
+es: Historial (días)
+de: Verlauf (Tage)
+
+History must be kept at least the checks retention.
+fr: L'historique doit être gardé au moins aussi longtemps que les vérifications.
+es: El historial debe guardarse al menos tanto como las comprobaciones.
+de: Der Verlauf muss mindestens so lange wie die Prüfungen aufbewahrt werden.
+
+Hour
+fr: Heure
+es: Hora
+de: Stunde
+
+Hourly figures
+fr: Chiffres par heure
+es: Cifras por hora
+de: Stündliche Werte
+
+How late a ping may arrive after the interval before it counts as missed. Default: 60s.
+fr: Retard toléré d'un ping après l'intervalle avant qu'il compte comme manqué. Par défaut : 60 s.
+es: Retraso tolerado de un ping tras el intervalo antes de contar como perdido. Por defecto: 60 s.
+de: Wie spät ein Ping nach dem Intervall eintreffen darf, bevor er als verpasst gilt. Standard: 60 s.
+
+Ignore TLS Errors
+fr: Ignorer les erreurs TLS
+es: Ignorar errores TLS
+de: TLS-Fehler ignorieren
+
+Ignore TLS errors
+fr: Ignorer les erreurs TLS
+es: Ignorar errores TLS
+de: TLS-Fehler ignorieren
+
+Import
+fr: Importer
+es: Importar
+de: Importieren
+
+In maintenance until {} ({}): checks neither count nor alert.
+fr: En maintenance jusqu'à {} ({}) : les vérifications ne comptent pas et n'alertent pas.
+es: En mantenimiento hasta {} ({}): las comprobaciones no cuentan ni alertan.
+de: In Wartung bis {} ({}): Prüfungen zählen nicht und lösen keine Alarme aus.
+
+In progress
+fr: En cours
+es: En curso
+de: Laufend
+
+Incidents
+fr: Incidents
+es: Incidentes
+de: Vorfälle
+
+Including those added later.
+fr: Y compris celles ajoutées plus tard.
+es: Incluidos los añadidos más tarde.
+de: Einschließlich später hinzugefügter.
+
+Instance-wide options. Each section is saved on its own.
+fr: Options de toute l'instance. Chaque section s'enregistre séparément.
+es: Opciones de toda la instancia. Cada sección se guarda por separado.
+de: Instanzweite Optionen. Jeder Abschnitt wird einzeln gespeichert.
+
+Interval
+fr: Intervalle
+es: Intervalo
+de: Intervall
+
+Interval & Thresholds
+fr: Intervalle et seuils
+es: Intervalo y umbrales
+de: Intervall und Schwellen
+
+Invalid code.
+fr: Code invalide.
+es: Código no válido.
+de: Ungültiger Code.
+
+Invalid request
+fr: Requête invalide
+es: Solicitud no válida
+de: Ungültige Anfrage
+
+Invalid username or password.
+fr: Identifiant ou mot de passe invalide.
+es: Usuario o contraseña no válidos.
+de: Ungültiger Benutzername oder ungültiges Passwort.
+
+It did not make the monitor down: the next check passed, or the failures stayed below the monitor's threshold.
+fr: Elle n'a pas mis la sonde hors ligne : la vérification suivante a réussi, ou les échecs sont restés sous le seuil de la sonde.
+es: No hizo caer el monitor: la siguiente comprobación fue correcta, o los fallos quedaron por debajo del umbral del monitor.
+de: Sie hat den Monitor nicht offline gesetzt: Die nächste Prüfung war erfolgreich oder die Fehler blieben unter der Schwelle des Monitors.
+
+Its checks are older than the retention period and no longer kept.
+fr: Ses vérifications dépassent la durée de conservation et ne sont plus gardées.
+es: Sus comprobaciones superan el periodo de retención y ya no se guardan.
+de: Seine Prüfungen sind älter als die Aufbewahrungsdauer und nicht mehr vorhanden.
+
+Judge the final response instead of the redirect.
+fr: Juger la réponse finale plutôt que la redirection.
+es: Evaluar la respuesta final en lugar de la redirección.
+de: Die endgültige Antwort statt der Weiterleitung bewerten.
+
+Keyword
+fr: Mot-clé
+es: Palabra clave
+de: Schlüsselwort
+
+Keyword Verification
+fr: Vérification du mot-clé
+es: Verificación de palabra clave
+de: Schlüsselwortprüfung
+
+Keyword must be at most 1 KiB.
+fr: Le mot-clé fait au plus 1 Kio.
+es: La palabra clave tiene como máximo 1 KiB.
+de: Das Schlüsselwort hat höchstens 1 KiB.
+
+Language
+fr: Langue
+es: Idioma
+de: Sprache
+
+Last 24 hours
+fr: Dernières 24 heures
+es: Últimas 24 horas
+de: Letzte 24 Stunden
+
+Last 90 days
+fr: Derniers 90 jours
+es: Últimos 90 días
+de: Letzte 90 Tage
+
+Last delivery
+fr: Dernier envoi
+es: Último envío
+de: Letzte Zustellung
+
+Last {} days
+fr: Derniers {} jours
+es: Últimos {} días
+de: Letzte {} Tage
+
+Latency Threshold (ms)
+fr: Seuil de latence (ms)
+es: Umbral de latencia (ms)
+de: Latenzschwelle (ms)
+
+Latency threshold
+fr: Seuil de latence
+es: Umbral de latencia
+de: Latenzschwelle
+
+Latest checks
+fr: Dernières vérifications
+es: Últimas comprobaciones
+de: Letzte Prüfungen
+
+Leave empty to disable. Default: 14 days.
+fr: Laissez vide pour désactiver. Par défaut : 14 jours.
+es: Déjelo vacío para desactivar. Por defecto: 14 días.
+de: Leer lassen zum Deaktivieren. Standard: 14 Tage.
+
+Light
+fr: Clair
+es: Claro
+de: Hell
+
+Line {}
+fr: Ligne {}
+es: Línea {}
+de: Zeile {}
+
+Link
+fr: Lier
+es: Vincular
+de: Verknüpfen
+
+Log in
+fr: Se connecter
+es: Iniciar sesión
+de: Anmelden
+
+Log out
+fr: Se déconnecter
+es: Cerrar sesión
+de: Abmelden
+
+Lowercase letters, digits and hyphens.
+fr: Lettres minuscules, chiffres et tirets.
+es: Letras minúsculas, dígitos y guiones.
+de: Kleinbuchstaben, Ziffern und Bindestriche.
+
+Main navigation
+fr: Navigation principale
+es: Navegación principal
+de: Hauptnavigation
+
+Maint.
+fr: Maint.
+es: Mant.
+de: Wart.
+
+Maintenance
+fr: Maintenance
+es: Mantenimiento
+de: Wartung
+
+Maintenance ended
+fr: Fin de maintenance
+es: Mantenimiento finalizado
+de: Wartung beendet
+
+Maintenance in progress
+fr: Maintenance en cours
+es: Mantenimiento en curso
+de: Wartung läuft
+
+Maintenance length
+fr: Durée de la maintenance
+es: Duración del mantenimiento
+de: Dauer der Wartung
+
+Maintenance now
+fr: Maintenance maintenant
+es: Mantenimiento ahora
+de: Jetzt warten
+
+Maintenance planned
+fr: Maintenance prévue
+es: Mantenimiento previsto
+de: Wartung geplant
+
+Maintenance started
+fr: Début de maintenance
+es: Mantenimiento iniciado
+de: Wartung begonnen
+
+Maintenance windows
+fr: Fenêtres de maintenance
+es: Ventanas de mantenimiento
+de: Wartungsfenster
+
+Memory does not grow with retention: SQLite reads the pages it needs and caches a bounded amount. Old data is deleted within the hour; the file keeps its size and reuses the space.
+fr: La mémoire ne croît pas avec la conservation : SQLite lit les pages dont il a besoin et en garde une quantité bornée en cache. Les anciennes données sont supprimées dans l'heure ; le fichier garde sa taille et réutilise l'espace.
+es: La memoria no crece con la retención: SQLite lee las páginas que necesita y guarda en caché una cantidad limitada. Los datos antiguos se eliminan en menos de una hora; el archivo mantiene su tamaño y reutiliza el espacio.
+de: Der Speicherbedarf wächst nicht mit der Aufbewahrung: SQLite liest die benötigten Seiten und puffert eine begrenzte Menge. Alte Daten werden innerhalb einer Stunde gelöscht; die Datei behält ihre Größe und nutzt den Platz wieder.
+
+Method
+fr: Méthode
+es: Método
+de: Methode
+
+Method not allowed
+fr: Méthode non autorisée
+es: Método no permitido
+de: Methode nicht erlaubt
+
+Missed ping
+fr: Ping manqué
+es: Ping perdido
+de: Verpasster Ping
+
+Mon
+fr: Lun
+es: Lun
+de: Mo
+
+Monitor
+fr: Sonde
+es: Monitor
+de: Monitor
+
+Monitor Name *
+fr: Nom de la sonde *
+es: Nombre del monitor *
+de: Name des Monitors *
+
+Monitor Type
+fr: Type de sonde
+es: Tipo de monitor
+de: Monitortyp
+
+Monitor state
+fr: État de la sonde
+es: Estado del monitor
+de: Monitorstatus
+
+Monitor “{}” has a new push URL: update the job that calls it.
+fr: La sonde « {} » a une nouvelle URL push : mettez à jour la tâche qui l'appelle.
+es: El monitor «{}» tiene una nueva URL push: actualice la tarea que la llama.
+de: Der Monitor „{}“ hat eine neue Push-URL: Aktualisieren Sie den Job, der sie aufruft.
+
+Monitor “{}” is not linked to the missing channel(s) {}.
+fr: La sonde « {} » n'est pas liée au(x) canal(aux) manquant(s) {}.
+es: El monitor «{}» no está vinculado a los canales que faltan {}.
+de: Der Monitor „{}“ ist nicht mit den fehlenden Kanälen {} verknüpft.
+
+Monitors
+fr: Sondes
+es: Monitores
+de: Monitore
+
+Monitors going down (or back up) within 15 s share one message, sent at the end of those 15 s.
+fr: Les sondes qui tombent (ou reviennent) en moins de 15 s partagent un message, envoyé à la fin de ces 15 s.
+es: Los monitores que caen (o vuelven) en menos de 15 s comparten un mensaje, enviado al final de esos 15 s.
+de: Monitore, die innerhalb von 15 s ausfallen (oder zurückkehren), teilen sich eine Nachricht, die am Ende dieser 15 s gesendet wird.
+
+Monitors sharing a group are listed together on the dashboard. Leave blank for none.
+fr: Les sondes d'un même groupe sont listées ensemble sur le tableau de bord. Laissez vide pour aucun.
+es: Los monitores de un mismo grupo se listan juntos en el panel. Déjelo vacío para ninguno.
+de: Monitore derselben Gruppe werden im Dashboard zusammen angezeigt. Leer lassen für keine.
+
+Move
+fr: Déplacer
+es: Mover
+de: Verschieben
+
+Move to group
+fr: Déplacer vers le groupe
+es: Mover al grupo
+de: In Gruppe verschieben
+
+Name
+fr: Nom
+es: Nombre
+de: Name
+
+Name *
+fr: Nom *
+es: Nombre *
+de: Name *
+
+Name is required.
+fr: Le nom est requis.
+es: El nombre es obligatorio.
+de: Der Name ist erforderlich.
+
+Name must be at most {} characters.
+fr: Le nom fait au plus {} caractères.
+es: El nombre tiene como máximo {} caracteres.
+de: Der Name hat höchstens {} Zeichen.
+
+Names were taken meanwhile: submit again.
+fr: Des noms ont été pris entre-temps : renvoyez le formulaire.
+es: Se ocuparon nombres mientras tanto: envíe de nuevo.
+de: Namen wurden inzwischen vergeben: Senden Sie erneut.
+
+Neither an export of Uptime Monitoring nor an Uptime Kuma backup.
+fr: Ni un export d'Uptime Monitoring ni une sauvegarde Uptime Kuma.
+es: Ni una exportación de Uptime Monitoring ni una copia de seguridad de Uptime Kuma.
+de: Weder ein Export von Uptime Monitoring noch ein Uptime-Kuma-Backup.
+
+New URL
+fr: Nouvelle URL
+es: Nueva URL
+de: Neue URL
+
+New certificate expires
+fr: Le nouveau certificat expire
+es: El nuevo certificado caduca
+de: Neues Zertifikat läuft ab
+
+New name *
+fr: Nouveau nom *
+es: Nuevo nombre *
+de: Neuer Name *
+
+New password
+fr: Nouveau mot de passe
+es: Nueva contraseña
+de: Neues Passwort
+
+Next on {}
+fr: Prochaine le {}
+es: Próxima: {}
+de: Nächste am {}
+
+No
+fr: Non
+es: No
+de: Nein
+
+No alert sent yet.
+fr: Aucune alerte envoyée pour l'instant.
+es: Aún no se ha enviado ninguna alerta.
+de: Noch kein Alarm gesendet.
+
+No check yet.
+fr: Aucune vérification pour l'instant.
+es: Aún no hay comprobaciones.
+de: Noch keine Prüfung.
+
+No group
+fr: Aucun groupe
+es: Sin grupo
+de: Keine Gruppe
+
+No incident in the last 90 days.
+fr: Aucun incident ces 90 derniers jours.
+es: Ningún incidente en los últimos 90 días.
+de: Kein Vorfall in den letzten 90 Tagen.
+
+No maintenance window yet. Add one before planned work, or schedule a weekly one for backups and updates.
+fr: Aucune fenêtre de maintenance. Ajoutez-en une avant des travaux prévus, ou planifiez-en une chaque semaine pour les sauvegardes et mises à jour.
+es: Aún no hay ventanas de mantenimiento. Añada una antes de trabajos previstos, o programe una semanal para copias de seguridad y actualizaciones.
+de: Noch kein Wartungsfenster. Legen Sie eines vor geplanten Arbeiten an oder planen Sie ein wöchentliches für Backups und Updates.
+
+No monitor
+fr: Aucune sonde
+es: Ningún monitor
+de: Kein Monitor
+
+No monitor changed.
+fr: Aucune sonde modifiée.
+es: Ningún monitor modificado.
+de: Kein Monitor geändert.
+
+No monitor is down
+fr: Aucune sonde hors ligne
+es: Ningún monitor está caído
+de: Kein Monitor ist offline
+
+No monitor matches these filters.
+fr: Aucune sonde ne correspond à ces filtres.
+es: Ningún monitor coincide con estos filtros.
+de: Kein Monitor passt zu diesen Filtern.
+
+No monitor selected.
+fr: Aucune sonde sélectionnée.
+es: Ningún monitor seleccionado.
+de: Kein Monitor ausgewählt.
+
+No monitor yet. <a href="/monitors/new">Add one</a> first.
+fr: Aucune sonde pour l'instant. <a href="/monitors/new">Ajoutez-en une</a> d'abord.
+es: Aún no hay monitores. <a href="/monitors/new">Añada uno</a> primero.
+de: Noch kein Monitor. <a href="/monitors/new">Fügen Sie zuerst einen hinzu</a>.
+
+No monitor yet. <a href="/monitors/new">Add the first one</a> to start checking a site.
+fr: Aucune sonde pour l'instant. <a href="/monitors/new">Ajoutez la première</a> pour commencer à surveiller un site.
+es: Aún no hay monitores. <a href="/monitors/new">Añada el primero</a> para empezar a supervisar un sitio.
+de: Noch kein Monitor. <a href="/monitors/new">Fügen Sie den ersten hinzu</a>, um eine Website zu überwachen.
+
+No monitors yet
+fr: Aucune sonde pour l'instant
+es: Aún no hay monitores
+de: Noch keine Monitore
+
+No notification channel yet. <a href="/alerts/new">Add one</a> to be alerted when a monitor goes down.
+fr: Aucun canal de notification. <a href="/alerts/new">Ajoutez-en un</a> pour être alerté quand une sonde tombe.
+es: Aún no hay canales de notificación. <a href="/alerts/new">Añada uno</a> para recibir alertas cuando un monitor caiga.
+de: Noch kein Benachrichtigungskanal. <a href="/alerts/new">Fügen Sie einen hinzu</a>, um bei einem Ausfall alarmiert zu werden.
+
+No notification channel yet. Add a webhook, Discord, ntfy, Telegram or e-mail channel to receive alerts.
+fr: Aucun canal de notification. Ajoutez un canal webhook, Discord, ntfy, Telegram ou e-mail pour recevoir les alertes.
+es: Aún no hay canales de notificación. Añada un canal webhook, Discord, ntfy, Telegram o de correo para recibir alertas.
+de: Noch kein Benachrichtigungskanal. Fügen Sie einen Webhook-, Discord-, ntfy-, Telegram- oder E-Mail-Kanal hinzu, um Alarme zu erhalten.
+
+No outage recorded for this monitor.
+fr: Aucune panne enregistrée pour cette sonde.
+es: No hay caídas registradas para este monitor.
+de: Kein Ausfall für diesen Monitor erfasst.
+
+No public page yet. Add one to share the status of your services.
+fr: Aucune page publique. Ajoutez-en une pour partager l'état de vos services.
+es: Aún no hay páginas públicas. Añada una para compartir el estado de sus servicios.
+de: Noch keine öffentliche Seite. Fügen Sie eine hinzu, um den Status Ihrer Dienste zu teilen.
+
+No response in the last 24 hours.
+fr: Aucune réponse ces dernières 24 heures.
+es: Ninguna respuesta en las últimas 24 horas.
+de: Keine Antwort in den letzten 24 Stunden.
+
+No service listed yet
+fr: Aucun service listé pour l'instant
+es: Aún no hay servicios listados
+de: Noch kein Dienst aufgeführt
+
+None, trusted network only
+fr: Aucun, réseau de confiance uniquement
+es: Ninguno, solo en red de confianza
+de: Keine, nur vertrauenswürdiges Netz
+
+None: alerts are off for this monitor, no channel was linked, or the alerts are older than the retention period.
+fr: Aucune : les alertes sont désactivées pour cette sonde, aucun canal n'était lié, ou les alertes dépassent la durée de conservation.
+es: Ninguna: las alertas están desactivadas para este monitor, no había canal vinculado, o las alertas superan el periodo de retención.
+de: Keine: Alarme sind für diesen Monitor aus, kein Kanal war verknüpft, oder die Alarme sind älter als die Aufbewahrungsdauer.
+
+None: no channel was linked, or the alerts are older than the retention period.
+fr: Aucune : aucun canal n'était lié, ou les alertes dépassent la durée de conservation.
+es: Ninguna: no había canal vinculado, o las alertas superan el periodo de retención.
+de: Keine: Kein Kanal war verknüpft, oder die Alarme sind älter als die Aufbewahrungsdauer.
+
+Not yet
+fr: Pas encore
+es: Aún no
+de: Noch nicht
+
+Note
+fr: Note
+es: Nota
+de: Notiz
+
+Note on this incident
+fr: Note sur cet incident
+es: Nota sobre este incidente
+de: Notiz zu diesem Vorfall
+
+Nothing added: fix these lines first.
+fr: Rien n'a été ajouté : corrigez d'abord ces lignes.
+es: No se añadió nada: corrija primero estas líneas.
+de: Nichts hinzugefügt: Korrigieren Sie zuerst diese Zeilen.
+
+Nothing moved: {}
+fr: Rien n'a été déplacé : {}
+es: No se movió nada: {}
+de: Nichts verschoben: {}
+
+Nothing to show: no {} in the last {} days.
+fr: Rien à afficher : aucun(e) {} ces {} derniers jours.
+es: Nada que mostrar: ningún {} en los últimos {} días.
+de: Nichts anzuzeigen: keine {} in den letzten {} Tagen.
+
+Notification channels
+fr: Canaux de notification
+es: Canales de notificación
+de: Benachrichtigungskanäle
+
+Off
+fr: Désactivé
+es: Desactivado
+de: Aus
+
+Off. Turn it on to ask for a code from an authenticator app after the password.
+fr: Désactivée. Activez-la pour demander un code d'une application d'authentification après le mot de passe.
+es: Desactivada. Actívela para pedir un código de una aplicación de autenticación tras la contraseña.
+de: Aus. Schalten Sie sie ein, um nach dem Passwort einen Code aus einer Authenticator-App abzufragen.
+
+Often an app password, not your account's.
+fr: Souvent un mot de passe d'application, pas celui de votre compte.
+es: A menudo una contraseña de aplicación, no la de su cuenta.
+de: Oft ein App-Passwort, nicht das Ihres Kontos.
+
+Older events
+fr: Événements plus anciens
+es: Eventos anteriores
+de: Ältere Ereignisse
+
+On: each login asks for a code from your authenticator app.
+fr: Activée : chaque connexion demande un code de votre application d'authentification.
+es: Activada: cada inicio de sesión pide un código de su aplicación de autenticación.
+de: An: Jede Anmeldung fragt nach einem Code aus Ihrer Authenticator-App.
+
+Once
+fr: Une fois
+es: Una vez
+de: Einmalig
+
+One HTTP monitor per URL, named after its host, with the usual defaults: GET every 60 s, 2xx expected, down after 3 failures. Edit any of them afterwards.
+fr: Une sonde HTTP par URL, nommée d'après son hôte, avec les réglages habituels : GET toutes les 60 s, 2xx attendu, hors ligne après 3 échecs. Modifiez-les ensuite au besoin.
+es: Un monitor HTTP por URL, con el nombre de su host y los valores habituales: GET cada 60 s, 2xx esperado, caído tras 3 fallos. Edite cualquiera después.
+de: Ein HTTP-Monitor pro URL, benannt nach seinem Host, mit den üblichen Standards: GET alle 60 s, 2xx erwartet, offline nach 3 Fehlern. Jeder lässt sich danach bearbeiten.
+
+One bar per hour. The table below gives each hour's figures.
+fr: Une barre par heure. Le tableau ci-dessous donne les chiffres de chaque heure.
+es: Una barra por hora. La tabla de abajo da las cifras de cada hora.
+de: Ein Balken pro Stunde. Die Tabelle unten zeigt die Werte jeder Stunde.
+
+One per line, at most {}. Without a scheme, https:// is used.
+fr: Une par ligne, au plus {}. Sans schéma, https:// est utilisé.
+es: Una por línea, como máximo {}. Sin esquema, se usa https://.
+de: Eine pro Zeile, höchstens {}. Ohne Schema wird https:// verwendet.
+
+Ongoing
+fr: En cours
+es: En curso
+de: Andauernd
+
+Ongoing, {}
+fr: En cours, {}
+es: En curso, {}
+de: Andauernd, {}
+
+Open the window
+fr: Ouvrir la fenêtre
+es: Abrir la ventana
+de: Fenster öffnen
+
+Open {}
+fr: Ouvrir {}
+es: Abrir {}
+de: {} öffnen
+
+Optional
+fr: Facultatif
+es: Opcional
+de: Optional
+
+Optional, shown under the title
+fr: Facultatif, affiché sous le titre
+es: Opcional, se muestra bajo el título
+de: Optional, unter dem Titel angezeigt
+
+Or paste its content
+fr: Ou collez son contenu
+es: O pegue su contenido
+de: Oder fügen Sie den Inhalt ein
+
+Or type the key
+fr: Ou saisissez la clé
+es: O escriba la clave
+de: Oder geben Sie den Schlüssel ein
+
+Order
+fr: Ordre
+es: Orden
+de: Reihenfolge
+
+Order must be a whole number from 0 to {}.
+fr: L'ordre est un nombre entier de 0 à {}.
+es: El orden es un número entero de 0 a {}.
+de: Die Reihenfolge ist eine ganze Zahl von 0 bis {}.
+
+Other tests are running: try again in a moment.
+fr: D'autres tests sont en cours : réessayez dans un instant.
+es: Hay otras pruebas en curso: inténtelo de nuevo en un momento.
+de: Andere Tests laufen: Versuchen Sie es gleich noch einmal.
+
+Outages
+fr: Pannes
+es: Caídas
+de: Ausfälle
+
+Outages, slowdowns, failed checks, certificate warnings and maintenance
+fr: Pannes, lenteurs, vérifications échouées, alertes de certificat et maintenance
+es: Caídas, lentitudes, comprobaciones fallidas, avisos de certificado y mantenimiento
+de: Ausfälle, Verlangsamungen, fehlgeschlagene Prüfungen, Zertifikatswarnungen und Wartung
+
+Overall status
+fr: État général
+es: Estado general
+de: Gesamtstatus
+
+Page not found
+fr: Page introuvable
+es: Página no encontrada
+de: Seite nicht gefunden
+
+Pages
+fr: Pages
+es: Páginas
+de: Seiten
+
+Password
+fr: Mot de passe
+es: Contraseña
+de: Passwort
+
+Password changed. Every other session is logged out.
+fr: Mot de passe changé. Toutes les autres sessions sont déconnectées.
+es: Contraseña cambiada. Se cierran todas las demás sesiones.
+de: Passwort geändert. Alle anderen Sitzungen werden abgemeldet.
+
+Password is required with a username.
+fr: Le mot de passe est requis avec un identifiant.
+es: La contraseña es obligatoria con un usuario.
+de: Mit einem Benutzernamen ist das Passwort erforderlich.
+
+Password must be at least {} characters.
+fr: Le mot de passe fait au moins {} caractères.
+es: La contraseña tiene al menos {} caracteres.
+de: Das Passwort hat mindestens {} Zeichen.
+
+Password must be at most {} bytes.
+fr: Le mot de passe fait au plus {} octets.
+es: La contraseña tiene como máximo {} bytes.
+de: Das Passwort hat höchstens {} Bytes.
+
+Passwords do not match.
+fr: Les mots de passe ne correspondent pas.
+es: Las contraseñas no coinciden.
+de: Die Passwörter stimmen nicht überein.
+
+Past
+fr: Passées
+es: Pasadas
+de: Vergangen
+
+Past incidents
+fr: Incidents passés
+es: Incidentes pasados
+de: Vergangene Vorfälle
+
+Paste at least one URL.
+fr: Collez au moins une URL.
+es: Pegue al menos una URL.
+de: Fügen Sie mindestens eine URL ein.
+
+Pause
+fr: Mettre en pause
+es: Pausar
+de: Pausieren
+
+Paused
+fr: En pause
+es: En pausa
+de: Pausiert
+
+Paused: no checks until you resume it.
+fr: En pause : aucune vérification jusqu'à sa reprise.
+es: En pausa: sin comprobaciones hasta que lo reanude.
+de: Pausiert: keine Prüfungen, bis Sie ihn fortsetzen.
+
+Pending
+fr: En attente
+es: Pendiente
+de: Ausstehend
+
+Pending.
+fr: En attente.
+es: Pendiente.
+de: Ausstehend.
+
+Period
+fr: Période
+es: Periodo
+de: Zeitraum
+
+Permanently delete this monitor and all its history.
+fr: Supprimer définitivement cette sonde et tout son historique.
+es: Eliminar definitivamente este monitor y todo su historial.
+de: Diesen Monitor und seinen gesamten Verlauf endgültig löschen.
+
+Pick at least one day.
+fr: Choisissez au moins un jour.
+es: Elija al menos un día.
+de: Wählen Sie mindestens einen Tag.
+
+Pick at least one monitor.
+fr: Choisissez au moins une sonde.
+es: Elija al menos un monitor.
+de: Wählen Sie mindestens einen Monitor.
+
+Picks the monitors in the group when you save; monitors added to it later are not included.
+fr: Prend les sondes du groupe à l'enregistrement ; celles ajoutées ensuite n'en font pas partie.
+es: Toma los monitores del grupo al guardar; los añadidos después no se incluyen.
+de: Übernimmt beim Speichern die Monitore der Gruppe; später hinzugefügte gehören nicht dazu.
+
+Please fix the {} highlighted field(s).
+fr: Corrigez le(s) {} champ(s) en surbrillance.
+es: Corrija los {} campos resaltados.
+de: Bitte korrigieren Sie die {} markierten Felder.
+
+Port
+fr: Port
+es: Puerto
+de: Port
+
+Port is a number from 1 to 65535.
+fr: Le port est un nombre de 1 à 65535.
+es: El puerto es un número de 1 a 65535.
+de: Der Port ist eine Zahl von 1 bis 65535.
+
+Press / to search, Esc to clear
+fr: Appuyez sur / pour chercher, Échap pour effacer
+es: Pulse / para buscar, Esc para borrar
+de: Drücken Sie / zum Suchen, Esc zum Leeren
+
+Preview
+fr: Aperçu
+es: Vista previa
+de: Vorschau
+
+Preview: this page is not published, visitors get a 404.
+fr: Aperçu : cette page n'est pas publiée, les visiteurs obtiennent une 404.
+es: Vista previa: esta página no está publicada, los visitantes reciben un 404.
+de: Vorschau: Diese Seite ist nicht veröffentlicht, Besucher erhalten einen 404.
+
+Private: only shown here.
+fr: Privée : affichée seulement ici.
+es: Privada: solo se muestra aquí.
+de: Privat: nur hier angezeigt.
+
+Public page
+fr: Page publique
+es: Página pública
+de: Öffentliche Seite
+
+Public pages
+fr: Pages publiques
+es: Páginas públicas
+de: Öffentliche Seiten
+
+Public pages showing one of its monitors announce it up to 7 days ahead. A window in progress is always shown there.
+fr: Les pages publiques montrant une de ses sondes l'annoncent jusqu'à 7 jours à l'avance. Une fenêtre en cours y est toujours affichée.
+es: Las páginas públicas que muestran uno de sus monitores la anuncian hasta 7 días antes. Una ventana en curso siempre se muestra en ellas.
+de: Öffentliche Seiten mit einem seiner Monitore kündigen es bis zu 7 Tage im Voraus an. Ein laufendes Fenster wird dort immer angezeigt.
+
+Published
+fr: Publiée
+es: Publicada
+de: Veröffentlicht
+
+Push URL
+fr: URL push
+es: URL push
+de: Push-URL
+
+Push, a ping expected every {} s with {} s of grace,
+fr: Push, un ping attendu toutes les {} s avec {} s de grâce,
+es: Push, se espera un ping cada {} s con {} s de gracia,
+de: Push, ein Ping alle {} s mit {} s Kulanz erwartet,
+
+Push: a job calls this instance
+fr: Push : une tâche appelle cette instance
+es: Push: una tarea llama a esta instancia
+de: Push: ein Job ruft diese Instanz auf
+
+Raw checks (days)
+fr: Vérifications brutes (jours)
+es: Comprobaciones brutas (días)
+de: Rohdaten der Prüfungen (Tage)
+
+Recent deliveries
+fr: Envois récents
+es: Envíos recientes
+de: Letzte Zustellungen
+
+Recipients: 1 to {} addresses separated by commas.
+fr: Destinataires : 1 à {} adresses séparées par des virgules.
+es: Destinatarios: de 1 a {} direcciones separadas por comas.
+de: Empfänger: 1 bis {} durch Kommas getrennte Adressen.
+
+Red bars are days with an outage
+fr: Les barres rouges sont des jours avec une panne
+es: Las barras rojas son días con una caída
+de: Rote Balken sind Tage mit einem Ausfall
+
+Red bars are outages, full height once they last a tenth of the bar's time. Orange bars are failed checks that did not make the monitor down, dots are times without checks. Hover a bar for its details.
+fr: Les barres rouges sont des pannes, pleine hauteur dès qu'elles durent un dixième de la barre. Les barres orange sont des vérifications échouées sans panne, les points des périodes sans vérification. Survolez une barre pour ses détails.
+es: Las barras rojas son caídas, a altura completa cuando duran una décima parte de la barra. Las naranjas son comprobaciones fallidas que no hicieron caer el monitor, los puntos son periodos sin comprobaciones. Pase el cursor sobre una barra para ver sus detalles.
+de: Rote Balken sind Ausfälle, in voller Höhe, sobald sie ein Zehntel der Balkenzeit dauern. Orange Balken sind fehlgeschlagene Prüfungen ohne Ausfall, Punkte sind Zeiten ohne Prüfungen. Fahren Sie über einen Balken für Details.
+
+Refuse checks and alerts towards localhost, private networks and cloud metadata addresses. Turn it on when people you do not trust can reach this instance's targets; leave it off to monitor internal services. Applies at once.
+fr: Refuser les vérifications et alertes vers localhost, les réseaux privés et les adresses de métadonnées cloud. Activez-le quand des personnes de confiance limitée peuvent atteindre les cibles de cette instance ; laissez-le désactivé pour surveiller des services internes. S'applique immédiatement.
+es: Rechazar comprobaciones y alertas hacia localhost, redes privadas y direcciones de metadatos en la nube. Actívelo cuando personas en las que no confía puedan llegar a los destinos de esta instancia; déjelo desactivado para supervisar servicios internos. Se aplica al instante.
+de: Prüfungen und Alarme an localhost, private Netze und Cloud-Metadatenadressen ablehnen. Schalten Sie es ein, wenn nicht vertrauenswürdige Personen die Ziele dieser Instanz erreichen können; lassen Sie es aus, um interne Dienste zu überwachen. Gilt sofort.
+
+Remove the stored token
+fr: Retirer le jeton enregistré
+es: Quitar el token guardado
+de: Gespeichertes Token entfernen
+
+Rename
+fr: Renommer
+es: Renombrar
+de: Umbenennen
+
+Rename Group
+fr: Renommer le groupe
+es: Renombrar grupo
+de: Gruppe umbenennen
+
+Rename group
+fr: Renommer le groupe
+es: Renombrar grupo
+de: Gruppe umbenennen
+
+Rename group {}
+fr: Renommer le groupe {}
+es: Renombrar el grupo {}
+de: Gruppe {} umbenennen
+
+Renewed
+fr: Renouvelé
+es: Renovado
+de: Erneuert
+
+Repeat
+fr: Répétition
+es: Repetición
+de: Wiederholung
+
+Report a bug
+fr: Signaler un bug
+es: Informar de un error
+de: Fehler melden
+
+Reported by the job
+fr: Signalé par la tâche
+es: Informado por la tarea
+de: Vom Job gemeldet
+
+Request Body (for POST / PUT / PATCH)
+fr: Corps de la requête (pour POST / PUT / PATCH)
+es: Cuerpo de la solicitud (para POST / PUT / PATCH)
+de: Anfrageinhalt (für POST / PUT / PATCH)
+
+Request Headers (JSON object)
+fr: En-têtes de la requête (objet JSON)
+es: Cabeceras de la solicitud (objeto JSON)
+de: Anfrage-Header (JSON-Objekt)
+
+Request Timeout (seconds)
+fr: Délai d'expiration de la requête (secondes)
+es: Tiempo de espera de la solicitud (segundos)
+de: Anfrage-Timeout (Sekunden)
+
+Request body
+fr: Corps de la requête
+es: Cuerpo de la solicitud
+de: Anfrageinhalt
+
+Request body must be at most 64 KiB.
+fr: Le corps de la requête fait au plus 64 Kio.
+es: El cuerpo de la solicitud tiene como máximo 64 KiB.
+de: Der Anfrageinhalt hat höchstens 64 KiB.
+
+Request headers
+fr: En-têtes de la requête
+es: Cabeceras de la solicitud
+de: Anfrage-Header
+
+Resolved
+fr: Résolu
+es: Resuelto
+de: Behoben
+
+Response
+fr: Réponse
+es: Respuesta
+de: Antwort
+
+Response time
+fr: Temps de réponse
+es: Tiempo de respuesta
+de: Antwortzeit
+
+Response time bars are scaled to the slowest hour, {} ms.
+fr: Les barres de temps de réponse sont à l'échelle de l'heure la plus lente, {} ms.
+es: Las barras de tiempo de respuesta se escalan a la hora más lenta, {} ms.
+de: Die Antwortzeit-Balken sind auf die langsamste Stunde skaliert, {} ms.
+
+Response times are back to normal after {}.
+fr: Les temps de réponse sont redevenus normaux après {}.
+es: Los tiempos de respuesta vuelven a ser normales tras {}.
+de: Die Antwortzeiten sind nach {} wieder normal.
+
+Response, 24 h average
+fr: Réponse, moyenne sur 24 h
+es: Respuesta, media de 24 h
+de: Antwort, 24-h-Durchschnitt
+
+Responses above {} ms
+fr: Réponses au-delà de {} ms
+es: Respuestas por encima de {} ms
+de: Antworten über {} ms
+
+Responses take {} ms, above the {} ms threshold.\nSlow since {}.
+fr: Les réponses prennent {} ms, au-delà du seuil de {} ms.\nLent depuis {}.
+es: Las respuestas tardan {} ms, por encima del umbral de {} ms.\nLento desde {}.
+de: Antworten dauern {} ms, über der Schwelle von {} ms.\nLangsam seit {}.
+
+Result
+fr: Résultat
+es: Resultado
+de: Ergebnis
+
+Resume
+fr: Reprendre
+es: Reanudar
+de: Fortsetzen
+
+Retry Interval (seconds)
+fr: Intervalle de nouvel essai (secondes)
+es: Intervalo de reintento (segundos)
+de: Wiederholungsintervall (Sekunden)
+
+Retry interval
+fr: Intervalle de nouvel essai
+es: Intervalo de reintento
+de: Wiederholungsintervall
+
+Retry interval cannot be longer than the check interval.
+fr: L'intervalle de nouvel essai ne peut pas dépasser l'intervalle de vérification.
+es: El intervalo de reintento no puede superar el intervalo de comprobación.
+de: Das Wiederholungsintervall darf nicht länger als das Prüfintervall sein.
+
+Retrying: {} of {} failures before down. {}
+fr: Nouvel essai : {} échec(s) sur {} avant de passer hors ligne. {}
+es: Reintentando: {} de {} fallos antes de caer. {}
+de: Erneuter Versuch: {} von {} Fehlern bis offline. {}
+
+SMTP Server
+fr: Serveur SMTP
+es: Servidor SMTP
+de: SMTP-Server
+
+SMTP server is a host name or an IP address, e.g. smtp.example.com.
+fr: Le serveur SMTP est un nom d'hôte ou une adresse IP, p. ex. smtp.example.com.
+es: El servidor SMTP es un nombre de host o una dirección IP, p. ej. smtp.example.com.
+de: Der SMTP-Server ist ein Hostname oder eine IP-Adresse, z. B. smtp.example.com.
+
+SMTP without certificate checks is not supported.
+fr: SMTP sans vérification de certificat n'est pas pris en charge.
+es: SMTP sin comprobación de certificado no está admitido.
+de: SMTP ohne Zertifikatsprüfung wird nicht unterstützt.
+
+Sat
+fr: Sam
+es: Sáb
+de: Sa
+
+Save
+fr: Enregistrer
+es: Guardar
+de: Speichern
+
+Save Changes
+fr: Enregistrer les modifications
+es: Guardar cambios
+de: Änderungen speichern
+
+Save note
+fr: Enregistrer la note
+es: Guardar nota
+de: Notiz speichern
+
+Search monitors
+fr: Chercher des sondes
+es: Buscar monitores
+de: Monitore suchen
+
+Search name, address, group
+fr: Chercher nom, adresse, groupe
+es: Buscar nombre, dirección, grupo
+de: Name, Adresse, Gruppe suchen
+
+Security
+fr: Sécurité
+es: Seguridad
+de: Sicherheit
+
+Select all
+fr: Tout sélectionner
+es: Seleccionar todo
+de: Alle auswählen
+
+Send Test
+fr: Envoyer un test
+es: Enviar prueba
+de: Test senden
+
+Send an alert when responses turn slow and when they are fast again.
+fr: Envoyer une alerte quand les réponses deviennent lentes et quand elles redeviennent rapides.
+es: Enviar una alerta cuando las respuestas se vuelvan lentas y cuando vuelvan a ser rápidas.
+de: Einen Alarm senden, wenn Antworten langsam und wieder schnell werden.
+
+Sender is an address, e.g. uptime@example.com or Uptime <uptime@example.com>.
+fr: L'expéditeur est une adresse, p. ex. uptime@example.com ou Uptime <uptime@example.com>.
+es: El remitente es una dirección, p. ej. uptime@example.com o Uptime <uptime@example.com>.
+de: Der Absender ist eine Adresse, z. B. uptime@example.com oder Uptime <uptime@example.com>.
+
+Sent
+fr: Envoyée
+es: Enviada
+de: Gesendet
+
+Server
+fr: Serveur
+es: Servidor
+de: Server
+
+Service
+fr: Service
+es: Servicio
+de: Dienst
+
+Services
+fr: Services
+es: Servicios
+de: Dienste
+
+Set <code>PUBLIC_URL</code> to show the full address.
+fr: Définissez <code>PUBLIC_URL</code> pour afficher l'adresse complète.
+es: Defina <code>PUBLIC_URL</code> para mostrar la dirección completa.
+de: Setzen Sie <code>PUBLIC_URL</code>, um die vollständige Adresse anzuzeigen.
+
+Set Up
+fr: Configurer
+es: Configurar
+de: Einrichten
+
+Settings
+fr: Paramètres
+es: Ajustes
+de: Einstellungen
+
+Settings saved.
+fr: Paramètres enregistrés.
+es: Ajustes guardados.
+de: Einstellungen gespeichert.
+
+Setup
+fr: Configuration initiale
+es: Configuración inicial
+de: Ersteinrichtung
+
+Show
+fr: Afficher
+es: Mostrar
+de: Anzeigen
+
+Show every monitor
+fr: Afficher toutes les sondes
+es: Mostrar todos los monitores
+de: Alle Monitore anzeigen
+
+Show on status pages
+fr: Afficher sur les pages d'état
+es: Mostrar en las páginas de estado
+de: Auf Statusseiten anzeigen
+
+Shown on status pages.
+fr: Affichée sur les pages d'état.
+es: Se muestra en las páginas de estado.
+de: Auf Statusseiten angezeigt.
+
+Skipped
+fr: Ignorés
+es: Omitidos
+de: Übersprungen
+
+Slow
+fr: Lent
+es: Lento
+de: Langsam
+
+Slowdowns
+fr: Lenteurs
+es: Lentitudes
+de: Verlangsamungen
+
+Slower responses, as many in a row as the failure threshold, mark the monitor Degraded. Leave empty to disable.
+fr: Des réponses plus lentes, autant d'affilée que le seuil d'échecs, rendent la sonde dégradée. Laissez vide pour désactiver.
+es: Respuestas más lentas, tantas seguidas como el umbral de fallos, marcan el monitor como degradado. Déjelo vacío para desactivar.
+de: Langsamere Antworten, so viele hintereinander wie die Fehlerschwelle, markieren den Monitor als beeinträchtigt. Leer lassen zum Deaktivieren.
+
+Slug *
+fr: Slug *
+es: Slug *
+de: Slug *
+
+Some services are slow
+fr: Certains services sont lents
+es: Algunos servicios van lentos
+de: Einige Dienste sind langsam
+
+Something went wrong. The error has been logged.
+fr: Une erreur est survenue. Elle a été journalisée.
+es: Algo ha fallado. El error se ha registrado.
+de: Etwas ist schiefgelaufen. Der Fehler wurde protokolliert.
+
+Start *
+fr: Début *
+es: Inicio *
+de: Beginn *
+
+Start time *
+fr: Heure de début *
+es: Hora de inicio *
+de: Startzeit *
+
+Started
+fr: Début
+es: Inicio
+de: Beginn
+
+State
+fr: État
+es: Estado
+de: Zustand
+
+Status
+fr: Statut
+es: Estado
+de: Status
+
+Status overview
+fr: Vue d'ensemble
+es: Resumen del estado
+de: Statusübersicht
+
+Status pages anyone can open, without logging in. Each shows the monitors you pick, under the names you choose; URLs and errors are never shown.
+fr: Des pages d'état que tout le monde peut ouvrir, sans connexion. Chacune affiche les sondes choisies, sous les noms que vous donnez ; les URL et les erreurs n'y apparaissent jamais.
+es: Páginas de estado que cualquiera puede abrir, sin iniciar sesión. Cada una muestra los monitores que elija, con los nombres que decida; las URL y los errores nunca se muestran.
+de: Statusseiten, die jeder ohne Anmeldung öffnen kann. Jede zeigt die gewählten Monitore unter den Namen Ihrer Wahl; URLs und Fehler werden nie angezeigt.
+
+Sun
+fr: Dim
+es: Dom
+de: So
+
+System
+fr: Système
+es: Sistema
+de: System
+
+TLS certificate
+fr: Certificat TLS
+es: Certificado TLS
+de: TLS-Zertifikat
+
+Test
+fr: Tester
+es: Probar
+de: Testen
+
+Test failed:
+fr: Échec du test :
+es: Prueba fallida:
+de: Test fehlgeschlagen:
+
+Test message sent.
+fr: Message de test envoyé.
+es: Mensaje de prueba enviado.
+de: Testnachricht gesendet.
+
+Test notification
+fr: Notification de test
+es: Notificación de prueba
+de: Testbenachrichtigung
+
+Test passed:
+fr: Test réussi :
+es: Prueba superada:
+de: Test bestanden:
+
+The certificate expired on {}.
+fr: Le certificat a expiré le {}.
+es: El certificado caducó el {}.
+de: Das Zertifikat ist am {} abgelaufen.
+
+The certificate expires on {} ({}).
+fr: Le certificat expire le {} ({}).
+es: El certificado caduca el {} ({}).
+de: Das Zertifikat läuft am {} ab ({}).
+
+The channel is not saved yet.
+fr: Le canal n'est pas encore enregistré.
+es: El canal aún no se ha guardado.
+de: Der Kanal ist noch nicht gespeichert.
+
+The check passed.
+fr: La vérification a réussi.
+es: La comprobación fue correcta.
+de: Die Prüfung war erfolgreich.
+
+The configuration file holds the monitors, channels, public pages and maintenance windows, linked by name, to import here or into another instance. It includes secrets: push URLs, channel tokens. The database copy holds everything, history and account included: stop the container and put it in place of the database file to restore it.
+fr: Le fichier de configuration contient les sondes, canaux, pages publiques et fenêtres de maintenance, liés par nom, à importer ici ou dans une autre instance. Il contient des secrets : URL push, jetons des canaux. La copie de la base contient tout, historique et compte compris : arrêtez le conteneur et mettez-la à la place du fichier de base pour la restaurer.
+es: El archivo de configuración contiene los monitores, canales, páginas públicas y ventanas de mantenimiento, vinculados por nombre, para importarlos aquí o en otra instancia. Incluye secretos: URL push, tokens de canales. La copia de la base de datos lo contiene todo, historial y cuenta incluidos: detenga el contenedor y póngala en lugar del archivo de la base de datos para restaurarla.
+de: Die Konfigurationsdatei enthält Monitore, Kanäle, öffentliche Seiten und Wartungsfenster, per Name verknüpft, zum Import hier oder in eine andere Instanz. Sie enthält Geheimnisse: Push-URLs, Kanal-Tokens. Die Datenbankkopie enthält alles, Verlauf und Konto inklusive: Stoppen Sie den Container und ersetzen Sie die Datenbankdatei damit, um sie wiederherzustellen.
+
+The current URL will stop working at once. Generate a new one?
+fr: L'URL actuelle cessera de fonctionner immédiatement. En générer une nouvelle ?
+es: La URL actual dejará de funcionar al instante. ¿Generar una nueva?
+de: Die aktuelle URL funktioniert sofort nicht mehr. Eine neue erzeugen?
+
+The end must come after the start.
+fr: La fin doit venir après le début.
+es: El fin debe ser posterior al inicio.
+de: Das Ende muss nach dem Beginn liegen.
+
+The job calls a secret URL, shown once the monitor is saved, after each run: a cron task, a backup, a job behind a NAT.
+fr: La tâche appelle une URL secrète, affichée une fois la sonde enregistrée, après chaque exécution : une tâche cron, une sauvegarde, une tâche derrière un NAT.
+es: La tarea llama a una URL secreta, mostrada al guardar el monitor, tras cada ejecución: una tarea cron, una copia de seguridad, una tarea tras un NAT.
+de: Der Job ruft nach jedem Lauf eine geheime URL auf, die nach dem Speichern des Monitors angezeigt wird: ein Cron-Job, ein Backup, ein Job hinter einem NAT.
+
+The monitor is not saved yet.
+fr: La sonde n'est pas encore enregistrée.
+es: El monitor aún no se ha guardado.
+de: Der Monitor ist noch nicht gespeichert.
+
+The response body must contain this text to be marked as Up.
+fr: Le corps de la réponse doit contenir ce texte pour être en ligne.
+es: El cuerpo de la respuesta debe contener este texto para estar activo.
+de: Der Antwortinhalt muss diesen Text enthalten, damit der Monitor online ist.
+
+The value of “{}” is not a valid header value.
+fr: La valeur de « {} » n'est pas une valeur d'en-tête valide.
+es: El valor de «{}» no es un valor de cabecera válido.
+de: Der Wert von „{}“ ist kein gültiger Header-Wert.
+
+The value of “{}” must be a string.
+fr: La valeur de « {} » doit être une chaîne.
+es: El valor de «{}» debe ser una cadena.
+de: Der Wert von „{}“ muss eine Zeichenkette sein.
+
+Theme: System
+fr: Thème : Système
+es: Tema: Sistema
+de: Design: System
+
+Theme: {}
+fr: Thème : {}
+es: Tema: {}
+de: Design: {}
+
+This channel works.
+fr: Ce canal fonctionne.
+es: Este canal funciona.
+de: Dieser Kanal funktioniert.
+
+This export cannot be read: {}.
+fr: Cet export est illisible : {}.
+es: Esta exportación no se puede leer: {}.
+de: Dieser Export ist nicht lesbar: {}.
+
+This export has no valid version number.
+fr: Cet export n'a pas de numéro de version valide.
+es: Esta exportación no tiene un número de versión válido.
+de: Dieser Export hat keine gültige Versionsnummer.
+
+This file comes from a newer version of Uptime Monitoring: update first.
+fr: Ce fichier vient d'une version plus récente d'Uptime Monitoring : mettez à jour d'abord.
+es: Este archivo viene de una versión más reciente de Uptime Monitoring: actualice primero.
+de: Diese Datei stammt aus einer neueren Version von Uptime Monitoring: Aktualisieren Sie zuerst.
+
+This form has expired or was not sent from this site. Reload the page and try again.
+fr: Ce formulaire a expiré ou n'a pas été envoyé depuis ce site. Rechargez la page et réessayez.
+es: Este formulario ha caducado o no se envió desde este sitio. Recargue la página e inténtelo de nuevo.
+de: Dieses Formular ist abgelaufen oder wurde nicht von dieser Website gesendet. Laden Sie die Seite neu und versuchen Sie es erneut.
+
+This instance has no administrator yet. Open the setup link printed in the server logs to create the account.
+fr: Cette instance n'a pas encore d'administrateur. Ouvrez le lien de configuration affiché dans les journaux du serveur pour créer le compte.
+es: Esta instancia aún no tiene administrador. Abra el enlace de configuración que aparece en los registros del servidor para crear la cuenta.
+de: Diese Instanz hat noch keinen Administrator. Öffnen Sie den Einrichtungslink aus den Serverprotokollen, um das Konto zu erstellen.
+
+This is not a JSON document.
+fr: Ce n'est pas un document JSON.
+es: No es un documento JSON.
+de: Das ist kein JSON-Dokument.
+
+This name is already used.
+fr: Ce nom est déjà utilisé.
+es: Este nombre ya está en uso.
+de: Dieser Name wird bereits verwendet.
+
+This page is served over plain HTTP: the browser will refuse the login cookie. Use HTTPS (through your reverse proxy) or open it on localhost.
+fr: Cette page est servie en HTTP simple : le navigateur refusera le cookie de connexion. Utilisez HTTPS (via votre proxy inverse) ou ouvrez-la sur localhost.
+es: Esta página se sirve por HTTP simple: el navegador rechazará la cookie de sesión. Use HTTPS (a través de su proxy inverso) o ábrala en localhost.
+de: Diese Seite wird über unverschlüsseltes HTTP ausgeliefert: Der Browser lehnt das Anmelde-Cookie ab. Verwenden Sie HTTPS (über Ihren Reverse-Proxy) oder öffnen Sie sie auf localhost.
+
+This slug is already used.
+fr: Ce slug est déjà utilisé.
+es: Este slug ya está en uso.
+de: Dieser Slug wird bereits verwendet.
+
+Threshold
+fr: Seuil
+es: Umbral
+de: Schwelle
+
+Thu
+fr: Jeu
+es: Jue
+de: Do
+
+Time
+fr: Heure
+es: Hora
+de: Zeit
+
+Time range
+fr: Période affichée
+es: Periodo
+de: Zeitraum
+
+Time-based, 6 digits, every 30 seconds.
+fr: Basé sur le temps, 6 chiffres, toutes les 30 secondes.
+es: Basado en el tiempo, 6 dígitos, cada 30 segundos.
+de: Zeitbasiert, 6 Ziffern, alle 30 Sekunden.
+
+Timeout
+fr: Délai d'expiration
+es: Tiempo de espera
+de: Timeout
+
+Timeout cannot be longer than the check interval.
+fr: Le délai d'expiration ne peut pas dépasser l'intervalle de vérification.
+es: El tiempo de espera no puede superar el intervalo de comprobación.
+de: Der Timeout darf nicht länger als das Prüfintervall sein.
+
+Times in {}. This page refreshes on its own.
+fr: Heures en {}. Cette page se rafraîchit d'elle-même.
+es: Horas en {}. Esta página se actualiza sola.
+de: Zeiten in {}. Diese Seite aktualisiert sich selbst.
+
+Timezone
+fr: Fuseau horaire
+es: Zona horaria
+de: Zeitzone
+
+Title
+fr: Titre
+es: Título
+de: Titel
+
+Title *
+fr: Titre *
+es: Título *
+de: Titel *
+
+Title is required.
+fr: Le titre est requis.
+es: El título es obligatorio.
+de: Der Titel ist erforderlich.
+
+Title must be at most {} characters.
+fr: Le titre fait au plus {} caractères.
+es: El título tiene como máximo {} caracteres.
+de: Der Titel hat höchstens {} Zeichen.
+
+To
+fr: À
+es: Para
+de: An
+
+To do
+fr: À faire
+es: Por hacer
+de: Zu erledigen
+
+To report a failure, add <code>?status=down&amp;msg=…</code>. For example, in a crontab:
+fr: Pour signaler un échec, ajoutez <code>?status=down&amp;msg=…</code>. Par exemple, dans une crontab :
+es: Para informar de un fallo, añada <code>?status=down&amp;msg=…</code>. Por ejemplo, en un crontab:
+de: Um einen Fehler zu melden, hängen Sie <code>?status=down&amp;msg=…</code> an. Zum Beispiel in einer Crontab:
+
+Today
+fr: Aujourd'hui
+es: Hoy
+de: Heute
+
+Today, {}
+fr: Aujourd'hui, {}
+es: Hoy, {}
+de: Heute, {}
+
+Token must be at most {} characters, without spaces.
+fr: Le jeton fait au plus {} caractères, sans espaces.
+es: El token tiene como máximo {} caracteres, sin espacios.
+de: Das Token hat höchstens {} Zeichen, ohne Leerzeichen.
+
+Too many login attempts. Try again later.
+fr: Trop de tentatives de connexion. Réessayez plus tard.
+es: Demasiados intentos de inicio de sesión. Inténtelo más tarde.
+de: Zu viele Anmeldeversuche. Versuchen Sie es später erneut.
+
+Topic
+fr: Sujet
+es: Tema
+de: Thema
+
+Topic is required: up to {} letters, digits, - or _.
+fr: Le sujet est requis : jusqu'à {} lettres, chiffres, - ou _.
+es: El tema es obligatorio: hasta {} letras, dígitos, - o _.
+de: Das Thema ist erforderlich: bis zu {} Buchstaben, Ziffern, - oder _.
+
+Tue
+fr: Mar
+es: Mar
+de: Di
+
+Turn Off
+fr: Désactiver
+es: Desactivar
+de: Ausschalten
+
+Turn On
+fr: Activer
+es: Activar
+de: Einschalten
+
+Two-factor authentication
+fr: Authentification à deux facteurs
+es: Autenticación en dos pasos
+de: Zwei-Faktor-Authentifizierung
+
+Two-factor authentication is off.
+fr: L'authentification à deux facteurs est désactivée.
+es: La autenticación en dos pasos está desactivada.
+de: Die Zwei-Faktor-Authentifizierung ist aus.
+
+Two-factor authentication is on. Every other session is logged out.
+fr: L'authentification à deux facteurs est activée. Toutes les autres sessions sont déconnectées.
+es: La autenticación en dos pasos está activada. Se cierran todas las demás sesiones.
+de: Die Zwei-Faktor-Authentifizierung ist an. Alle anderen Sitzungen werden abgemeldet.
+
+Two-factor code
+fr: Code à deux facteurs
+es: Código de dos pasos
+de: Zwei-Faktor-Code
+
+Type
+fr: Type
+es: Tipo
+de: Typ
+
+URL must be at most {} characters.
+fr: L'URL fait au plus {} caractères.
+es: La URL tiene como máximo {} caracteres.
+de: Die URL hat höchstens {} Zeichen.
+
+URL must include a host, e.g. https://example.com.
+fr: L'URL doit contenir un hôte, p. ex. https://example.com.
+es: La URL debe incluir un host, p. ej. https://example.com.
+de: Die URL muss einen Host enthalten, z. B. https://example.com.
+
+URL must start with http:// or https://.
+fr: L'URL doit commencer par http:// ou https://.
+es: La URL debe empezar por http:// o https://.
+de: Die URL muss mit http:// oder https:// beginnen.
+
+URL to monitor *
+fr: URL à surveiller *
+es: URL a supervisar *
+de: Zu überwachende URL *
+
+URLs *
+fr: URL *
+es: URL *
+de: URLs *
+
+Unavailable since {}.
+fr: Indisponible depuis {}.
+es: No disponible desde {}.
+de: Nicht verfügbar seit {}.
+
+Ungrouped
+fr: Sans groupe
+es: Sin grupo
+de: Ohne Gruppe
+
+Unknown
+fr: Inconnu
+es: Desconocido
+de: Unbekannt
+
+Unknown language.
+fr: Langue inconnue.
+es: Idioma desconocido.
+de: Unbekannte Sprache.
+
+Unknown timezone.
+fr: Fuseau horaire inconnu.
+es: Zona horaria desconocida.
+de: Unbekannte Zeitzone.
+
+Unlink
+fr: Délier
+es: Desvincular
+de: Trennen
+
+Until {}
+fr: Jusqu'à {}
+es: Hasta {}
+de: Bis {}
+
+Up
+fr: En ligne
+es: Activo
+de: Online
+
+Up since {}.
+fr: En ligne depuis {}.
+es: Activo desde {}.
+de: Online seit {}.
+
+Up to 10 addresses, separated by commas.
+fr: Jusqu'à 10 adresses, séparées par des virgules.
+es: Hasta 10 direcciones, separadas por comas.
+de: Bis zu 10 Adressen, durch Kommas getrennt.
+
+Up to {} lowercase letters, digits and single hyphens, e.g. my-services.
+fr: Jusqu'à {} lettres minuscules, chiffres et tirets simples, p. ex. mes-services.
+es: Hasta {} letras minúsculas, dígitos y guiones simples, p. ej. mis-servicios.
+de: Bis zu {} Kleinbuchstaben, Ziffern und einzelne Bindestriche, z. B. meine-dienste.
+
+Up, no outage recorded.
+fr: En ligne, aucune panne enregistrée.
+es: Activo, sin caídas registradas.
+de: Online, kein Ausfall erfasst.
+
+Upcoming
+fr: À venir
+es: Próximas
+de: Anstehend
+
+Uptime
+fr: Disponibilité
+es: Disponibilidad
+de: Verfügbarkeit
+
+Uptime, 24 hours
+fr: Disponibilité, 24 heures
+es: Disponibilidad, 24 horas
+de: Verfügbarkeit, 24 Stunden
+
+Uptime, 30 days
+fr: Disponibilité, 30 jours
+es: Disponibilidad, 30 días
+de: Verfügbarkeit, 30 Tage
+
+Use status codes or ranges between 100 and 599, e.g. 200-299,301.
+fr: Utilisez des codes ou des plages de statut entre 100 et 599, p. ex. 200-299,301.
+es: Use códigos o rangos de estado entre 100 y 599, p. ej. 200-299,301.
+de: Verwenden Sie Statuscodes oder Bereiche zwischen 100 und 599, z. B. 200-299,301.
+
+Used for every page, public status pages included, and for notifications.
+fr: Utilisée pour chaque page, pages d'état publiques comprises, et pour les notifications.
+es: Se usa en todas las páginas, incluidas las páginas de estado públicas, y en las notificaciones.
+de: Gilt für alle Seiten, öffentliche Statusseiten eingeschlossen, und für Benachrichtigungen.
+
+Used for every time shown and for the daily history. After a change, the first day in the new zone overlaps the previous one (moving east) or misses a few hours (moving west).
+fr: Utilisé pour toutes les heures affichées et pour l'historique quotidien. Après un changement, le premier jour dans le nouveau fuseau chevauche le précédent (vers l'est) ou perd quelques heures (vers l'ouest).
+es: Se usa para todas las horas mostradas y para el historial diario. Tras un cambio, el primer día en la nueva zona se solapa con el anterior (hacia el este) o pierde unas horas (hacia el oeste).
+de: Gilt für alle angezeigten Zeiten und den Tagesverlauf. Nach einer Änderung überschneidet sich der erste Tag in der neuen Zone mit dem vorherigen (nach Osten) oder es fehlen einige Stunden (nach Westen).
+
+Username
+fr: Identifiant
+es: Usuario
+de: Benutzername
+
+Username contains invalid characters.
+fr: L'identifiant contient des caractères invalides.
+es: El usuario contiene caracteres no válidos.
+de: Der Benutzername enthält ungültige Zeichen.
+
+Username is required.
+fr: L'identifiant est requis.
+es: El usuario es obligatorio.
+de: Der Benutzername ist erforderlich.
+
+Username must be at most {} characters.
+fr: L'identifiant fait au plus {} caractères.
+es: El usuario tiene como máximo {} caracteres.
+de: Der Benutzername hat höchstens {} Zeichen.
+
+Valid until {}
+fr: Valide jusqu'au {}
+es: Válido hasta el {}
+de: Gültig bis {}
+
+Visitors see it under this incident. Status pages refresh within a minute.
+fr: Les visiteurs la voient sous cet incident. Les pages d'état se rafraîchissent en moins d'une minute.
+es: Los visitantes la ven bajo este incidente. Las páginas de estado se actualizan en menos de un minuto.
+de: Besucher sehen sie unter diesem Vorfall. Statusseiten aktualisieren sich innerhalb einer Minute.
+
+Waiting for the first check.
+fr: En attente de la première vérification.
+es: Esperando la primera comprobación.
+de: Warten auf die erste Prüfung.
+
+Waiting for the first ping.
+fr: En attente du premier ping.
+es: Esperando el primer ping.
+de: Warten auf den ersten Ping.
+
+Warned
+fr: Alerté
+es: Avisado
+de: Gewarnt
+
+Webhook: receives a JSON POST with the event, the monitor and the message. Discord: the channel's webhook URL.
+fr: Webhook : reçoit un POST JSON avec l'événement, la sonde et le message. Discord : l'URL du webhook du canal.
+es: Webhook: recibe un POST JSON con el evento, el monitor y el mensaje. Discord: la URL del webhook del canal.
+de: Webhook: erhält einen JSON-POST mit Ereignis, Monitor und Nachricht. Discord: die Webhook-URL des Kanals.
+
+Wed
+fr: Mer
+es: Mié
+de: Mi
+
+Welcome
+fr: Bienvenue
+es: Bienvenido
+de: Willkommen
+
+What happened, what was done. Leave empty to remove the note.
+fr: Ce qui s'est passé, ce qui a été fait. Laissez vide pour retirer la note.
+es: Qué pasó y qué se hizo. Déjelo vacío para quitar la nota.
+de: Was passiert ist, was getan wurde. Leer lassen, um die Notiz zu entfernen.
+
+When
+fr: Quand
+es: Cuándo
+de: Wann
+
+When unchecked, no alert is sent to this channel.
+fr: Décoché, aucune alerte n'est envoyée à ce canal.
+es: Si se desmarca, no se envía ninguna alerta a este canal.
+de: Wenn deaktiviert, wird kein Alarm an diesen Kanal gesendet.
+
+When unchecked, the monitor is paused and checks are suspended.
+fr: Décochée, la sonde est en pause et les vérifications sont suspendues.
+es: Si se desmarca, el monitor se pausa y se suspenden las comprobaciones.
+de: Wenn deaktiviert, ist der Monitor pausiert und die Prüfungen ruhen.
+
+When unchecked, the page is not found; you can still preview it.
+fr: Décochée, la page est introuvable ; vous pouvez toujours la prévisualiser.
+es: Si se desmarca, la página no se encuentra; aún puede previsualizarla.
+de: Wenn deaktiviert, ist die Seite nicht auffindbar; die Vorschau bleibt möglich.
+
+Where alerts are sent: any webhook, a Discord channel, an ntfy topic, a Telegram chat or e-mail.
+fr: Où les alertes sont envoyées : tout webhook, un canal Discord, un sujet ntfy, une discussion Telegram ou un e-mail.
+es: Dónde se envían las alertas: cualquier webhook, un canal de Discord, un tema de ntfy, un chat de Telegram o correo.
+de: Wohin Alarme gesendet werden: beliebiger Webhook, ein Discord-Kanal, ein ntfy-Thema, ein Telegram-Chat oder E-Mail.
+
+While a window is on, its monitors are still checked, but nothing counts against uptime and no alert is sent. Times are in the instance timezone.
+fr: Pendant une fenêtre, ses sondes sont toujours vérifiées, mais rien ne compte dans la disponibilité et aucune alerte n'est envoyée. Les heures sont dans le fuseau de l'instance.
+es: Durante una ventana, sus monitores se siguen comprobando, pero nada cuenta para la disponibilidad y no se envía ninguna alerta. Las horas están en la zona horaria de la instancia.
+de: Während eines Fensters werden seine Monitore weiter geprüft, aber nichts zählt für die Verfügbarkeit und kein Alarm wird gesendet. Zeiten in der Zeitzone der Instanz.
+
+Whole groups
+fr: Groupes entiers
+es: Grupos completos
+de: Ganze Gruppen
+
+Window
+fr: Fenêtre
+es: Ventana
+de: Fenster
+
+Yes
+fr: Oui
+es: Sí
+de: Ja
+
+Yesterday, {}
+fr: Hier, {}
+es: Ayer, {}
+de: Gestern, {}
+
+Your provider's relay: Gmail, Fastmail, Brevo, your own server…
+fr: Le relais de votre fournisseur : Gmail, Fastmail, Brevo, votre propre serveur…
+es: El relé de su proveedor: Gmail, Fastmail, Brevo, su propio servidor…
+de: Das Relay Ihres Anbieters: Gmail, Fastmail, Brevo, Ihr eigener Server…
+
+alerts on
+fr: alertes activées
+es: alertas activadas
+de: Alarme an
+
+already exists.
+fr: existe déjà.
+es: ya existe.
+de: existiert bereits.
+
+an inverted keyword is not supported.
+fr: un mot-clé inversé n'est pas pris en charge.
+es: una palabra clave invertida no está admitida.
+de: ein invertiertes Schlüsselwort wird nicht unterstützt.
+
+back up after {}
+fr: de retour après {}
+es: activo de nuevo tras {}
+de: wieder online nach {}
+
+back up alert
+fr: alerte de retour
+es: alerta de recuperación
+de: Wieder-online-Alarm
+
+certificate alert
+fr: alerte de certificat
+es: alerta de certificado
+de: Zertifikatsalarm
+
+delivered
+fr: envoyée
+es: enviada
+de: zugestellt
+
+down after {} failure.
+fr: hors ligne après {} échec.
+es: caído tras {} fallo.
+de: offline nach {} Fehler.
+
+down after {} failures in a row.
+fr: hors ligne après {} échecs d'affilée.
+es: caído tras {} fallos seguidos.
+de: offline nach {} Fehlern in Folge.
+
+down after {} missed run.
+fr: hors ligne après {} exécution manquée.
+es: caído tras {} ejecución perdida.
+de: offline nach {} verpasstem Lauf.
+
+down after {} missed runs in a row.
+fr: hors ligne après {} exécutions manquées d'affilée.
+es: caído tras {} ejecuciones perdidas seguidas.
+de: offline nach {} verpassten Läufen in Folge.
+
+down alert
+fr: alerte de panne
+es: alerta de caída
+de: Ausfallalarm
+
+e.g. Acme Status
+fr: p. ex. État Acme
+es: p. ej. Estado de Acme
+de: z. B. Acme-Status
+
+e.g. Database upgrade
+fr: p. ex. Mise à jour de la base
+es: p. ej. Actualización de la base de datos
+de: z. B. Datenbank-Upgrade
+
+e.g. Ops Discord, My phone
+fr: p. ex. Discord Ops, Mon téléphone
+es: p. ej. Discord de Ops, Mi teléfono
+de: z. B. Ops-Discord, Mein Handy
+
+e.g. Production API, Landing Page
+fr: p. ex. API de production, Page d'accueil
+es: p. ej. API de producción, Página de inicio
+de: z. B. Produktions-API, Startseite
+
+e.g. Production, Customers
+fr: p. ex. Production, Clients
+es: p. ej. Producción, Clientes
+de: z. B. Produktion, Kunden
+
+e.g. status: ok, Welcome
+fr: p. ex. status: ok, Bienvenue
+es: p. ej. status: ok, Bienvenido
+de: z. B. status: ok, Willkommen
+
+failed
+fr: échouée
+es: fallida
+de: fehlgeschlagen
+
+fast again alert
+fr: alerte de retour à la normale
+es: alerta de vuelta a la normalidad
+de: Wieder-schnell-Alarm
+
+no alerts
+fr: pas d'alertes
+es: sin alertas
+de: keine Alarme
+
+no notification type.
+fr: aucun type de notification.
+es: ningún tipo de notificación.
+de: kein Benachrichtigungstyp.
+
+ntfy login with a user name and password is not supported.
+fr: la connexion ntfy avec identifiant et mot de passe n'est pas prise en charge.
+es: el inicio de sesión de ntfy con usuario y contraseña no está admitido.
+de: ntfy-Anmeldung mit Benutzername und Passwort wird nicht unterstützt.
+
+response
+fr: réponse
+es: respuesta
+de: Antwort
+
+slow alert
+fr: alerte de lenteur
+es: alerta de lentitud
+de: Langsamkeitsalarm
+
+unknown kind or settings.
+fr: type ou réglages inconnus.
+es: tipo o ajustes desconocidos.
+de: unbekannter Typ oder Einstellungen.
+
+uptime
+fr: disponibilité
+es: disponibilidad
+de: Verfügbarkeit
+
+{}\nDown since {}.
+fr: {}\nHors ligne depuis {}.
+es: {}\nCaído desde {}.
+de: {}\nOffline seit {}.
+
+{} (copy)
+fr: {} (copie)
+es: {} (copia)
+de: {} (Kopie)
+
+{} added, {} skipped.
+fr: {} ajouté(s), {} ignoré(s).
+es: {} añadidos, {} omitidos.
+de: {} hinzugefügt, {} übersprungen.
+
+{} added.
+fr: {} ajoutée(s).
+es: {} añadidos.
+de: {} hinzugefügt.
+
+{} and {} more
+fr: {} et {} de plus
+es: {} y {} más
+de: {} und {} weitere
+
+{} and {}.
+fr: {} et {}.
+es: {} y {}.
+de: {} und {}.
+
+{} at {}:{} for {}
+fr: {} à {}:{} pendant {}
+es: {} a las {}:{} durante {}
+de: {} um {}:{} für {}
+
+{} certificate expires soon
+fr: {} : le certificat expire bientôt
+es: {}: el certificado caduca pronto
+de: {}: Zertifikat läuft bald ab
+
+{} day left
+fr: {} jour restant
+es: Queda {} día
+de: Noch {} Tag
+
+{} days before expiry
+fr: {} jours avant expiration
+es: {} días antes de caducar
+de: {} Tage vor Ablauf
+
+{} days left
+fr: {} jours restants
+es: Quedan {} días
+de: Noch {} Tage
+
+{} degraded
+fr: {} dégradée(s)
+es: {} degradados
+de: {} beeinträchtigt
+
+{} deleted.
+fr: {} supprimée(s).
+es: {} eliminados.
+de: {} gelöscht.
+
+{} down
+fr: {} hors ligne
+es: {} caídos
+de: {} offline
+
+{} every {} s,
+fr: {} toutes les {} s,
+es: {} cada {} s,
+de: {} alle {} s,
+
+{} failed a check
+fr: {} : une vérification a échoué
+es: {}: una comprobación falló
+de: {}: eine Prüfung ist fehlgeschlagen
+
+{} failure
+fr: {} échec
+es: {} fallo
+de: {} Fehler
+
+{} failures in a row
+fr: {} échecs d'affilée
+es: {} fallos seguidos
+de: {} Fehler in Folge
+
+{} d {} h
+fr: {} j {} h
+es: {} d {} h
+de: {} T. {} Std.
+
+{} h {} min
+fr: {} h {} min
+es: {} h {} min
+de: {} Std. {} Min.
+
+{} holds {}. They all move to the new name; an existing group's name merges them into it.
+fr: {} contient {}. Elles passent toutes sous le nouveau nom ; le nom d'un groupe existant les y fusionne.
+es: {} contiene {}. Todos pasan al nuevo nombre; el nombre de un grupo existente los fusiona con él.
+de: {} enthält {}. Alle wechseln zum neuen Namen; der Name einer bestehenden Gruppe führt sie mit ihr zusammen.
+
+{} in maintenance
+fr: {} en maintenance
+es: {} en mantenimiento
+de: {} in Wartung
+
+{} is down
+fr: {} est hors ligne
+es: {} está caído
+de: {} ist offline
+
+{} is fast again
+fr: {} est de nouveau rapide
+es: {} vuelve a ser rápido
+de: {} ist wieder schnell
+
+{} is slow
+fr: {} est lente
+es: {} va lento
+de: {} ist langsam
+
+{} is up
+fr: {} est en ligne
+es: {} está activo
+de: {} ist online
+
+{} min
+fr: {} min
+es: {} min
+de: {} Min.
+
+{} monitors
+fr: {} sondes
+es: {} monitores
+de: {} Monitore
+
+{} monitors are degraded
+fr: {} sondes sont dégradées
+es: {} monitores están degradados
+de: {} Monitore sind beeinträchtigt
+
+{} monitors are down
+fr: {} sondes sont hors ligne
+es: {} monitores están caídos
+de: {} Monitore sind offline
+
+{} monitors are up
+fr: {} sondes sont en ligne
+es: {} monitores están activos
+de: {} Monitore sind online
+
+{} moved.
+fr: {} déplacée(s).
+es: {} movidos.
+de: {} verschoben.
+
+{} of the last {} days. Open an event for its details.
+fr: {} des {} derniers jours. Ouvrez un événement pour ses détails.
+es: {} de los últimos {} días. Abra un evento para ver sus detalles.
+de: {} – letzte {} Tage. Öffnen Sie ein Ereignis für Details.
+
+{} paused
+fr: {} en pause
+es: {} en pausa
+de: {} pausiert
+
+{} paused.
+fr: {} mise(s) en pause.
+es: {} pausados.
+de: {} pausiert.
+
+{} pending
+fr: {} en attente
+es: {} pendientes
+de: {} ausstehend
+
+{} per year, kept forever
+fr: {} par an, conservés pour toujours
+es: {} al año, conservados para siempre
+de: {} pro Jahr, für immer behalten
+
+{} resumed.
+fr: {} reprise(s).
+es: {} reanudados.
+de: {} fortgesetzt.
+
+{} selected
+fr: {} sélectionnée(s)
+es: {} seleccionados
+de: {} ausgewählt
+
+{} services are down
+fr: {} services sont hors service
+es: {} servicios están caídos
+de: {} Dienste sind ausgefallen
+
+{} services respond slowly.
+fr: {} services répondent lentement.
+es: {} servicios responden lentamente.
+de: {} Dienste antworten langsam.
+
+{} up
+fr: {} en ligne
+es: {} activos
+de: {} online
+
+{} uptime
+fr: {} de disponibilité
+es: {} de disponibilidad
+de: {} Verfügbarkeit
+
+{} uptime. One bar per day.
+fr: {} de disponibilité. Une barre par jour.
+es: {} de disponibilidad. Una barra por día.
+de: {} Verfügbarkeit. Ein Balken pro Tag.
+
+{} was down {}
+fr: {} a été hors ligne {}
+es: {} estuvo caído {}
+de: {} war {} offline
+
+{} was slow {}
+fr: {} a été lente {}
+es: {} fue lento {}
+de: {} war {} langsam
+
+{}: certificate expired
+fr: {} : certificat expiré
+es: {}: certificado caducado
+de: {}: Zertifikat abgelaufen
+
+{}: certificate expires soon
+fr: {} : le certificat expire bientôt
+es: {}: el certificado caduca pronto
+de: {}: Zertifikat läuft bald ab
+
+{}: no checks
+fr: {} : aucune vérification
+es: {}: sin comprobaciones
+de: {}: keine Prüfungen
+
+{}: {} checks, all passed
+fr: {} : {} vérifications, toutes réussies
+es: {}: {} comprobaciones, todas correctas
+de: {}: {} Prüfungen, alle erfolgreich
+
+{}: {} ms on average
+fr: {} : {} ms en moyenne
+es: {}: {} ms de media
+de: {}: {} ms im Durchschnitt
+
+{}: {} of {} checks failed, {} up
+fr: {} : {} vérifications sur {} échouées, {} de disponibilité
+es: {}: {} de {} comprobaciones fallidas, {} de disponibilidad
+de: {}: {} von {} Prüfungen fehlgeschlagen, {} Verfügbarkeit
+
+“{}” appears more than once.
+fr: « {} » apparaît plus d'une fois.
+es: «{}» aparece más de una vez.
+de: „{}“ kommt mehr als einmal vor.
+
+“{}” is kept for the monitors without a group.
+fr: « {} » est réservé aux sondes sans groupe.
+es: «{}» está reservado a los monitores sin grupo.
+de: „{}“ ist für Monitore ohne Gruppe reserviert.
+
+“{}” is not a valid header name.
+fr: « {} » n'est pas un nom d'en-tête valide.
+es: «{}» no es un nombre de cabecera válido.
+de: „{}“ ist kein gültiger Header-Name.
+
+“{}” monitors are not supported.
+fr: les sondes « {} » ne sont pas prises en charge.
+es: los monitores «{}» no están admitidos.
+de: „{}“-Monitore werden nicht unterstützt.
+
+“{}” notifications are not supported.
+fr: les notifications « {} » ne sont pas prises en charge.
+es: las notificaciones «{}» no están admitidas.
+de: „{}“-Benachrichtigungen werden nicht unterstützt.
+
+Data
+fr: Données
+es: Datos
+de: Daten
+
+Retention
+fr: Conservation
+es: Retención
+de: Aufbewahrung
+
+Monitored addresses
+fr: Adresses surveillées
+es: Direcciones supervisadas
+de: Überwachte Adressen
+
+Settings sections
+fr: Sections des paramètres
+es: Secciones de ajustes
+de: Bereiche der Einstellungen
+
+{} days
+fr: {} jours
+es: {} días
+de: {} Tage
+
+forever
+fr: illimité
+es: para siempre
+de: unbegrenzt
+
+Checks {} days, history {}
+fr: Vérifications {} jours, historique {}
+es: Comprobaciones {} días, historial {}
+de: Prüfungen {} Tage, Verlauf {}
+
+Two-factor on
+fr: Double authentification activée
+es: Dos pasos activados
+de: Zwei-Faktor an
+
+Two-factor off
+fr: Double authentification désactivée
+es: Dos pasos desactivados
+de: Zwei-Faktor aus
+
+Two-factor on, private addresses blocked
+fr: Double authentification activée, adresses privées bloquées
+es: Dos pasos activados, direcciones privadas bloqueadas
+de: Zwei-Faktor an, private Adressen gesperrt
+
+Two-factor off, private addresses blocked
+fr: Double authentification désactivée, adresses privées bloquées
+es: Dos pasos desactivados, direcciones privadas bloqueadas
+de: Zwei-Faktor aus, private Adressen gesperrt
+
+Export, database copy, import
+fr: Export, copie de la base, import
+es: Exportar, copia de la base de datos, importar
+de: Export, Datenbankkopie, Import

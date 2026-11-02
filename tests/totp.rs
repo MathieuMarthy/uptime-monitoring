@@ -56,7 +56,7 @@ async fn enable(app: &TestApp) -> String {
         ),
     )
     .await;
-    assert_redirect(&r, "/settings?saved=totp");
+    assert_redirect(&r, "/settings?section=security&saved=totp");
     secret
 }
 
@@ -101,7 +101,7 @@ async fn first_step(app: &TestApp) -> String {
 #[tokio::test]
 async fn settings_show_2fa_off_with_a_setup_link() {
     let (app, _) = logged_in_with_password().await;
-    let r = get(&app, "/settings").await;
+    let r = get(&app, "/settings?section=security").await;
     assert!(r.body.contains("Two-factor authentication"));
     assert!(r.body.contains("href=\"/settings/totp\""));
 }
@@ -158,7 +158,7 @@ async fn enabling_2fa_keeps_this_session_and_ends_the_others() {
     let other = Session::create(&pool).await.unwrap();
     enable(&app).await;
     assert!(Session::find(&pool, &other.token).await.unwrap().is_none());
-    let r = get(&app, "/settings").await;
+    let r = get(&app, "/settings?section=security").await;
     assert_eq!(r.status, 200);
     assert!(r.body.contains("action=\"/settings/totp/disable\""));
     assert!(!r.body.contains("href=\"/settings/totp\""));
@@ -194,7 +194,7 @@ async fn disabling_2fa_needs_the_password_and_a_code() {
         &format!("current_password={password}&code={}", code(&secret, 1)),
     )
     .await;
-    assert_redirect(&r, "/settings?saved=totp-off");
+    assert_redirect(&r, "/settings?section=security&saved=totp-off");
     assert_redirect(&login(&app, USERNAME, PASSWORD).await, "/");
 }
 

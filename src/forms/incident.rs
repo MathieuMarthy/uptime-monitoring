@@ -1,4 +1,5 @@
 use crate::forms::{has_visible_char, text_len};
+use crate::i18n::tf;
 use serde::Deserialize;
 
 pub const NOTE_MAX_CHARS: usize = 2000;
@@ -26,7 +27,7 @@ impl NoteForm {
         let note = self.note.replace("\r\n", "\n");
         let note = note.trim();
         if text_len(note) > NOTE_MAX_CHARS {
-            return Err(format!("A note is at most {NOTE_MAX_CHARS} characters."));
+            return Err(tf("A note is at most {} characters.", &[&NOTE_MAX_CHARS]));
         }
         let note = has_visible_char(note).then(|| note.to_string());
         Ok(NoteInput {

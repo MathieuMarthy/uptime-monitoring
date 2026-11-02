@@ -155,3 +155,4 @@ rolled up hourly once complete; `latency_p95_ms` is the nearest-rank percentile.
 | `checks_retention_days` | 7 (≥ 2) |
 | `history_retention_days` | NULL = kept forever (incidents, slowdowns, daily stats); otherwise ≥ `checks_retention_days` |
 | `block_private_targets` | 0 |
+| `language` | `'en'` (`en`, `fr`, `es` or `de`; chosen during setup) |

@@ -10,6 +10,7 @@ pub mod engine;
 pub mod error;
 pub mod forms;
 pub mod healthcheck;
+pub mod i18n;
 pub mod maintenance;
 pub mod middleware;
 pub mod models;
@@ -44,6 +45,10 @@ pub fn app(state: AppState) -> Router {
         .merge(assets::router())
         .fallback(|| async { AppError::NotFound })
         .method_not_allowed_fallback(|| async { AppError::MethodNotAllowed })
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            middleware::set_language,
+        ))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(axum::middleware::map_response(middleware::security_headers))
         .layer(TraceLayer::new_for_http())

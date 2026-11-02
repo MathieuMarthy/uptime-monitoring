@@ -1,6 +1,8 @@
 //! Import of an export document: only adds. Every entry goes through the validation of its admin
 //! form; an entry whose name (or slug) is taken, or that is invalid, is skipped with its reason.
 
+use crate::i18n::{t, tf};
+
 use super::{
     ChannelExport, Export, FORMAT, MaintenanceExport, MonitorExport, ScheduleExport,
     StatusPageExport, VERSION, kuma,
@@ -46,32 +48,34 @@ impl Skipped {
     }
 }
 
-const EXISTS: &str = "already exists.";
+fn exists() -> &'static str {
+    t("already exists.")
+}
 const VERSION_U64: u64 = VERSION as u64;
 
 /// Reads an export of this application or an Uptime Kuma backup. Kuma entries that cannot be
 /// converted are already in the report.
 pub fn parse(text: &str) -> Result<(Export, Report), String> {
     let value: serde_json::Value =
-        serde_json::from_str(text).map_err(|_| "This is not a JSON document.".to_string())?;
+        serde_json::from_str(text).map_err(|_| t("This is not a JSON document.").to_string())?;
     if value.get("format").and_then(|f| f.as_str()) == Some(FORMAT) {
         match value.get("version").and_then(|v| v.as_u64()) {
             Some(1..=VERSION_U64) => {}
             Some(version) if version > VERSION_U64 => {
-                return Err(
-                    "This file comes from a newer version of Uptime Monitoring: update first."
-                        .to_string(),
-                );
+                return Err(t(
+                    "This file comes from a newer version of Uptime Monitoring: update first.",
+                )
+                .to_string());
             }
-            _ => return Err("This export has no valid version number.".to_string()),
+            _ => return Err(t("This export has no valid version number.").to_string()),
         }
         let export = serde_json::from_value(value)
-            .map_err(|e| format!("This export cannot be read: {e}."))?;
+            .map_err(|e| tf("This export cannot be read: {}.", &[&e]))?;
         Ok((export, Report::default()))
     } else if value.get("monitorList").is_some() {
         Ok(kuma::convert(&value))
     } else {
-        Err("Neither an export of Uptime Monitoring nor an Uptime Kuma backup.".to_string())
+        Err(t("Neither an export of Uptime Monitoring nor an Uptime Kuma backup.").to_string())
     }
 }
 
@@ -149,14 +153,14 @@ async fn add_channel(
     existing: &mut Existing,
     report: &mut Report,
 ) -> Result<(), sqlx::Error> {
-    let skip = |reason: &str| Skipped::new("Channel", &channel.name, reason);
+    let skip = |reason: &str| Skipped::new(t("Channel"), &channel.name, reason);
     let key = channel.name.trim().to_ascii_lowercase();
     if existing.channels.contains_key(&key) {
-        report.skipped.push(skip(EXISTS));
+        report.skipped.push(skip(exists()));
         return Ok(());
     }
     let Ok(config) = ChannelConfig::parse(&channel.kind, &channel.config.to_string()) else {
-        report.skipped.push(skip("unknown kind or settings."));
+        report.skipped.push(skip(t("unknown kind or settings.")));
         return Ok(());
     };
     let mut form = ChannelForm::from_config(
@@ -226,10 +230,10 @@ async fn add_monitor(
     existing: &mut Existing,
     report: &mut Report,
 ) -> Result<(), sqlx::Error> {
-    let skip = |reason: &str| Skipped::new("Monitor", &monitor.name, reason);
+    let skip = |reason: &str| Skipped::new(t("Monitor"), &monitor.name, reason);
     let key = name_key(monitor.name.trim());
     if existing.monitors.contains_key(&key) {
-        report.skipped.push(skip(EXISTS));
+        report.skipped.push(skip(exists()));
         return Ok(());
     }
     let mut channel_ids = Vec::new();
@@ -249,10 +253,9 @@ async fn add_monitor(
     };
     let id = Monitor::insert(conn, &input).await?;
     if !missing.is_empty() {
-        report.notices.push(format!(
+        report.notices.push(tf(
             "Monitor “{}” is not linked to the missing channel(s) {}.",
-            input.name,
-            missing.join(", ")
+            &[&input.name, &missing.join(", ")],
         ));
     }
     if input.kind == crate::forms::monitor::PUSH {
@@ -262,9 +265,9 @@ async fn add_monitor(
             _ => false,
         };
         if !kept {
-            report.notices.push(format!(
+            report.notices.push(tf(
                 "Monitor “{}” has a new push URL: update the job that calls it.",
-                input.name
+                &[&input.name],
             ));
         }
     }
@@ -281,10 +284,10 @@ async fn add_page(
     existing: &mut Existing,
     report: &mut Report,
 ) -> Result<(), sqlx::Error> {
-    let skip = |reason: &str| Skipped::new("Public page", &page.slug, reason);
+    let skip = |reason: &str| Skipped::new(t("Public page"), &page.slug, reason);
     let slug = page.slug.trim();
     if existing.slugs.contains(slug) {
-        report.skipped.push(skip(EXISTS));
+        report.skipped.push(skip(exists()));
         return Ok(());
     }
     let mut seen = HashSet::new();
@@ -324,10 +327,10 @@ async fn add_maintenance(
     existing: &mut Existing,
     report: &mut Report,
 ) -> Result<(), sqlx::Error> {
-    let skip = |reason: &str| Skipped::new("Maintenance", &maintenance.title, reason);
+    let skip = |reason: &str| Skipped::new(t("Maintenance"), &maintenance.title, reason);
     let key = window_key(&maintenance.title, maintenance.schedule);
     if existing.maintenances.contains(&key) {
-        report.skipped.push(skip(EXISTS));
+        report.skipped.push(skip(exists()));
         return Ok(());
     }
     let on = |b: bool| b.then(|| "on".to_string());
@@ -350,7 +353,7 @@ async fn add_maintenance(
         } => {
             form.kind = "weekly".to_string();
             for day in (0..7).filter(|day| weekdays & (1 << day) != 0) {
-                form.other.insert(format!("day_{day}"), "on".to_string());
+                form.other.insert(format!("day_{}", day), "on".to_string());
             }
             if (0..24 * 60).contains(&local_start) {
                 form.local_start = format!("{:02}:{:02}", local_start / 60, local_start % 60);
@@ -360,7 +363,8 @@ async fn add_maintenance(
     }
     for name in &maintenance.monitors {
         if let Some(id) = existing.monitors.get(&name_key(name.trim())) {
-            form.other.insert(format!("monitor_{id}"), "on".to_string());
+            form.other
+                .insert(format!("monitor_{}", id), "on".to_string());
         }
     }
     match form.validate(&TimeZone::UTC, &existing.groups) {

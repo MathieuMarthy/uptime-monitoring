@@ -1,6 +1,6 @@
 {#- The alert checkboxes of a monitor form: needs `channels` and `form.has_channel`. #}
 {% if channels.is_empty() %}
-<p class="form-hint">No notification channel yet. <a href="/alerts/new">Add one</a> to be alerted when a monitor goes down.</p>
+<p class="form-hint">{{ "No notification channel yet. <a href=\"/alerts/new\">Add one</a> to be alerted when a monitor goes down."|t|safe }}</p>
 {% else %}
 <div class="form-row">
     {% for channel in channels %}
@@ -10,7 +10,7 @@
                    {%- if form.has_channel(*channel.id) %} checked{% endif %}/>
             <div class="checkbox-label-group">
                 <span class="form-label">{{ channel.name }}</span>
-                <span class="form-hint">{{ channel.kind }}{% if !channel.enabled %} (disabled){% endif %}</span>
+                <span class="form-hint">{{ channel.kind }}{% if !channel.enabled %} {{ "(disabled)"|t }}{% endif %}</span>
             </div>
         </label>
     </div>

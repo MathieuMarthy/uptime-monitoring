@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}{% if self.is_edit() %}Edit Maintenance{% else %}Add Maintenance{% endif %} - Uptime Monitoring{% endblock %}
+{% block title %}{% if self.is_edit() %}{{ "Edit Maintenance"|t }}{% else %}{{ "Add Maintenance"|t }}{% endif %} - Uptime Monitoring{% endblock %}
 {% block nav_maintenances %}aria-current="page"{% endblock %}
 
 {% block styles %}
@@ -18,13 +18,13 @@
 {% block content %}
 <div class="form-container">
     <div class="form-header">
-        <h1 class="form-title">{% if self.is_edit() %}Edit Maintenance{% else %}Add a Maintenance Window{% endif %}</h1>
-        <p class="form-subtitle">Checks keep running, but they neither count against uptime nor alert. Times are in {{ timezone }}.</p>
+        <h1 class="form-title">{% if self.is_edit() %}{{ "Edit Maintenance"|t }}{% else %}{{ "Add a Maintenance Window"|t }}{% endif %}</h1>
+        <p class="form-subtitle">{{ "Checks keep running, but they neither count against uptime nor alert. Times are in {}."|tf(timezone) }}</p>
     </div>
 
     {% if !errors.is_empty() %}
     <div class="error-banner" role="alert">
-        <span>Please fix the {{ errors.len() }} highlighted field(s).</span>
+        <span>{{ "Please fix the {} highlighted field(s)."|tf(errors.len()) }}</span>
     </div>
     {% endif %}
 
@@ -33,29 +33,29 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="form-section">
                 <div class="form-group">
-                    <label class="form-label" for="title">Title *</label>
+                    <label class="form-label" for="title">{{ "Title *"|t }}</label>
                     <input class="form-input" id="title" name="title" type="text" maxlength="100"
-                           placeholder="e.g. Database upgrade" required value="{{ form.title }}"/>
+                           placeholder="{{ "e.g. Database upgrade"|t }}" required value="{{ form.title }}"/>
                     {% call field_error("title") %}{% endcall %}
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="kind">Repeat</label>
+                    <label class="form-label" for="kind">{{ "Repeat"|t }}</label>
                     <select class="form-select" id="kind" name="kind">
-                        <option value="once" {% if !form.is_weekly() %}selected{% endif %}>Once</option>
-                        <option value="weekly" {% if form.is_weekly() %}selected{% endif %}>Every week</option>
+                        <option value="once" {% if !form.is_weekly() %}selected{% endif %}>{{ "Once"|t }}</option>
+                        <option value="weekly" {% if form.is_weekly() %}selected{% endif %}>{{ "Every week"|t }}</option>
                     </select>
                 </div>
 
                 <div class="form-row" data-kind="once"{% if form.is_weekly() %} hidden{% endif %}>
                     <div class="form-group">
-                        <label class="form-label" for="starts_at">Start *</label>
+                        <label class="form-label" for="starts_at">{{ "Start *"|t }}</label>
                         <input class="form-input" id="starts_at" name="starts_at" type="datetime-local" required
                                value="{{ form.starts_at }}"/>
                         {% call field_error("starts_at") %}{% endcall %}
                     </div>
                     <div class="form-group">
-                        <label class="form-label" for="ends_at">End *</label>
+                        <label class="form-label" for="ends_at">{{ "End *"|t }}</label>
                         <input class="form-input" id="ends_at" name="ends_at" type="datetime-local" required
                                value="{{ form.ends_at }}"/>
                         {% call field_error("ends_at") %}{% endcall %}
@@ -64,7 +64,7 @@
 
                 <div data-kind="weekly"{% if !form.is_weekly() %} hidden{% endif %}>
                     <fieldset class="form-group">
-                        <legend class="form-label">Days *</legend>
+                        <legend class="form-label">{{ "Days *"|t }}</legend>
                         <div class="weekday-picks">
                             {% for day in self.weekdays() %}
                             <label class="checkbox-inline" for="day_{{ loop.index0 }}">
@@ -77,13 +77,13 @@
                     </fieldset>
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label" for="local_start">Start time *</label>
+                            <label class="form-label" for="local_start">{{ "Start time *"|t }}</label>
                             <input class="form-input" id="local_start" name="local_start" type="time" required
                                    value="{{ form.local_start }}"/>
                             {% call field_error("local_start") %}{% endcall %}
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="duration_min">Duration (minutes) *</label>
+                            <label class="form-label" for="duration_min">{{ "Duration (minutes) *"|t }}</label>
                             <input class="form-input" id="duration_min" name="duration_min" type="number" min="1"
                                    max="10080" required value="{{ form.duration_min }}"/>
                             {% call field_error("duration_min") %}{% endcall %}
@@ -93,20 +93,20 @@
             </div>
 
             <div class="form-section">
-                <h2 class="section-title">Monitors</h2>
+                <h2 class="section-title">{{ "Monitors"|t }}</h2>
                 <label class="checkbox-group" for="all_monitors">
                     <input type="checkbox" id="all_monitors" name="all_monitors" {% if form.all_monitors.is_some() %}checked{% endif %}/>
                     <div class="checkbox-label-group">
-                        <span class="form-label">All monitors</span>
-                        <span class="form-hint">Including those added later.</span>
+                        <span class="form-label">{{ "All monitors"|t }}</span>
+                        <span class="form-hint">{{ "Including those added later."|t }}</span>
                     </div>
                 </label>
                 {% call field_error("monitors") %}{% endcall %}
 
                 {% if !groups.is_empty() %}
                 <fieldset class="form-group">
-                    <legend class="form-label">Whole groups</legend>
-                    <span class="form-hint">Picks the monitors in the group when you save; monitors added to it later are not included.</span>
+                    <legend class="form-label">{{ "Whole groups"|t }}</legend>
+                    <span class="form-hint">{{ "Picks the monitors in the group when you save; monitors added to it later are not included."|t }}</span>
                     <div class="weekday-picks">
                         {% for group in groups %}
                         {% let field = self.group_field(group) %}
@@ -120,10 +120,10 @@
                 {% endif %}
 
                 {% if monitors.is_empty() %}
-                <p class="form-hint">No monitor yet. <a href="/monitors/new">Add one</a> first.</p>
+                <p class="form-hint">{{ "No monitor yet. <a href=\"/monitors/new\">Add one</a> first."|t|safe }}</p>
                 {% else %}
                 <fieldset class="form-group">
-                    <legend class="form-label">Monitors</legend>
+                    <legend class="form-label">{{ "Monitors"|t }}</legend>
                     <div class="weekday-picks">
                         {% for m in monitors %}
                         <label class="checkbox-inline" for="monitor_{{ m.id }}">
@@ -140,8 +140,8 @@
                 <label class="checkbox-group" for="show_on_status_pages">
                     <input type="checkbox" id="show_on_status_pages" name="show_on_status_pages" {% if form.show_on_status_pages.is_some() %}checked{% endif %}/>
                     <div class="checkbox-label-group">
-                        <span class="form-label">Announce on public pages</span>
-                        <span class="form-hint">Public pages showing one of its monitors announce it up to 7 days ahead. A window in progress is always shown there.</span>
+                        <span class="form-label">{{ "Announce on public pages"|t }}</span>
+                        <span class="form-hint">{{ "Public pages showing one of its monitors announce it up to 7 days ahead. A window in progress is always shown there."|t }}</span>
                     </div>
                 </label>
             </div>
@@ -149,9 +149,9 @@
             <div class="form-actions">
                 <div class="form-actions-left">
                     <button class="button-primary" type="submit">
-                        {% if self.is_edit() %}Save Changes{% else %}Add Window{% endif %}
+                        {% if self.is_edit() %}{{ "Save Changes"|t }}{% else %}{{ "Add Window"|t }}{% endif %}
                     </button>
-                    <a class="button-secondary" href="/maintenances">Cancel</a>
+                    <a class="button-secondary" href="/maintenances">{{ "Cancel"|t }}</a>
                 </div>
             </div>
         </form>
@@ -159,14 +159,14 @@
         {% if let Some(id) = maintenance_id %}
         <div class="danger-zone">
             <form action="/maintenances/{{ id }}/delete" method="POST"
-                  data-confirm="Delete this maintenance window?">
+                  data-confirm="{{ "Delete this maintenance window?"|t }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <div class="form-actions form-actions-plain">
                     <div>
-                        <span class="danger-zone-title">Danger Zone</span>
-                        <p class="form-hint">Delete this window. Checks already made keep their effect.</p>
+                        <span class="danger-zone-title">{{ "Danger Zone"|t }}</span>
+                        <p class="form-hint">{{ "Delete this window. Checks already made keep their effect."|t }}</p>
                     </div>
-                    <button class="button-danger" type="submit">Delete Window</button>
+                    <button class="button-danger" type="submit">{{ "Delete Window"|t }}</button>
                 </div>
             </form>
         </div>

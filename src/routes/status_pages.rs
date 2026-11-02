@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::forms::monitor::FieldErrors;
 use crate::forms::status_page::StatusPageForm;
+use crate::i18n::t;
 use crate::models::{Monitor, MonitorSummary, Session, StatusPage, is_unique_violation};
 use crate::routes::{PathId, form_or_invalid};
 use crate::state::AppState;
@@ -12,7 +13,9 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Form, Router};
 
-const DUPLICATE_SLUG: &str = "This slug is already used.";
+fn duplicate_slug() -> &'static str {
+    t("This slug is already used.")
+}
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -202,7 +205,7 @@ fn page(
         errors,
         csrf_token,
         action_url: match id {
-            Some(id) => format!("/public-pages/{id}/edit"),
+            Some(id) => format!("/public-pages/{}/edit", id),
             None => "/public-pages/new".to_string(),
         },
         page_id: id,
@@ -211,5 +214,5 @@ fn page(
 }
 
 fn slug_taken() -> FieldErrors {
-    FieldErrors::from([("slug", DUPLICATE_SLUG.to_string())])
+    FieldErrors::from([("slug", duplicate_slug().to_string())])
 }
