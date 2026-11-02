@@ -1,0 +1,27 @@
+# cargo deny check (CI: .github/workflows/audit.yml).
+
+[advisories]
+ignore = [
+    # basic-toml is unmaintained; askama_derive only uses it at compile time to read askama.toml.
+    { id = "RUSTSEC-2026-0374", reason = "compile-time only, through askama_derive" },
+]
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "0BSD",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CDLA-Permissive-2.0",
+]
+
+[bans]
+multiple-versions = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
