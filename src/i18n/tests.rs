@@ -239,3 +239,64 @@ fn translations_keep_placeholders() {
         }
     }
 }
+
+/// Words people read in attributes (labels, tooltips, confirmations) go through `|t` too;
+/// sample values (addresses, slugs) are left as they are.
+#[test]
+fn template_attributes_hold_no_plain_english() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    let mut dirs = vec![root];
+    let mut plain = Vec::new();
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                dirs.push(path);
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for attr in [
+                "aria-label=\"",
+                "title=\"",
+                "placeholder=\"",
+                "alt=\"",
+                "data-confirm=\"",
+            ] {
+                for (at, _) in text.match_indices(attr) {
+                    let rest = &text[at + attr.len()..];
+                    let value = &rest[..rest.find('"').unwrap_or(0)];
+                    // `{{ "…"|t }}` holds quotes: such a value starts with `{{`.
+                    if value.starts_with("{{") {
+                        continue;
+                    }
+                    let tags = |v: &str| {
+                        let mut out = String::new();
+                        let mut rest = v;
+                        while let Some(start) = rest.find("{%") {
+                            out.push_str(&rest[..start]);
+                            rest = rest[start..]
+                                .find("%}")
+                                .map_or("", |end| &rest[start + end + 2..]);
+                        }
+                        out + rest
+                    };
+                    let stripped = tags(value);
+                    let mut value = stripped.as_str();
+                    let sample = ["://", "@", "example", "acme", "my-alerts"]
+                        .iter()
+                        .any(|s| value.contains(s));
+                    while let Some(start) = value.find("{{") {
+                        value = &value[..start];
+                    }
+                    let words = value
+                        .split(|c: char| !c.is_alphabetic())
+                        .any(|w| w.len() >= 3);
+                    if words && !sample {
+                        plain.push(format!("{}: {attr}{value}", path.display()));
+                    }
+                }
+            }
+        }
+    }
+    assert!(plain.is_empty(), "{plain:#?}");
+}

@@ -1,6 +1,6 @@
 //! Availability shown as bars, one per time bucket.
 
-use crate::i18n::tf;
+use crate::i18n::{dates, t, tf};
 
 use crate::error::AppError;
 use crate::models::stats::uptime;
@@ -225,7 +225,7 @@ impl Axis {
         let from = hourly_start(tz, now);
         let labels = (0..HOURS)
             .map(|i| match i {
-                _ if i == HOURS - 1 => "now".to_string(),
+                _ if i == HOURS - 1 => t("now").to_string(),
                 _ if i % 6 == 0 => format_time(tz, from + i * HOUR_MS),
                 _ => String::new(),
             })
@@ -238,8 +238,8 @@ impl Axis {
         let today = day_of(tz, now);
         let labels = (0..DAYS)
             .map(|i| match today.checked_sub((DAYS - 1 - i).days()) {
-                _ if i == DAYS - 1 => "today".to_string(),
-                Ok(day) if i % 30 == 0 => day.strftime("%-d %b").to_string(),
+                _ if i == DAYS - 1 => t("today").to_string(),
+                Ok(day) if i % 30 == 0 => dates::day_short_month(day),
                 _ => String::new(),
             })
             .collect();

@@ -80,11 +80,11 @@
                             <td><label for="monitor_{{ m.id }}">{{ m.name }}</label></td>
                             <td>
                                 <input class="form-input" name="display_name_{{ m.id }}" type="text" maxlength="100"
-                                       aria-label="Display name of {{ m.name }}" value="{{ form.display_name(*m.id) }}"/>
+                                       aria-label="{{ "Display name of {}"|tf(m.name) }}" value="{{ form.display_name(*m.id) }}"/>
                             </td>
                             <td>
                                 <input class="form-input page-monitors-order" name="position_{{ m.id }}" type="number" min="0" max="9999" value="{{ form.position(*m.id) }}"
-                                       aria-label="Order of {{ m.name }}"/>
+                                       aria-label="{{ "Order of {}"|tf(m.name) }}"/>
                             </td>
                         </tr>
                         {% endfor %}

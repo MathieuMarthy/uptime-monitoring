@@ -41,10 +41,6 @@ fr: -1001234567890 ou @canal
 es: -1001234567890 o @canal
 de: -1001234567890 oder @kanal
 
-1 day left
-fr: 1 jour restant
-es: Queda 1 día
-de: Noch 1 Tag
 
 1 monitor
 fr: 1 sonde
@@ -1652,10 +1648,6 @@ fr: Rien n'a été déplacé : {}
 es: No se movió nada: {}
 de: Nichts verschoben: {}
 
-Nothing to show: no {} in the last {} days.
-fr: Rien à afficher : aucun(e) {} ces {} derniers jours.
-es: Nada que mostrar: ningún {} en los últimos {} días.
-de: Nichts anzuzeigen: keine {} in den letzten {} Tagen.
 
 Notification channels
 fr: Canaux de notification
@@ -3361,3 +3353,88 @@ Export, database copy, import
 fr: Export, copie de la base, import
 es: Exportar, copia de la base de datos, importar
 de: Export, Datenbankkopie, Import
+
+Availability over the last 24 hours: {}
+fr: Disponibilité sur les dernières 24 heures : {}
+es: Disponibilidad en las últimas 24 horas: {}
+de: Verfügbarkeit in den letzten 24 Stunden: {}
+
+Availability over the last 90 days: {}
+fr: Disponibilité sur les 90 derniers jours : {}
+es: Disponibilidad en los últimos 90 días: {}
+de: Verfügbarkeit in den letzten 90 Tagen: {}
+
+Average response time per hour, slowest {}: {} ms
+fr: Temps de réponse moyen par heure, le plus lent à {} : {} ms
+es: Tiempo de respuesta medio por hora, el más lento a las {}: {} ms
+de: Durchschnittliche Antwortzeit pro Stunde, am langsamsten um {}: {} ms
+
+Display name of {}
+fr: Nom affiché de {}
+es: Nombre visible de {}
+de: Anzeigename von {}
+
+Order of {}
+fr: Ordre de {}
+es: Orden de {}
+de: Reihenfolge von {}
+
+Select {}
+fr: Sélectionner {}
+es: Seleccionar {}
+de: {} auswählen
+
+Nothing to show in the last {} days.
+fr: Rien à afficher ces {} derniers jours.
+es: Nada que mostrar en los últimos {} días.
+de: Nichts anzuzeigen in den letzten {} Tagen.
+
+No outage in the last {} days.
+fr: Aucune panne ces {} derniers jours.
+es: Ninguna caída en los últimos {} días.
+de: Kein Ausfall in den letzten {} Tagen.
+
+No slowdown in the last {} days.
+fr: Aucune lenteur ces {} derniers jours.
+es: Ninguna lentitud en los últimos {} días.
+de: Keine Verlangsamung in den letzten {} Tagen.
+
+No failed check in the last {} days.
+fr: Aucune vérification échouée ces {} derniers jours.
+es: Ninguna comprobación fallida en los últimos {} días.
+de: Keine fehlgeschlagene Prüfung in den letzten {} Tagen.
+
+No certificate warning in the last {} days.
+fr: Aucune alerte de certificat ces {} derniers jours.
+es: Ningún aviso de certificado en los últimos {} días.
+de: Keine Zertifikatswarnung in den letzten {} Tagen.
+
+No maintenance window in the last {} days.
+fr: Aucune fenêtre de maintenance ces {} derniers jours.
+es: Ninguna ventana de mantenimiento en los últimos {} días.
+de: Kein Wartungsfenster in den letzten {} Tagen.
+
+now
+fr: maintenant
+es: ahora
+de: jetzt
+
+today
+fr: aujourd'hui
+es: hoy
+de: heute
+
+test alert
+fr: alerte de test
+es: alerta de prueba
+de: Testalarm
+
+Stored, leave empty to keep it
+fr: Enregistré, laissez vide pour le garder
+es: Guardado, déjelo vacío para conservarlo
+de: Gespeichert, leer lassen zum Beibehalten
+
+Required with a username
+fr: Requis avec un identifiant
+es: Obligatorio con un usuario
+de: Erforderlich mit Benutzername

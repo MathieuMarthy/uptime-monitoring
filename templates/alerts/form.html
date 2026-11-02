@@ -96,7 +96,7 @@
                 <div class="form-group">
                     <label class="form-label" for="ntfy_token">{{ "Access Token"|t }}</label>
                     <input class="form-input" id="ntfy_token" name="ntfy_token" type="password" autocomplete="off"
-                           value="{{ form.ntfy_token }}" placeholder="{% if has_token %}Stored, leave empty to keep it{% else %}Optional{% endif %}"/>
+                           value="{{ form.ntfy_token }}" placeholder="{% if has_token %}{{ "Stored, leave empty to keep it"|t }}{% else %}{{ "Optional"|t }}{% endif %}"/>
                     <span class="form-hint">{{ "For a protected topic."|t }}</span>
                     {% call field_error("ntfy_token") %}{% endcall %}
                 </div>
@@ -118,7 +118,7 @@
                     <div class="form-group">
                         <label class="form-label" for="telegram_token">{{ "Bot Token"|t }}</label>
                         <input class="form-input" id="telegram_token" name="telegram_token" type="password" autocomplete="off"
-                               value="{{ form.telegram_token }}" placeholder="{% if has_bot_token %}Stored, leave empty to keep it{% else %}123456:ABC-DEF…{% endif %}"/>
+                               value="{{ form.telegram_token }}" placeholder="{% if has_bot_token %}{{ "Stored, leave empty to keep it"|t }}{% else %}123456:ABC-DEF…{% endif %}"/>
                         <span class="form-hint">{{ "Create a bot with @BotFather, then send it a message or add it to the group."|t }}</span>
                         {% call field_error("telegram_token") %}{% endcall %}
                     </div>
@@ -174,7 +174,7 @@
                     <div class="form-group">
                         <label class="form-label" for="email_password">{{ "Password"|t }}</label>
                         <input class="form-input" id="email_password" name="email_password" type="password" autocomplete="new-password"
-                               value="{{ form.email_password }}" placeholder="{% if has_password %}Stored, leave empty to keep it{% else %}Required with a username{% endif %}"/>
+                               value="{{ form.email_password }}" placeholder="{% if has_password %}{{ "Stored, leave empty to keep it"|t }}{% else %}{{ "Required with a username"|t }}{% endif %}"/>
                         <span class="form-hint">{{ "Often an app password, not your account's."|t }}</span>
                         {% call field_error("email_password") %}{% endcall %}
                     </div>

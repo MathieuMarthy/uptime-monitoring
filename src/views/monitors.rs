@@ -2,7 +2,7 @@ use crate::engine::verdict::CheckOutcome;
 use crate::error::AppError;
 use crate::forms::bulk_monitor::{BULK_MAX_URLS, BulkErrors, BulkMonitorForm};
 use crate::forms::monitor::{FieldErrors, GROUP_MAX_CHARS, GroupError, METHODS, MonitorForm, PUSH};
-use crate::i18n::{filters, t, tf};
+use crate::i18n::{filters, t, tf, tn};
 use crate::models::{
     Channel, Check, Incident, Monitor, MonitorState, MonitorStatus, MonitorSummary, Settings,
     name_key,
@@ -854,8 +854,7 @@ impl DetailTemplate {
 pub fn certificate_label(expires_at: i64, now: i64) -> String {
     match days_left(expires_at, now) {
         left if left < 0 => t("Expired").to_string(),
-        1 => t("1 day left").to_string(),
-        left => tf("{} days left", &[&left]),
+        left => tn(left, "{} day left", "{} days left"),
     }
 }
 

@@ -151,7 +151,7 @@
                     {%- for row in group.rows %}
                     {%- let m = row.monitor %}
                     <li data-search="{{ row.search }}" data-status="{{ row.status_key() }}"{% if row.hidden %} hidden{% endif %}>
-                        <input class="row-select" type="checkbox" name="id" value="{{ m.id }}" aria-label="Select {{ m.name }}">
+                        <input class="row-select" type="checkbox" name="id" value="{{ m.id }}" aria-label="{{ "Select {}"|tf(m.name) }}">
                         <a class="monitor-row row-{{ row.status_key() }}" href="/monitors/{{ m.id }}">
                             <span class="monitor-name">
                                 <span class="lamp lamp-{{ row.status_key() }}" aria-hidden="true"></span>

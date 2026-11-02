@@ -3,6 +3,8 @@
 //! a missing one shows the English text. The language of a request is set by a
 //! middleware in a task-local, so handlers, forms and templates never pass it around.
 
+pub mod dates;
+
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;

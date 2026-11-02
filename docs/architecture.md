@@ -159,12 +159,15 @@ English, French, Spanish and German. English text is the key: there are no messa
 - **Catalog.** `src/i18n/catalog.txt`, embedded and parsed once: an English line, then `fr: …`, `es: …`, `de: …`;
   `\n` is a line break. A missing translation shows the English text. `i18n::tests` extracts every key from
   `src/` and `templates/` and checks the catalog against it, along with the `{}` count and the HTML tags of each
-  translation.
+  translation. Another test refuses plain English in the `aria-label`, `title`,
+  `placeholder`, `alt` and `data-confirm` attributes of templates (sample values such as addresses aside).
+- **Dates in words.** `i18n::dates` names days and months and orders them per language (`1 de noviembre de
+  2026`, `Sonntag, 1. November`); never `strftime` with `%A`/`%B`/`%b`, which only knows English.
 - **JavaScript.** Scripts hold no text: the page passes it in `data-*` attributes (`copy.js`, `theme.js`, `bulk.js`,
   `settings.js`).
 - **Not translated.** Check errors recorded by the engine (`connection refused`, `HTTP 502, expected 200-299`) are
-  stored text, kept in English, like logs. The reserved group name `Ungrouped` is English in forms; it is shown
-  translated. Byte units (KiB, MiB) stay as they are.
+  stored text, kept in English, like logs. The label of the monitors without a group, `Ungrouped`, is shown translated
+  and reserved in every language, so no group shares it. Byte units (KiB, MiB) stay as they are.
 
 ## Configuration
 

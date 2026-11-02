@@ -2,7 +2,7 @@
 //! windows across monitors, latest first, grouped by local day.
 
 use crate::error::AppError;
-use crate::i18n::{filters, t, tf};
+use crate::i18n::{dates, filters, t, tf, tn};
 use crate::models::{
     CertificateWarning, Check, FailedCheck, Incident, Maintenance, Monitor, MonitorState,
     MonitorSummary, NamedIncident, NamedSlowdown, NotificationLog, Settings, Slowdown,
@@ -448,6 +448,20 @@ impl IndexTemplate {
             Kind::Maintenance => t("Maintenance windows"),
         }
     }
+
+    /// When the period holds no event of the chosen kind: one sentence per kind, so each
+    /// language words it its own way.
+    pub fn empty_text(&self) -> String {
+        let days = &self.filter.days;
+        match self.filter.kind {
+            Kind::All => tf("Nothing to show in the last {} days.", &[days]),
+            Kind::Outages => tf("No outage in the last {} days.", &[days]),
+            Kind::Slowdowns => tf("No slowdown in the last {} days.", &[days]),
+            Kind::Checks => tf("No failed check in the last {} days.", &[days]),
+            Kind::Certificates => tf("No certificate warning in the last {} days.", &[days]),
+            Kind::Maintenance => tf("No maintenance window in the last {} days.", &[days]),
+        }
+    }
 }
 
 /// The starts and ends of maintenance windows from `from` to `now`, of the windows covering
@@ -598,8 +612,7 @@ async fn certificate_event(
     let tag = match days_left(w.expires_at, now) {
         _ if renewed => t("Renewed").to_string(),
         left if left < 0 => t("Expired").to_string(),
-        1 => t("1 day left").to_string(),
-        left => tf("{} days left", &[&left]),
+        left => tn(left, "{} day left", "{} days left"),
     };
     let mut facts = vec![
         Fact {
@@ -621,7 +634,7 @@ async fn certificate_event(
         monitor_id: w.monitor_id,
         monitor_name: w.monitor_name,
         time: format_time(tz, w.warned_at),
-        expires: day_of(tz, w.expires_at).strftime("%-d %B %Y").to_string(),
+        expires: dates::day_month_year(day_of(tz, w.expires_at)),
         renewed,
         tag,
         facts,
@@ -633,7 +646,7 @@ async fn certificate_event(
 fn day_label(tz: &TimeZone, at: i64, now: i64) -> String {
     let day = day_of(tz, at);
     let today = day_of(tz, now);
-    let name = day.strftime("%A %-d %B").to_string();
+    let name = dates::weekday_day_month(day);
     if day == today {
         tf("Today, {}", &[&name])
     } else if today.checked_sub(1.day()).ok() == Some(day) {

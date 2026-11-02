@@ -117,7 +117,7 @@
             <div class="chart-grid">
                 <span class="chart-label">{{ "Availability"|t }}</span>
                 <span class="trace trace-24 trace-tall" role="img"
-                      aria-label="Availability over the last 24 hours: {{ hourly.uptime_label() }}">
+                      aria-label="{{ "Availability over the last 24 hours: {}"|tf(hourly.uptime_label()) }}">
                     {%- for tick in hourly.ticks -%}
                     <span class="tick {{ tick.class }}{% if loop.index0 > 0 && loop.index0 % hour_axis.step == 0 %} tick-guide{% endif %}" data-tip="{{ tick.title }}"></span>
                     {%- endfor -%}
@@ -125,7 +125,7 @@
                 <span class="chart-label">{{ "Response time"|t }}</span>
                 {% if let Some(max) = latency_max_ms %}
                 <span class="latency-chart" role="img"
-                      aria-label="Average response time per hour, slowest {{ latency_slowest }}: {{ max }} ms">
+                      aria-label="{{ "Average response time per hour, slowest {}: {} ms"|tf2(latency_slowest, max) }}">
                     {%- for bar in latency -%}
                     <span class="lat {{ bar.class }} lat-{{ bar.level }}{% if loop.index0 > 0 && loop.index0 % hour_axis.step == 0 %} tick-guide{% endif %}"
                           {%- if !bar.title.is_empty() %} data-tip="{{ bar.title }}"{% endif %}></span>
@@ -171,7 +171,7 @@
                 <span class="section-note">{{ "{} uptime. One bar per day."|tf(daily.uptime_90d) }}</span>
             </div>
             <span class="trace trace-90 trace-tall" role="img"
-                  aria-label="Availability over the last 90 days: {{ daily.uptime_90d }}">
+                  aria-label="{{ "Availability over the last 90 days: {}"|tf(daily.uptime_90d) }}">
                 {%- for tick in daily.bars.ticks -%}
                 <span class="tick {{ tick.class }}{% if loop.index0 > 0 && loop.index0 % day_axis.step == 0 %} tick-guide{% endif %}" data-tip="{{ tick.title }}"></span>
                 {%- endfor -%}

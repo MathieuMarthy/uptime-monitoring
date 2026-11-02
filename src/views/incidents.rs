@@ -80,7 +80,7 @@ impl AlertRow {
                 "tls_expiring" => t("certificate alert"),
                 "degraded" => t("slow alert"),
                 "latency_normal" => t("fast again alert"),
-                _ => "test",
+                _ => t("test alert"),
             },
             ok: entry.ok,
             error: entry.error,

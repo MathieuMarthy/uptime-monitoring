@@ -1,5 +1,5 @@
 use crate::forms::{has_visible_char, is_invisible_format, text_len};
-use crate::i18n::{t, tf};
+use crate::i18n::{Lang, t, tf};
 use crate::models::{Monitor, name_key};
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -12,7 +12,8 @@ pub const METHODS: [&str; 6] = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]
 const NAME_MAX_CHARS: usize = 100;
 pub const GROUP_MAX_CHARS: usize = 64;
 /// The dashboard's title for the monitors without a group, which no group may take.
-/// Name shown for the monitors without a group; reserved, whatever the language.
+/// Name shown for the monitors without a group, translated; reserved in every language, so no group
+/// shares the label of the ungrouped monitors.
 pub const UNGROUPED: &str = "Ungrouped";
 const URL_MAX_BYTES: usize = 2048;
 const BODY_MAX_BYTES: usize = 64 * 1024;
@@ -34,7 +35,7 @@ impl std::fmt::Display for GroupError {
             )),
             Self::Reserved => f.write_str(&tf(
                 "“{}” is kept for the monitors without a group.",
-                &[&UNGROUPED],
+                &[&t(UNGROUPED)],
             )),
         }
     }
@@ -50,7 +51,10 @@ pub fn clean_group(raw: &str) -> Result<Option<String>, GroupError> {
     let group = group.split_whitespace().collect::<Vec<_>>().join(" ");
     if text_len(&group) > GROUP_MAX_CHARS {
         Err(GroupError::TooLong)
-    } else if name_key(&group) == name_key(UNGROUPED) {
+    } else if Lang::ALL
+        .iter()
+        .any(|lang| name_key(&group) == name_key(lang.translate(UNGROUPED)))
+    {
         Err(GroupError::Reserved)
     } else {
         Ok((!group.is_empty()).then_some(group))
@@ -657,6 +661,19 @@ mod tests {
             ..valid()
         });
         assert!(errors.contains_key("group"), "{errors:?}");
+    }
+
+    #[test]
+    fn ungrouped_is_reserved_in_every_language() {
+        for name in ["sans groupe", "Sin grupo", "OHNE GRUPPE"] {
+            assert_eq!(clean_group(name), Err(GroupError::Reserved), "{name}");
+        }
+        let message =
+            crate::i18n::sync_scope(crate::i18n::Lang::Fr, || GroupError::Reserved.to_string());
+        assert_eq!(
+            message,
+            "« Sans groupe » est réservé aux sondes sans groupe."
+        );
     }
 
     #[test]
