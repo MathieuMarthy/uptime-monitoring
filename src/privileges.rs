@@ -32,14 +32,58 @@ pub fn hand_over_database(database_url: &str, uid: u32, gid: u32) -> io::Result<
         _ => PathBuf::from("."),
     };
     std::fs::create_dir_all(&dir)?;
-    let mut paths = vec![dir];
-    for suffix in ["", "-wal", "-shm", "-journal"] {
-        let mut name = file.clone().into_os_string();
-        name.push(suffix);
-        paths.push(PathBuf::from(name));
+    // `sqlite:///uptime.db`, or a relative path from `/`: the whole filesystem would be handed over.
+    if std::fs::canonicalize(&dir)? == Path::new("/") {
+        return Err(io::Error::other(
+            "DATABASE_URL points to a file at the root of the filesystem; put it in a directory, \
+             such as sqlite:///data/uptime.db",
+        ));
     }
-    for path in paths {
+    give(&dir, uid, gid)?;
+    for path in database_files(&file) {
         give(&path, uid, gid)?;
+    }
+    Ok(())
+}
+
+/// The database and its journals.
+fn database_files(file: &Path) -> Vec<PathBuf> {
+    ["", "-wal", "-shm", "-journal"]
+        .into_iter()
+        .map(|suffix| {
+            let mut name = file.as_os_str().to_owned();
+            name.push(suffix);
+            PathBuf::from(name)
+        })
+        .collect()
+}
+
+/// Files created from now on are readable by their owner only: the database holds the password
+/// hash and every channel's secrets.
+pub fn restrict_new_files() {
+    // SAFETY: umask has no preconditions and cannot fail.
+    unsafe {
+        libc::umask(0o077);
+    }
+}
+
+/// Makes the existing database and journals readable by their owner only, for files created
+/// before `restrict_new_files` existed. Symlinks are left alone.
+pub fn restrict_database(database_url: &str) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let Some(file) = database_file(database_url) else {
+        return Ok(());
+    };
+    for path in database_files(&file) {
+        let meta = match std::fs::symlink_metadata(&path) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(e),
+        };
+        if meta.is_file() && meta.mode() & 0o077 != 0 {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| io::Error::new(e.kind(), format!("{}: {e}", path.display())))?;
+        }
     }
     Ok(())
 }
@@ -115,6 +159,44 @@ mod tests {
         )
         .unwrap();
         assert!(fresh.parent().unwrap().is_dir());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_root_directory_is_never_handed_over() {
+        let err = hand_over_database("sqlite:///uptime.db", 65532, 65532).unwrap_err();
+        assert!(err.to_string().contains("DATABASE_URL"), "{err}");
+    }
+
+    #[test]
+    fn new_files_are_private() {
+        restrict_new_files();
+        let file = std::env::temp_dir().join(format!("uptime-umask-{}", std::process::id()));
+        std::fs::write(&file, b"").unwrap();
+        let mode = std::fs::metadata(&file).unwrap().mode() & 0o777;
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(mode, 0o600);
+    }
+
+    #[test]
+    fn existing_database_files_become_private_without_following_links() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("uptime-restrict-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("uptime.db");
+        let wal = dir.join("uptime.db-wal");
+        let target = dir.join("elsewhere");
+        for path in [&file, &wal, &target] {
+            std::fs::write(path, b"").unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        }
+        std::os::unix::fs::symlink(&target, dir.join("uptime.db-shm")).unwrap();
+
+        restrict_database(&format!("sqlite://{}", file.display())).unwrap();
+        let mode = |path: &Path| std::fs::metadata(path).unwrap().mode() & 0o777;
+        assert_eq!(mode(&file), 0o600);
+        assert_eq!(mode(&wal), 0o600);
+        assert_eq!(mode(&target), 0o644, "a symlink is not followed");
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

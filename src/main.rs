@@ -23,6 +23,8 @@ fn main() {
         }
     };
     let serving = matches!(command, Command::Serve);
+    // The database holds the password hash and every channel's secrets.
+    privileges::restrict_new_files();
 
     let config = match Config::from_env() {
         Ok(config) => config,
@@ -43,6 +45,9 @@ fn main() {
             eprintln!("Cannot switch from root to user {uid}:{gid} (PUID, PGID): {e}");
             std::process::exit(1);
         }
+    }
+    if serving && let Err(e) = privileges::restrict_database(&config.database_url) {
+        eprintln!("Cannot make the database readable by its owner only: {e}");
     }
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
