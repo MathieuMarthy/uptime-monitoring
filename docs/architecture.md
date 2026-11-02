@@ -38,6 +38,7 @@ uptime-monitoring/
 │   │   ├── rate_limit.rs         # In-memory limit on failed logins per IP
 │   │   └── totp.rs               # RFC 6238 codes, base32, QR code SVG
 │   ├── middleware.rs             # set_language, require_session (session + CSRF), security headers
+│   ├── server.rs                 # HTTP/1.1 server with connection limits (header and request timeouts, max connections)
 │   ├── time.rs                   # now_ms(), local days and hours, date formatting
 │   ├── windows.rs                # Maintenance windows in time (pure) + Maintenances, the shared set
 │   ├── maintenance.rs            # Hourly upkeep: daily rollups, then purges
@@ -201,7 +202,8 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   time (`AppState::password_hashing`); a request that waits more than 5 s for its turn gets a 429. Login always verifies the password and compares usernames through their SHA-256, so timing does not reveal the
   username.
 - **Sessions.** 32 random bytes, hex, in the `__Host-session` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/`),
-  valid 30 days from login. Only the SHA-256 is stored. Expired sessions are purged at each login. Because the cookie is
+  valid 30 days from login. Only the SHA-256 is stored. Expired sessions are purged at each login. Settings › Security shows how many other sessions are open and
+  logs them out (`POST /settings/sessions`), as a password change does. Because the cookie is
   `Secure`, logging in over plain HTTP only works on `localhost`; public pages show a warning otherwise
   (`static/js/insecure-warning.js`).
 - **Rate limit.** 10 login attempts per client per 15 minutes, then 429 until the window ends; a successful login
@@ -216,6 +218,10 @@ proxy, every client shares the proxy's IP and the limit becomes global.
   forward, through a conditional `UPDATE`. No recovery codes: a lost app is fixed on the server with the `disable-totp` command.
 - **Headers.** Every response carries a strict CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and
   `Referrer-Policy: same-origin`; protected pages add `Cache-Control: no-store`. HSTS is left to the reverse proxy.
+- **Connections** (`server.rs`). `axum::serve` sets no timer, so hyper's header timeout would never apply: the binary
+  serves HTTP/1.1 through hyper itself. 10 s to send the headers, idle keep-alive connections included; 30 s to read
+  the body and produce the response (408 past it; a streamed body such as the backup is not counted); at most 512
+  connections at once, the next ones wait in the listen backlog. No HTTP/2: the reverse proxy speaks HTTP/1.1 to it.
 
 ## Check engine
 
@@ -535,14 +541,20 @@ grid. Each form is posted and validated on its own (`/settings/general`, `/setti
 ## Deployment
 
 - **Image.** `Dockerfile` builds a static musl binary (dependencies in their own layer) and copies it onto
-  `gcr.io/distroless/static-debian12`, which has the CA certificates and no shell. `DATABASE_URL` points to the
-  `/data` volume. About 21 MB, under 3 MiB of RAM at rest. amd64 only.
+  `gcr.io/distroless/static-debian13`, which has the CA certificates and no shell. Both images are pinned by digest
+  (Dependabot proposes updates). `DATABASE_URL` points to the `/data` volume, also the working directory. About 21 MB, under 3 MiB of RAM at rest. amd64 only.
 - **Privileges** (`privileges.rs`). The image starts as root, like official images whose entrypoint runs `chown`
   then `gosu`, but without a shell: before the async runtime, any file or socket, the binary gives the database's
   directory, the database and its journals (nothing else) to `PUID:PGID` (default 65532), without following
   symlinks, then drops supplementary groups, sets its gid and uid, and checks that root cannot be regained. A
   bind-mounted directory created by Docker as root thus works as is. Started as another user (`user:` in Compose,
-  Kubernetes), it changes nothing. The `healthcheck` subcommand drops root too, without touching files.
+  Kubernetes), it changes nothing. The `healthcheck` subcommand drops root too, without touching files. A database
+  directory that resolves to `/` is refused rather than handed over.
+- **File modes.** The umask is 077 from the first instruction: the database holds the password hash and every
+  channel's secret. Existing database files are brought to 0600 at startup (symlinks left alone).
+- **Compose** (`compose.yaml`). The example drops every capability but `CHOWN`, `SETUID` and `SETGID` (used only
+  before root is dropped), sets `no-new-privileges`, a read-only root filesystem (only `/data` is written, backups
+  included), and memory and PID limits.
 - **Health.** No shell in the image: `HEALTHCHECK` runs `uptime-monitoring healthcheck`, which sends `GET /health` to
   `BIND_ADDR` (loopback when it is unspecified) and exits 0 on a 200 within 5 s.
 - **Logs.** No colour codes unless stdout is a terminal.
@@ -552,6 +564,10 @@ grid. Each form is posted and validated on its own (`/settings/general`, `/setti
   `-D warnings`, tests, and an image build without push. On a `v*` tag, the image is built and pushed to
   `ghcr.io/<owner>/uptime-monitoring` with the version and `major.minor` tags, plus `latest` for a version that is not
   a pre-release. The release fails unless the tag is `v` + the `Cargo.toml` version, so bump it before tagging.
+  Actions are pinned by commit.
+- **Supply chain** (`.github/workflows/audit.yml`, `deny.toml`, `.github/dependabot.yml`). `cargo deny` checks
+  RustSec advisories, licences and sources (crates.io only) on every push, pull request and each Monday. An ignored
+  advisory needs its reason in `deny.toml`. Dependabot proposes crate, action and base image updates weekly.
 
 ## Tests
 
