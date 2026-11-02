@@ -161,6 +161,24 @@
         </div>
 
         <div class="form-card">
+            {% if other_sessions > 0 %}
+            <form action="/settings/sessions" method="POST" class="form-section">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <h2 class="section-title">{{ "Sessions"|t }}</h2>
+                <p class="form-hint">{{ other_sessions|tn("{} other session open.", "{} other sessions open.") }}</p>
+                <div class="form-actions-left">
+                    <button class="button-secondary" type="submit">{{ "Log Out Other Sessions"|t }}</button>
+                </div>
+            </form>
+            {% else %}
+            <div class="form-section">
+                <h2 class="section-title">{{ "Sessions"|t }}</h2>
+                <p class="form-hint">{{ "No other session open."|t }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="form-card">
             <div class="form-section">
                 <h2 class="section-title">{{ "Two-factor authentication"|t }}</h2>
                 {% if totp_enabled %}

@@ -3438,3 +3438,28 @@ Required with a username
 fr: Requis avec un identifiant
 es: Obligatorio con un usuario
 de: Erforderlich mit Benutzername
+
+Sessions
+fr: Sessions
+es: Sesiones
+de: Sitzungen
+
+{} other session open.
+fr: {} autre session ouverte.
+es: {} otra sesión abierta.
+de: {} weitere Sitzung offen.
+
+{} other sessions open.
+fr: {} autres sessions ouvertes.
+es: {} otras sesiones abiertas.
+de: {} weitere Sitzungen offen.
+
+No other session open.
+fr: Aucune autre session ouverte.
+es: Ninguna otra sesión abierta.
+de: Keine weitere Sitzung offen.
+
+Log Out Other Sessions
+fr: Déconnecter les autres sessions
+es: Cerrar las demás sesiones
+de: Andere Sitzungen abmelden

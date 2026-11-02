@@ -35,6 +35,7 @@ pub fn router() -> Router<AppState> {
         .route("/settings/password", post(change_password))
         .route("/settings/totp", get(totp_setup).post(enable_totp))
         .route("/settings/totp/disable", post(disable_totp))
+        .route("/settings/sessions", post(end_other_sessions))
         .route("/settings/export", get(export))
         .route("/settings/backup", get(backup))
         .route(
@@ -59,7 +60,7 @@ async fn import(
     let (export, mut report) = match import::parse(&form.document) {
         Ok(parsed) => parsed,
         Err(message) => {
-            let mut page = page(&state, session.csrf_token, Section::Backup).await?;
+            let mut page = page(&state, session, Section::Backup).await?;
             page.errors.insert("document", message);
             page.document = form.document;
             return Ok(page.into_response());
@@ -145,13 +146,14 @@ async fn index(
         .and_then(|q| q.section.as_deref())
         .and_then(Section::from_param)
         .unwrap_or_default();
-    let mut page = page(&state, session.csrf_token, section).await?;
+    let mut page = page(&state, session, section).await?;
     page.saved = match query.and_then(|q| q.saved).as_deref() {
         Some("password") => Some(t("Password changed. Every other session is logged out.")),
         Some("totp") => Some(t(
             "Two-factor authentication is on. Every other session is logged out.",
         )),
         Some("totp-off") => Some(t("Two-factor authentication is off.")),
+        Some("sessions") => Some(t("Every other session is logged out.")),
         Some(_) => Some(t("Settings saved.")),
         None => None,
     };
@@ -160,16 +162,28 @@ async fn index(
 
 async fn page(
     state: &AppState,
-    csrf_token: String,
+    session: Session,
     section: Section,
 ) -> Result<SettingsTemplate, AppError> {
     let settings = Settings::load(&state.db).await?;
     let storage = StorageUse::load(&state.db).await?;
-    let mut page = SettingsTemplate::new(&settings, storage, csrf_token, section);
+    let other_sessions = session.count_others(&state.db).await?;
+    let mut page = SettingsTemplate::new(&settings, storage, session.csrf_token, section);
     page.totp_enabled = Admin::find(&state.db)
         .await?
         .is_some_and(|admin| admin.totp_secret.is_some());
+    page.other_sessions = other_sessions;
     Ok(page)
+}
+
+/// Logs out every session but this one, as after a password change.
+async fn end_other_sessions(
+    State(state): State<AppState>,
+    Extension(session): Extension<Session>,
+) -> Result<Response, AppError> {
+    session.end_others(&state.db).await?;
+    tracing::info!("Other admin sessions logged out.");
+    Ok(Redirect::to("/settings?section=security&saved=sessions").into_response())
 }
 
 async fn update_general(
@@ -188,7 +202,7 @@ async fn update_general(
             Ok(Redirect::to("/settings?section=general&saved=general").into_response())
         }
         Err(errors) => {
-            let mut page = page(&state, session.csrf_token, Section::General).await?;
+            let mut page = page(&state, session, Section::General).await?;
             page.errors = errors;
             Ok(page.into_response())
         }
@@ -212,7 +226,7 @@ async fn update_data(
             Ok(Redirect::to("/settings?section=data&saved=data").into_response())
         }
         Err(errors) => {
-            let mut page = page(&state, session.csrf_token, Section::Data).await?;
+            let mut page = page(&state, session, Section::Data).await?;
             page.data = form;
             page.errors = errors;
             Ok(page.into_response())
@@ -284,7 +298,7 @@ async fn password_errors(
     session: Session,
     errors: FieldErrors,
 ) -> Result<Response, AppError> {
-    let mut page = page(state, session.csrf_token, Section::Security).await?;
+    let mut page = page(state, session, Section::Security).await?;
     page.errors = errors;
     Ok(page.into_response())
 }

@@ -1,6 +1,6 @@
 mod common;
 
-use common::{PASSWORD, TestApp, TestResponse, USERNAME, get, login, post_form};
+use common::{PASSWORD, TestApp, TestResponse, USERNAME, get, login, post_form, post_raw};
 use sqlx::SqlitePool;
 use uptime_monitoring::models::{Session, Settings};
 
@@ -309,4 +309,44 @@ async fn an_error_shows_the_section_of_its_form() {
             .contains(r#"href="/settings?section=security" aria-current="page""#)
     );
     assert!(r.body.contains("Current password is incorrect."));
+}
+
+// --- Sessions ---
+
+#[tokio::test]
+async fn other_sessions_can_be_logged_out() {
+    let (app, pool) = logged_in_with_password().await;
+    let others = [
+        Session::create(&pool).await.unwrap(),
+        Session::create(&pool).await.unwrap(),
+    ];
+
+    let page = get(&app, "/settings?section=security").await;
+    assert!(
+        page.body.contains("2 other sessions open."),
+        "{}",
+        page.body
+    );
+    assert!(page.body.contains("action=\"/settings/sessions\""));
+
+    let r = post_form(&app, "/settings/sessions", "").await;
+    assert_redirect(&r, "/settings?section=security&saved=sessions");
+    for other in &others {
+        assert!(Session::find(&pool, &other.token).await.unwrap().is_none());
+    }
+
+    let page = get(&app, "/settings?section=security&saved=sessions").await;
+    assert_eq!(page.status, 200, "this session is kept");
+    assert!(page.body.contains("Every other session is logged out."));
+    assert!(page.body.contains("No other session open."));
+    assert!(!page.body.contains("action=\"/settings/sessions\""));
+}
+
+#[tokio::test]
+async fn logging_out_other_sessions_needs_the_csrf_token() {
+    let (app, pool) = logged_in_with_password().await;
+    let other = Session::create(&pool).await.unwrap();
+    let r = post_raw(&app, "/settings/sessions", "csrf_token=forged").await;
+    assert_eq!(r.status, 403);
+    assert!(Session::find(&pool, &other.token).await.unwrap().is_some());
 }

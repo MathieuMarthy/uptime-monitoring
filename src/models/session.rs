@@ -52,6 +52,24 @@ impl Session {
         Ok(())
     }
 
+    /// Live sessions other than this one.
+    pub async fn count_others(&self, pool: &SqlitePool) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE token_hash <> ? AND expires_at > ?")
+            .bind(&self.token_hash)
+            .bind(now_ms())
+            .fetch_one(pool)
+            .await
+    }
+
+    /// Deletes every session but this one.
+    pub async fn end_others(&self, pool: &SqlitePool) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM sessions WHERE token_hash <> ?")
+            .bind(&self.token_hash)
+            .execute(pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn purge_expired(pool: &SqlitePool, now: i64) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM sessions WHERE expires_at <= ?")
             .bind(now)

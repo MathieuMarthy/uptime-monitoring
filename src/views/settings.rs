@@ -67,6 +67,8 @@ pub struct SettingsTemplate {
     pub saved: Option<&'static str>,
     pub storage: StorageUse,
     pub totp_enabled: bool,
+    /// Live sessions besides the one viewing the page.
+    pub other_sessions: i64,
     /// The import text sent back with its error.
     pub document: String,
 }
@@ -114,6 +116,7 @@ impl SettingsTemplate {
             saved: None,
             storage,
             totp_enabled: false,
+            other_sessions: 0,
             document: String::new(),
         }
     }
