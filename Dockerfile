@@ -1,7 +1,8 @@
 # Static musl binary, then a distroless image: CA certificates, no shell. It starts as root only to
 # hand /data to PUID:PGID (default 65532, distroless's nonroot), then the binary drops root for good
 # before opening anything (src/privileges.rs).
-FROM rust:1.98-alpine AS builder
+# Pinned by digest: a tag moved upstream cannot slip into a build. Dependabot proposes updates.
+FROM rust:1.99-alpine@sha256:7e9e2d068a107a2adafd19930011178d14a78326053cd4c3a9f7ad3fd049557d AS builder
 RUN apk add --no-cache musl-dev
 WORKDIR /app
 
@@ -18,12 +19,14 @@ COPY src src
 RUN touch src/main.rs src/lib.rs && cargo build --release --locked \
     && mkdir /data
 
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/static-debian13@sha256:448810357cc8e67b7208988abdba0f5ec3d3aebee0a5b13eb624979792cffc0f
 COPY --from=builder /app/target/release/uptime-monitoring /usr/local/bin/uptime-monitoring
 COPY --from=builder --chown=65532:65532 /data /data
 ENV DATABASE_URL=sqlite:///data/uptime.db \
     BIND_ADDR=0.0.0.0:8080
 VOLUME /data
+# A relative DATABASE_URL lands in the volume, not at the root of the filesystem.
+WORKDIR /data
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s \
     CMD ["/usr/local/bin/uptime-monitoring", "healthcheck"]
