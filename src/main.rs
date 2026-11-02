@@ -1,5 +1,4 @@
 use std::io::IsTerminal;
-use std::net::SocketAddr;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use uptime_monitoring::config::Config;
@@ -8,7 +7,7 @@ use uptime_monitoring::models::{Admin, Settings};
 use uptime_monitoring::notify::Notifier;
 use uptime_monitoring::state::AppState;
 use uptime_monitoring::windows::Maintenances;
-use uptime_monitoring::{app, db, engine, healthcheck, maintenance, privileges};
+use uptime_monitoring::{app, db, engine, healthcheck, maintenance, privileges, server};
 
 fn main() {
     let command = std::env::args().nth(1);
@@ -141,13 +140,13 @@ async fn serve(config: Config) {
         "uptime-monitoring is running on http://{}",
         config.bind_addr
     );
-    axum::serve(
+    server::serve(
         listener,
-        app(state).into_make_service_with_connect_info::<SocketAddr>(),
+        app(state),
+        server::Limits::default(),
+        shutdown_signal(),
     )
-    .with_graceful_shutdown(shutdown_signal())
-    .await
-    .expect("Server error");
+    .await;
 }
 
 /// Exits 0 when the instance at `BIND_ADDR` answers `/health`, 1 otherwise.

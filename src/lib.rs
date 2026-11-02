@@ -18,6 +18,7 @@ pub mod notify;
 pub mod page_cache;
 pub mod privileges;
 pub mod routes;
+pub mod server;
 pub mod state;
 pub mod time;
 pub mod transfer;
