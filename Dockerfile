@@ -2,7 +2,7 @@
 # hand /data to PUID:PGID (default 65532, distroless's nonroot), then the binary drops root for good
 # before opening anything (src/privileges.rs).
 # Pinned by digest: a tag moved upstream cannot slip into a build. Dependabot proposes updates.
-FROM rust:1.99-alpine@sha256:7e9e2d068a107a2adafd19930011178d14a78326053cd4c3a9f7ad3fd049557d AS builder
+FROM rust:1.100-alpine@sha256:de1e0058543a81ed7b046629167db587c67a94bdf37cce14eb27f0ec83baaffb AS builder
 RUN apk add --no-cache musl-dev
 WORKDIR /app
 
