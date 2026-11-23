@@ -19,7 +19,7 @@ COPY src src
 RUN touch src/main.rs src/lib.rs && cargo build --release --locked \
     && mkdir /data
 
-FROM gcr.io/distroless/static-debian13@sha256:448810357cc8e67b7208988abdba0f5ec3d3aebee0a5b13eb624979792cffc0f
+FROM gcr.io/distroless/static-debian13@sha256:4c2cd1dee442c9a99924a378c7c126fac8fef14771579ef567c3f2bdd7a5122a
 COPY --from=builder /app/target/release/uptime-monitoring /usr/local/bin/uptime-monitoring
 COPY --from=builder --chown=65532:65532 /data /data
 ENV DATABASE_URL=sqlite:///data/uptime.db \
